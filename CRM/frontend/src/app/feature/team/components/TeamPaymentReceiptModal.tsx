@@ -4,7 +4,7 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Printer, Send, CheckCircle2, Building2, CreditCard, ShieldCheck } from "lucide-react"
 import { TeamPayoutRecord } from "../types"
-import { sendTeamPaymentReceiptEmail } from "../services/teamPaymentService"
+import { sendTeamPaymentReceiptEmail } from "../service/teamPaymentService"
 import { Button } from "@/components/ui/Button"
 import { printDocument } from "@/lib/printUtils"
 

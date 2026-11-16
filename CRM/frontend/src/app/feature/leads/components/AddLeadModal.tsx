@@ -3,7 +3,7 @@
 import * as React from "react"
 import { X, Plus, Check, Calendar, Clock, Wrench, FileText, User as UserIcon, Tag, Building, MapPin } from "lucide-react"
 import { Lead, LeadStatus, LeadType } from "../types"
-import { addLead, parseLeadDate, formatLeadReminderDate, MONTH_NAMES_SHORT } from "../services/leadService"
+import { addLead, parseLeadDate, formatLeadReminderDate, MONTH_NAMES_SHORT } from "../service/leadService"
 
 // Helper to convert date string to "YYYY-MM-DD" for input[type="date"] (Zero UTC Timezone Shift)
 function formatDateForInput(dateStr?: string): string {
@@ -63,8 +63,8 @@ const STANDARD_SOURCES = [
 ]
 
 import { useAuthStore, isMatchingCompany, getSelectableCompanies } from "@/store/useAuthStore"
-import { getUsers } from "@/app/feature/users/services/userService"
-import { getClients, ClientItem } from "@/app/feature/clients/services/clientService"
+import { getUsers } from "@/app/feature/users/service/userService"
+import { getClients, ClientItem } from "@/app/feature/clients/service/clientService"
 import {
   SearchableSelect,
   ALL_COUNTRIES,

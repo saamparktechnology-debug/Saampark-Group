@@ -9,36 +9,13 @@ import {
 } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
-import { getUsers } from "@/app/feature/users/services/userService"
-import { getClients } from "@/app/feature/clients/services/clientService"
-import { getLeads } from "@/app/feature/leads/services/leadService"
-import { getProjects } from "@/app/feature/projects/services/projectService"
-import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
-
-export interface ChatMessage {
-  id: string
-  senderEmail: string
-  senderName: string
-  recipientEmail: string
-  recipientName: string
-  text: string
-  timestamp: string
-  read?: boolean
-}
-
-export interface ChatContact {
-  id: string
-  name: string
-  email: string
-  role: string
-  avatar: string
-  status?: "Online" | "Away" | "Offline"
-  lastMessage?: string
-  lastTime?: string
-  unreadCount?: number
-  companyName?: string
-  branchName?: string
-}
+import { getUsers } from "@/app/feature/users/service/userService"
+import { getClients } from "@/app/feature/clients/service/clientService"
+import { getLeads } from "@/app/feature/leads/service/leadService"
+import { getProjects } from "@/app/feature/projects/service/projectService"
+import { ChatContact, ChatMessage } from "./types"
+import { useMessagesQuery, useSaveMessagesMutation } from "./hooks/useMessages"
+import { messageFeatureService } from "./service/messageService"
 
 export default function MessagesMain() {
   const { user, activeCompanyId, branches } = useAuthStore()
@@ -54,7 +31,9 @@ export default function MessagesMain() {
 
   const [contacts, setContacts] = React.useState<ChatContact[]>([])
   const [selectedContact, setSelectedContact] = React.useState<ChatContact | null>(null)
-  const [messages, setMessages] = React.useState<ChatMessage[]>([])
+  const msgCompanyKey = activeCompanyId || user?.companyId || "tech"
+  const { data: messages = [] } = useMessagesQuery(msgCompanyKey)
+  const saveMessagesMutation = useSaveMessagesMutation(msgCompanyKey)
   const [inputText, setInputText] = React.useState("")
   const [searchContact, setSearchContact] = React.useState("")
   const [mobileView, setMobileView] = React.useState<"contacts" | "chat">("contacts")
@@ -336,41 +315,7 @@ export default function MessagesMain() {
   const targetComp = activeCompanyId || user?.companyId || "tech"
   const previousMessagesRef = React.useRef<ChatMessage[]>([])
 
-  const loadChat = React.useCallback(async () => {
-    const data = await fetchModuleDataFromDB<ChatMessage[]>("chat_messages", [], targetComp)
-    const list = Array.isArray(data) ? filterGlobalDeletedItems(data) : []
-    
-    // Check if new incoming message received for current user to notify
-    if (previousMessagesRef.current.length > 0 && list.length > previousMessagesRef.current.length) {
-      const prevIds = new Set(previousMessagesRef.current.map(m => m.id))
-      const brandNew = list.filter(m => !prevIds.has(m.id))
-      brandNew.forEach(m => {
-        if (m.recipientEmail.toLowerCase().trim() === currentUserEmail && m.senderEmail.toLowerCase().trim() !== currentUserEmail) {
-          import("@/lib/notificationService").then(({ sendBrowserNotification }) => {
-            sendBrowserNotification(`New Message from ${m.senderName || "Colleague"}`, {
-              body: m.text,
-              tag: `msg_${m.id}`,
-              url: "/feature/messages"
-            })
-          })
-        }
-      })
-    }
-    previousMessagesRef.current = list
-    setMessages(list)
-  }, [targetComp, currentUserEmail])
-
-  React.useEffect(() => {
-    loadChat()
-    window.addEventListener("storage", loadChat)
-    window.addEventListener("saampark_data_synced", loadChat)
-    window.addEventListener("saampark_company_switched", loadChat)
-    return () => {
-      window.removeEventListener("storage", loadChat)
-      window.removeEventListener("saampark_data_synced", loadChat)
-      window.removeEventListener("saampark_company_switched", loadChat)
-    }
-  }, [loadChat])
+  
 
   // Mark incoming messages as read when viewing contact conversation
   React.useEffect(() => {
@@ -389,10 +334,7 @@ export default function MessagesMain() {
     })
 
     if (hasUnread) {
-      setMessages(updated)
-      saveModuleDataToDB("chat_messages", updated, targetComp).then(() => {
-        window.dispatchEvent(new Event("saampark_data_synced"))
-      })
+      saveMessagesMutation.mutate(updated)
     }
   }, [selectedContact, messages, currentUserEmail, targetComp])
 
@@ -461,17 +403,15 @@ export default function MessagesMain() {
     }
 
     const updated = [...messages, newMsg]
-    setMessages(updated)
     setInputText("")
-    await saveModuleDataToDB("chat_messages", updated, targetComp)
+    await saveMessagesMutation.mutateAsync(updated)
   }
 
   const handleDeleteMessage = async (msgId: string) => {
     if (!canDelete) return
     const filtered = messages.filter((m) => m.id !== msgId)
-    setMessages(filtered)
-    await markGlobalItemDeleted(msgId, "chat_messages")
-    await saveModuleDataToDB("chat_messages", filtered, targetComp)
+    await messageFeatureService.markDeleted(msgId)
+    await saveMessagesMutation.mutateAsync(filtered)
   }
 
   const filteredContacts = contacts.filter((c) =>

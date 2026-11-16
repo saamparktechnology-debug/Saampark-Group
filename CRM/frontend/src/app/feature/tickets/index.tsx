@@ -10,41 +10,10 @@ import {
 } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
-import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+import { DisputeTicket, TicketAttachment, TicketPriority, TicketStatus } from "./types"
+import { useDeleteTicketMutation, useSaveTicketsMutation, useTicketsQuery } from "./hooks/useTickets"
 import { uploadToImgBB } from "@/lib/imgbbUpload"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
-
-export type TicketPriority = "Low" | "Normal" | "High" | "Critical"
-export type TicketStatus = "New" | "Open" | "In Progress" | "Under Review" | "Resolved" | "Closed"
-
-export interface TicketAttachment {
-  name: string
-  url: string
-  size?: string
-}
-
-export interface DisputeTicket {
-  id: string
-  ticketNumber: string
-  subject: string
-  category: string
-  priority: TicketPriority
-  status: TicketStatus
-  description: string
-  attachments?: TicketAttachment[]
-  createdBy: string
-  creatorEmail: string
-  creatorRole: string
-  companyId?: string
-  branchId?: string
-  createdAt: string
-  assignedTo?: string
-  raisedTo?: string
-  resolutionNote?: string
-  resolutionAttachments?: TicketAttachment[]
-  resolvedAt?: string
-  resolvedBy?: string
-}
 
 export default function TicketsMain() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
@@ -64,7 +33,9 @@ export default function TicketsMain() {
   const currentUserName = user?.name || "User"
   const targetComp = activeCompanyId || user?.companyId || "tech"
 
-  const [tickets, setTickets] = React.useState<DisputeTicket[]>([])
+  const { data: tickets = [] } = useTicketsQuery(targetComp)
+  const saveTicketsMutation = useSaveTicketsMutation(targetComp)
+  const deleteTicketMutation = useDeleteTicketMutation(targetComp)
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedStatusTab, setSelectedStatusTab] = React.useState<string>("all")
   const [selectedTicket, setSelectedTicket] = React.useState<DisputeTicket | null>(null)
@@ -150,24 +121,7 @@ export default function TicketsMain() {
     }
   }
 
-  const loadTickets = React.useCallback(async () => {
-    const data = await fetchModuleDataFromDB<DisputeTicket[]>("tickets", [], targetComp)
-    setTickets(Array.isArray(data) ? filterGlobalDeletedItems(data) : [])
-  }, [targetComp])
-
-  React.useEffect(() => {
-    loadTickets()
-    window.addEventListener("storage", loadTickets)
-    window.addEventListener("saampark_data_synced", loadTickets)
-    window.addEventListener("saampark_company_switched", loadTickets)
-    window.addEventListener("saampark_branch_switched", loadTickets)
-    return () => {
-      window.removeEventListener("storage", loadTickets)
-      window.removeEventListener("saampark_data_synced", loadTickets)
-      window.removeEventListener("saampark_company_switched", loadTickets)
-      window.removeEventListener("saampark_branch_switched", loadTickets)
-    }
-  }, [loadTickets])
+  
 
   // Access Control Rules:
   // Super Admin → sees ALL tickets across the company (scoped by branch if selected)
@@ -178,7 +132,7 @@ export default function TicketsMain() {
     const targetBranch = freshBranch
 
     const checkBranch = (t: DisputeTicket) => {
-      if (!targetBranch || targetBranch === "all") return true
+      if (!targetBranch || targetBranch === "all" || targetBranch === "main" || targetBranch === "hq") return true
       const tBranch = String(t.branchId || "").toLowerCase().trim()
       if (!tBranch) return false // strict: if branch selected, ticket must have one
       const branchObj = (freshBranches || []).find(b => 
@@ -223,6 +177,11 @@ export default function TicketsMain() {
       if (!matchSearch) return false
       if (selectedStatusTab === "all") return true
       return t.status === selectedStatusTab
+    }).sort((a, b) => {
+      const timeA = new Date(a.createdAt || 0).getTime()
+      const timeB = new Date(b.createdAt || 0).getTime()
+      if (timeA && timeB && timeA !== timeB) return timeB - timeA
+      return String(b.id || "").localeCompare(String(a.id || ""))
     })
   }, [accessibleTickets, searchQuery, selectedStatusTab])
 
@@ -258,8 +217,7 @@ export default function TicketsMain() {
     }
 
     const updated = [newTicket, ...tickets]
-    setTickets(updated)
-    await saveModuleDataToDB("tickets", updated, targetComp)
+    await saveTicketsMutation.mutateAsync(updated)
     showToast(`✅ Dispute Ticket ${newTicket.ticketNumber} submitted with ${attachments.length} attachment(s)!`)
     setIsRaiseModalOpen(false)
     setSubject("")
@@ -283,8 +241,7 @@ export default function TicketsMain() {
       }
     })
 
-    setTickets(updated)
-    await saveModuleDataToDB("tickets", updated, targetComp)
+    await saveTicketsMutation.mutateAsync(updated)
     showToast(`✅ Ticket ${selectedTicket.ticketNumber} updated to ${newStatus}! Confirmation recorded.`)
     setSelectedTicket(null)
     setResolutionInput("")
@@ -297,8 +254,7 @@ export default function TicketsMain() {
     if (await confirmTwoStepDelete(label, "ticket")) {
       await markGlobalItemDeleted(id, "tickets")
       const updated = tickets.filter(t => t.id !== id)
-      setTickets(updated)
-      await saveModuleDataToDB("tickets", updated, targetComp)
+      await saveTicketsMutation.mutateAsync(updated)
       showToast("Ticket deleted.")
       if (selectedTicket?.id === id) setSelectedTicket(null)
     }

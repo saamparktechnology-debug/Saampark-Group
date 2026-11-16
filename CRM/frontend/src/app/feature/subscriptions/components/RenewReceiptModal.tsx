@@ -53,8 +53,8 @@ export function RenewReceiptModal({
     if (!receipt) return companies[0] || DEFAULT_COMPANIES[0]
     const targetCompId = String(receipt.companyId || activeCompanyId || "tech").toLowerCase().trim()
     const matched = companies.find(c => {
-      const cId = c.id.toLowerCase().trim()
-      const cSlug = (c.slug || "").toLowerCase().trim()
+      const cId = String(c.id || "").toLowerCase().trim()
+      const cSlug = String(c.slug || "").toLowerCase().trim()
       return cId === targetCompId || cSlug === targetCompId
     })
     return matched || companies[0] || DEFAULT_COMPANIES[0]
@@ -262,7 +262,7 @@ export function RenewReceiptModal({
                   <span className="text-[10px] font-bold uppercase tracking-wider text-teal-900 dark:text-teal-300 block mb-0.5">
                     Amount Received in Words:
                   </span>
-                  <p className="font-serif italic font-bold text-teal-950 dark:text-teal-200 print:text-black text-sm">
+                  <p className="font-sans font-bold text-teal-950 dark:text-teal-200 print:text-black text-sm">
                     {numberToIndianWords(receipt.totalAmount)}
                   </p>
                 </div>
@@ -314,7 +314,7 @@ export function RenewReceiptModal({
                 {activeCompany?.signature_image_url ? (
                   <img src={activeCompany.signature_image_url} alt="Signature" className="h-12 object-contain my-1" />
                 ) : (
-                  <div className="h-10 flex items-center justify-center italic font-serif text-zinc-400 text-xs">
+                  <div className="h-10 flex items-center justify-center font-sans font-semibold text-zinc-400 text-xs">
                     [Digitally Authorized &amp; Stamped]
                   </div>
                 )}

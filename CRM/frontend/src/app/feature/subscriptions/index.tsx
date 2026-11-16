@@ -31,15 +31,15 @@ import {
   calculateNextCycleDate,
   generateSubscriptionInvoice,
   checkAndSendSubscriptionOverdueReminders
-} from "./services/subscriptionService"
+} from "./service/subscriptionService"
 import { SubscriptionList } from "./components/SubscriptionList"
 import { RenewSubscriptionModal } from "./components/RenewSubscriptionModal"
 import { RenewReceiptModal, RenewReceiptData } from "./components/RenewReceiptModal"
 import { EditSubscriptionModal } from "./components/EditSubscriptionModal"
 import { ClientSubscriptionLedgerModal } from "./components/ClientSubscriptionLedgerModal"
 import { InvoiceModal } from "@/app/feature/sales/invoices/components/InvoiceModal"
-import { InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
-import { getClients } from "@/app/feature/clients/services/clientService"
+import { InvoiceItem } from "@/app/feature/sales/invoices/service/invoiceService"
+import { getClients } from "@/app/feature/clients/service/clientService"
 import { UserService } from "@/services/apiServices"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"

@@ -104,7 +104,7 @@ export const UserService = {
     }
 
     try {
-      const { getStoredUserAccountsAsync } = await import("@/app/feature/users/services/userService")
+      const { getStoredUserAccountsAsync } = await import("@/app/feature/users/service/userService")
       const localUsers = await getStoredUserAccountsAsync()
       if (Array.isArray(localUsers) && localUsers.length > 0) {
         return localUsers.filter(isTeamMemberOnly).map((u: any) => ({

@@ -1,8 +1,8 @@
 "use client"
 
 import { sendBrowserNotification } from "./notificationService"
-import { getSubscriptions } from "@/app/feature/subscriptions/services/subscriptionService"
-import { taskService } from "@/app/feature/tasks/services/taskService"
+import { getSubscriptions } from "@/app/feature/subscriptions/service/subscriptionService"
+import { taskService } from "@/app/feature/tasks/service/taskService"
 import { fetchModuleDataFromDB } from "./storageSync"
 
 const REMINDER_LOGS_KEY = "saampark_automated_reminder_logs"

@@ -15,11 +15,11 @@ import { Widget } from "./components/Widget"
 import { KPICard } from "./components/KPICard"
 import { DonutChart } from "./components/DonutChart"
 import { BarChartMockup } from "./components/BarChartMockup"
-import { getStoredUserAccountsAsync, getUsers, getUserAvatar } from "../users/services/userService"
-import { taskService } from "../tasks/services/taskService"
-import { getProjects } from "../projects/services/projectService"
-import { getInvoices, InvoiceItem } from "../sales/invoices/services/invoiceService"
-import { getOrders, OrderItem } from "../sales/orders/services/orderService"
+import { getStoredUserAccountsAsync, getUsers, getUserAvatar } from "../users/service/userService"
+import { taskService } from "../tasks/service/taskService"
+import { getProjects } from "../projects/service/projectService"
+import { getInvoices, InvoiceItem } from "../sales/invoices/service/invoiceService"
+import { getOrders, OrderItem } from "../sales/orders/service/orderService"
 import { Task } from "../tasks/types"
 import { Project } from "../projects/types"
 import { filterGlobalDeletedItems, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
@@ -86,7 +86,7 @@ export default function DashboardMain() {
 
   const refreshLiveDashboard = React.useCallback(async () => {
     try {
-      const { getLeads } = await import("../leads/services/leadService")
+      const { getLeads } = await import("../leads/service/leadService")
       const [uList, tList, pList, lList, invList, ordList, expList] = await Promise.all([
         getUsers(targetComp),
         taskService.getTasks(targetComp),
@@ -1074,7 +1074,7 @@ export default function DashboardMain() {
            </div>
            
            <div className="mt-auto pt-3 border-t border-border/40 text-center">
-             <a href="/feature/sales/orders" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline text-xs font-bold">View All Sales Orders →</a>
+             <a href="/feature/sales/invoices" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline text-xs font-bold">View All Sales Orders →</a>
            </div>
         </Widget>
       </div>

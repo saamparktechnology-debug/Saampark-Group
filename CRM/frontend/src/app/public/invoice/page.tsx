@@ -7,9 +7,9 @@ import {
   Printer, AlertCircle, Share2,
   CheckCircle2, Check
 } from "lucide-react"
-import { getInvoices, InvoiceItem, clientAcceptInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
-import { getCompanyPaymentSettings, CompanyPaymentSettings, DEFAULT_COMPANY_PAYMENT_SETTINGS } from "@/app/feature/settings/services/companyPaymentService"
-import { getClients } from "@/app/feature/clients/services/clientService"
+import { getInvoices, InvoiceItem, clientAcceptInvoice } from "@/app/feature/sales/invoices/service/invoiceService"
+import { getCompanyPaymentSettings, CompanyPaymentSettings, DEFAULT_COMPANY_PAYMENT_SETTINGS } from "@/app/feature/settings/service/companyPaymentService"
+import { getClients } from "@/app/feature/clients/service/clientService"
 import { ClientItem } from "@/app/feature/clients/types"
 import { OfficialInvoiceDocument } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
 import { fetchModuleDataFromDB } from "@/lib/storageSync"
@@ -67,8 +67,9 @@ function PublicInvoiceContent() {
 
           if (target) {
             setInvoice(target)
+            const clientTarget = String(target.client || "").toLowerCase().trim()
             const matchedCli = allClients.find(
-              (c) => c.name.toLowerCase().trim() === (target.client || "").toLowerCase().trim()
+              (c) => String(c.name || "").toLowerCase().trim() === clientTarget
             )
             if (matchedCli) setClientDetails(matchedCli)
 
@@ -76,11 +77,11 @@ function PublicInvoiceContent() {
             const targetCompName = String((target as any).companyName || "").toLowerCase().trim()
             const compList = Array.isArray(allCompanies) && allCompanies.length > 0 ? allCompanies : DEFAULT_COMPANIES
             const matchedComp = compList.find(c => {
-              const cId = c.id.toLowerCase().trim()
-              const cSlug = (c.slug || "").toLowerCase().trim()
-              const cName = c.name.toLowerCase().trim()
-              const cBrand = (c.brand_name || "").toLowerCase().trim()
-              const cDivision = (c.division_name || "").toLowerCase().trim()
+              const cId = String(c.id || "").toLowerCase().trim()
+              const cSlug = String(c.slug || "").toLowerCase().trim()
+              const cName = String(c.name || "").toLowerCase().trim()
+              const cBrand = String(c.brand_name || "").toLowerCase().trim()
+              const cDivision = String(c.division_name || "").toLowerCase().trim()
               return (
                 cId === targetCompId || 
                 cSlug === targetCompId || 

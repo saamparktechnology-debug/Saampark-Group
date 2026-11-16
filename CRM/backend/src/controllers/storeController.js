@@ -43,7 +43,8 @@ const getStoreData = async (req, res, next) => {
         key // Fallback to root key
       ].filter(Boolean);
 
-      let foundData = null;
+      const candidateMap = new Map();
+      let nonArrayFound = null;
 
       for (const cKey of candidateKeys) {
         let compRows = [];
@@ -60,48 +61,40 @@ const getStoreData = async (req, res, next) => {
         if (compRows.length > 0 && compRows[0].data_json) {
           try {
             const parsedComp = JSON.parse(compRows[0].data_json);
-            if (Array.isArray(parsedComp) && parsedComp.length > 0) {
-              const filtered = parsedComp.filter(item => {
-                if (!item) return false;
+            if (Array.isArray(parsedComp)) {
+              parsedComp.forEach(item => {
+                if (!item) return;
                 const idStr = item.id !== undefined && item.id !== null ? String(item.id).toLowerCase().trim() : '';
                 const emailStr = item.email ? String(item.email).toLowerCase().trim() : '';
-                if (idStr && deletedSet.has(idStr)) return false;
-                if (emailStr && deletedSet.has(emailStr)) return false;
-                return true;
-              });
+                if (idStr && deletedSet.has(idStr)) return;
+                if (emailStr && deletedSet.has(emailStr)) return;
 
-              // If it's the root key fallback, filter items by company if items have companyId
-              if (cKey === key && filtered.length > 0) {
-                const compFiltered = filtered.filter(item => {
+                // If root key fallback, filter items by company if items have companyId
+                if (cKey === key) {
                   const itemComp = String(item.companyId || item.company_id || item.company || '').toLowerCase().trim();
-                  if (!itemComp) return true; // Global / unassigned item
-                  if (isConsult && (itemComp === 'consultancy' || itemComp === '2' || itemComp === 'print')) return true;
-                  if (isTech && (itemComp === 'tech' || itemComp === '1')) return true;
-                  return itemComp === compStr;
-                });
-                if (compFiltered.length > 0) {
-                  foundData = compFiltered;
-                  break;
+                  if (itemComp && itemComp !== 'all') {
+                    if (isConsult && !(itemComp === 'consultancy' || itemComp === '2' || itemComp === 'print')) return;
+                    if (isTech && !(itemComp === 'tech' || itemComp === '1')) return;
+                    if (!isConsult && !isTech && itemComp !== compStr) return;
+                  }
                 }
-                // If no company-specific match, fall back to filtered items for shared entities like clients
-                if (key === 'clients' || key === 'client_labels' || key === 'categories') {
-                  foundData = filtered;
-                  break;
+                const k = idStr || emailStr || JSON.stringify(item);
+                if (!candidateMap.has(k)) {
+                  candidateMap.set(k, item);
                 }
-              } else if (filtered.length > 0) {
-                foundData = filtered;
-                break;
-              }
-            } else if (!Array.isArray(parsedComp) && typeof parsedComp === 'object' && Object.keys(parsedComp).length > 0) {
-              foundData = parsedComp;
-              break;
+              });
+            } else if (!Array.isArray(parsedComp) && typeof parsedComp === 'object' && !nonArrayFound) {
+              nonArrayFound = parsedComp;
             }
           } catch {}
         }
       }
 
-      if (foundData !== null) {
-        return successResponse(res, 200, 'Company-isolated module data fetched from MySQL', foundData);
+      if (candidateMap.size > 0) {
+        return successResponse(res, 200, 'Company-isolated module data fetched from MySQL', Array.from(candidateMap.values()));
+      }
+      if (nonArrayFound !== null) {
+        return successResponse(res, 200, 'Company-isolated module data fetched from MySQL', nonArrayFound);
       }
 
       return successResponse(res, 200, 'Company module data fetched', []);
@@ -182,10 +175,32 @@ const saveStoreData = async (req, res, next) => {
 
       for (const saveK of keysToSave) {
         try {
+          let mergedToSave = dataJson;
+          if (Array.isArray(data)) {
+            const [existRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = ?', [saveK]);
+            let existList = [];
+            if (existRows.length > 0 && existRows[0].data_json) {
+              try { existList = JSON.parse(existRows[0].data_json); } catch {}
+            }
+            if (Array.isArray(existList)) {
+              const kMap = new Map();
+              existList.forEach(item => {
+                if (item && item.id !== undefined && item.id !== null) {
+                  kMap.set(String(item.id).toLowerCase().trim(), item);
+                }
+              });
+              data.forEach(item => {
+                if (item && item.id !== undefined && item.id !== null) {
+                  kMap.set(String(item.id).toLowerCase().trim(), item);
+                }
+              });
+              mergedToSave = JSON.stringify(Array.from(kMap.values()));
+            }
+          }
           await pool.execute(
             `INSERT INTO app_data (module_key, data_json) VALUES (?, ?)
              ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
-            [saveK, dataJson]
+            [saveK, mergedToSave]
           );
         } catch {}
       }
@@ -220,12 +235,34 @@ const saveStoreData = async (req, res, next) => {
         } catch {}
       }
     } else {
-      // Save to global key
+      // Save to global key with array item merging
       try {
+        let mergedToSave = dataJson;
+        if (Array.isArray(data)) {
+          const [existRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = ?', [key]);
+          let existList = [];
+          if (existRows.length > 0 && existRows[0].data_json) {
+            try { existList = JSON.parse(existRows[0].data_json); } catch {}
+          }
+          if (Array.isArray(existList)) {
+            const kMap = new Map();
+            existList.forEach(item => {
+              if (item && item.id !== undefined && item.id !== null) {
+                kMap.set(String(item.id).toLowerCase().trim(), item);
+              }
+            });
+            data.forEach(item => {
+              if (item && item.id !== undefined && item.id !== null) {
+                kMap.set(String(item.id).toLowerCase().trim(), item);
+              }
+            });
+            mergedToSave = JSON.stringify(Array.from(kMap.values()));
+          }
+        }
         await activePool.execute(
           `INSERT INTO app_data (module_key, data_json) VALUES (?, ?)
            ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
-          [key, dataJson]
+          [key, mergedToSave]
         );
       } catch (saveErr) {
         if (activePool !== pool) {

@@ -26,8 +26,8 @@ import { Button } from "@/components/ui/Button"
 import { formatDisplayDate } from "@/lib/utils"
 import { Tabs } from "@/components/ui/Tabs"
 import { useAuthStore } from "@/store/useAuthStore"
-import { getPayments, addPayment, deletePayment, PaymentItem } from "./services/paymentService"
-import { getInvoices, InvoiceItem } from "../invoices/services/invoiceService"
+import { getPayments, addPayment, deletePayment, PaymentItem } from "./service/paymentService"
+import { getInvoices, InvoiceItem } from "../invoices/service/invoiceService"
 
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
@@ -35,7 +35,7 @@ import { usePermissionStore } from "@/store/usePermissionStore"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 export default function PaymentsPage() {
-  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
   const canViewPayment = canPerformAction(user, "Payments", "view")
@@ -159,25 +159,42 @@ export default function PaymentsPage() {
   }
 
   const displayedPayments = React.useMemo(() => {
-    const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
-    const targetBranch = activeBranchId || (user?.role !== "Super Admin" && user?.role !== "Admin" ? user?.branchId : null)
+    const { activeCompanyId: freshComp, activeBranchId: freshBranch, activeSubBranchId: freshSubBranch, branches: freshBranches, subBranches: freshSubBranches } = useAuthStore.getState()
+    const userComp = (freshComp || user?.companyId || "").toLowerCase().trim()
+    const targetBranch = freshBranch || (user?.role !== "Super Admin" && user?.role !== "Admin" ? user?.branchId : null)
 
-    const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const targetBranchObj = (freshBranches || []).find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
     const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
     const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
+    const targetSubBranch = freshSubBranch || (user?.role !== "Super Admin" && user?.role !== "Admin" ? (user as any)?.subBranchId : null)
+    const targetSubBranchObj = (freshSubBranches || []).find(sb => sb.id === targetSubBranch || (sb as any).name?.toLowerCase() === (targetSubBranch || "").toLowerCase())
+    const targetSubBranchId = String(targetSubBranchObj?.id || targetSubBranch || "").toLowerCase().trim()
+    const targetSubBranchName = targetSubBranchObj?.name?.toLowerCase().trim() || ""
+
     const checkBranch = (p: any) => {
-      if (!targetBranch || targetBranch === "all") return true
+      if (!targetBranch || targetBranch === "all" || targetBranch === "main" || targetBranch === "hq") return true
       const pBranch = String(p.branchId || p.branch_id || "").toLowerCase().trim()
       const pBranchName = String(p.branchName || p.branch_name || "").toLowerCase().trim()
+      if (!pBranch && !pBranchName) return false
       return (pBranch && (pBranch === targetBranchId || (targetBranchName && pBranch === targetBranchName))) ||
              (pBranchName && (pBranchName === targetBranchName || pBranchName === targetBranchId))
+    }
+
+    const checkSubBranch = (p: any) => {
+      if (!targetSubBranch || targetSubBranch === "all" || targetSubBranch === "main" || targetSubBranch === "hq" || targetSubBranch === "all_subbranches") return true
+      const pSubBranch = String(p.subBranchId || p.sub_branch_id || "").toLowerCase().trim()
+      const pSubBranchName = String(p.subBranchName || p.sub_branch_name || "").toLowerCase().trim()
+      if (!pSubBranch && !pSubBranchName) return false
+      return (pSubBranch && (pSubBranch === targetSubBranchId || (targetSubBranchName && pSubBranch === targetSubBranchName))) ||
+             (pSubBranchName && (pSubBranchName === targetSubBranchName || pSubBranchName === targetSubBranchId))
     }
 
     let filtered = payments
     if (isClientRole) {
       filtered = filtered.filter((p) => {
         if (!checkBranch(p)) return false
+        if (!checkSubBranch(p)) return false
         return isRecordAssignedToClient(p, user)
       })
     } else {
@@ -190,12 +207,21 @@ export default function PaymentsPage() {
           return pComp === userComp || (userComp === "tech" && !p.companyId)
         })
       }
-      if (targetBranch && targetBranch !== "all") {
+      if (targetBranch && targetBranch !== "all" && targetBranch !== "main" && targetBranch !== "hq") {
         filtered = filtered.filter((p) => checkBranch(p))
       }
+      if (targetSubBranch && targetSubBranch !== "all" && targetSubBranch !== "main" && targetSubBranch !== "hq" && targetSubBranch !== "all_subbranches") {
+        filtered = filtered.filter((p) => checkSubBranch(p))
+      }
     }
-    return filtered
-  }, [payments, isClientRole, clientEmailNorm, clientNameNorm, activeCompanyId, activeBranchId, branches, user?.companyId, user?.branchId])
+
+    return filtered.slice().sort((a, b) => {
+      const timeA = new Date(a.paymentDate || (a as any).createdAt || 0).getTime()
+      const timeB = new Date(b.paymentDate || (b as any).createdAt || 0).getTime()
+      if (timeA && timeB && timeA !== timeB) return timeB - timeA
+      return String(b.id || "").localeCompare(String(a.id || ""))
+    })
+  }, [payments, isClientRole, clientEmailNorm, clientNameNorm, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches, user?.companyId, user?.branchId])
 
   const totalAmountNum = displayedPayments.reduce((sum, p) => sum + (p.amountNum || (parseInt(p.amount.replace(/[^0-9]/g, "")) || 0)), 0)
   const totalTransactions = displayedPayments.length

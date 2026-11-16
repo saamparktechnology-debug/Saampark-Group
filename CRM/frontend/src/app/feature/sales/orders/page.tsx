@@ -31,21 +31,21 @@ import {
   ArrowRight
 } from "lucide-react"
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
-import { useAuthStore } from "@/store/useAuthStore"
-import { addInvoice, getInvoices, InvoiceItem } from "../invoices/services/invoiceService"
+import { useAuthStore, isMatchingCompany } from "@/store/useAuthStore"
+import { addInvoice, getInvoices, InvoiceItem } from "../invoices/service/invoiceService"
 import { InvoiceModal } from "../invoices/components/InvoiceModal"
-import { addPayment } from "../payments/services/paymentService"
+import { addPayment } from "../payments/service/paymentService"
 import { sendPaymentDueReminderEmailNotification } from "@/services/emailNotificationService"
-import { getOrders, addOrder, updateOrder, deleteOrder } from "./services/orderService"
+import { getOrders, addOrder, updateOrder, deleteOrder } from "./service/orderService"
 
-import { getClients } from "@/app/feature/clients/services/clientService"
-import { getProjects } from "@/app/feature/projects/services/projectService"
+import { getClients } from "@/app/feature/clients/service/clientService"
+import { getProjects } from "@/app/feature/projects/service/projectService"
 import { Project, ProjectMilestone } from "@/app/feature/projects/types"
 
 import { exportToExcel, printPDFReport, exportToCSV } from "@/lib/exportUtils"
 import { formatDisplayDate } from "@/lib/utils"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
-import { getUserAvatar } from "@/app/feature/users/services/userService"
+import { getUserAvatar } from "@/app/feature/users/service/userService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
 
@@ -76,7 +76,7 @@ interface OrderItem {
 const INITIAL_ORDERS: OrderItem[] = []
 
 export default function OrderListPage() {
-  const { user, activeCompanyId } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
   const canViewOrder = canPerformAction(user, "Sales Orders", "view")
@@ -195,14 +195,67 @@ export default function OrderListPage() {
   }, [isAddModalOpen])
 
   const displayedOrders = React.useMemo(() => {
+    const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
+    const targetBranch = activeBranchId || (user?.role !== "Super Admin" && user?.role !== "Admin" ? user?.branchId : null)
+    const targetSubBranch = activeSubBranchId || (user?.role !== "Super Admin" && user?.role !== "Admin" ? (user as any)?.subBranchId : null)
+
+    const safeBranches = Array.isArray(branches) ? branches : []
+    const targetBranchObj = safeBranches.find((b: any) => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
+    const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+    const safeSubBranches = Array.isArray(subBranches) ? subBranches : []
+    const targetSubBranchObj = safeSubBranches.find((sb: any) => sb.id === targetSubBranch || sb.name.toLowerCase() === (targetSubBranch || "").toLowerCase())
+    const targetSubBranchId = String(targetSubBranchObj?.id || targetSubBranch || "").toLowerCase().trim()
+    const targetSubBranchName = targetSubBranchObj?.name?.toLowerCase().trim() || ""
+
+    const checkBranch = (o: any) => {
+      if (!targetBranch || targetBranch === "all" || targetBranch === "hq" || targetBranch === "main" || targetBranchId === "main" || targetBranchId === "hq") return true
+      const oBranch = String(o.branchId || o.branch_id || "").toLowerCase().trim()
+      const oBranchName = String(o.branchName || o.branch_name || "").toLowerCase().trim()
+      if (!oBranch && !oBranchName) return false
+      return (oBranch && (oBranch === targetBranchId || (targetBranchName && oBranch === targetBranchName))) ||
+             (oBranchName && (oBranchName === targetBranchName || oBranchName === targetBranchId))
+    }
+
+    const checkSubBranch = (o: any) => {
+      if (!targetSubBranch || targetSubBranch === "all" || targetSubBranch === "hq" || targetSubBranch === "main" || targetSubBranchId === "main" || targetSubBranchId === "hq") return true
+      const oSub = String(o.subBranchId || o.sub_branch_id || "").toLowerCase().trim()
+      const oSubName = String(o.subBranchName || o.sub_branch_name || "").toLowerCase().trim()
+      if (!oSub && !oSubName) return false
+      return (oSub && (oSub === targetSubBranchId || (targetSubBranchName && oSub === targetSubBranchName))) ||
+             (oSubName && (oSubName === targetSubBranchName || oSubName === targetSubBranchId))
+    }
+
+    let filtered = orders
     if (isClientRole) {
-      return orders.filter((o) => isRecordAssignedToClient(o, user))
+      filtered = filtered.filter((o) => isRecordAssignedToClient(o, user))
+    } else {
+      if (user?.role === "Teams" || (user?.role as string) === "Team") {
+        filtered = filtered.filter((o) => isRecordAssignedToTeamMember(o, user))
+      }
+      if (userComp && userComp !== "all") {
+        filtered = filtered.filter((o) => {
+          const oComp = (o.companyId || (o as any).company || "tech").toLowerCase().trim()
+          return isMatchingCompany({ id: oComp, slug: oComp } as any, userComp)
+        })
+      }
+      if (targetBranch && targetBranch !== "all" && targetBranch !== "hq" && targetBranch !== "main" && targetBranchId !== "main" && targetBranchId !== "hq") {
+        filtered = filtered.filter((o) => checkBranch(o))
+      }
+      if (targetSubBranch && targetSubBranch !== "all" && targetSubBranch !== "hq" && targetSubBranch !== "main") {
+        filtered = filtered.filter((o) => checkSubBranch(o))
+      }
     }
-    if (user?.role === "Teams" || (user?.role as string) === "Team") {
-      return orders.filter((o) => isRecordAssignedToTeamMember(o, user))
-    }
-    return orders
-  }, [orders, isClientRole, user])
+    // Newly created orders on top
+    filtered.sort((a, b) => {
+      const timeA = new Date(a.orderDate || 0).getTime()
+      const timeB = new Date(b.orderDate || 0).getTime()
+      if (timeA !== timeB && !isNaN(timeA) && !isNaN(timeB)) return timeB - timeA
+      return String(b.id || "").localeCompare(String(a.id || ""), undefined, { numeric: true })
+    })
+    return filtered
+  }, [orders, isClientRole, user, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches])
 
   const filteredOrders = React.useMemo(() => {
     return displayedOrders.filter((ord) => {

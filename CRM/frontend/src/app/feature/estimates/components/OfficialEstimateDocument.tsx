@@ -6,8 +6,9 @@ import {
   Phone, Mail, Globe, Shield, Calendar, Calculator, CheckCircle2,
   Clock, AlertCircle, FileText, QrCode, Landmark, Stamp, FileCheck, Sparkles, Megaphone
 } from "lucide-react"
-import { EstimateItem } from "../services/estimateService"
+import { EstimateItem } from "../service/estimateService"
 import { useAuthStore, Company, Branch, DEFAULT_COMPANIES, getCompanyLogoUrl } from "@/store/useAuthStore"
+import { getQrCodeDataUri } from "@/lib/qrCode"
 import { OfficialFormNo9Document } from "@/components/documents/OfficialFormNo9Document"
 import { printDocument } from "@/lib/printUtils"
 
@@ -113,10 +114,10 @@ export function OfficialEstimateDocument({
     const targetCompName = String((estimate as any).companyName || "").toLowerCase().trim()
 
     const matched = companies.find(c => {
-      const cId = c.id.toLowerCase().trim()
-      const cSlug = (c.slug || "").toLowerCase().trim()
-      const cName = c.name.toLowerCase().trim()
-      const cBrand = (c.brand_name || "").toLowerCase().trim()
+      const cId = String(c.id || "").toLowerCase().trim()
+      const cSlug = String(c.slug || "").toLowerCase().trim()
+      const cName = String(c.name || "").toLowerCase().trim()
+      const cBrand = String(c.brand_name || "").toLowerCase().trim()
       return (
         cId === targetCompId || 
         cSlug === targetCompId || 
@@ -125,7 +126,7 @@ export function OfficialEstimateDocument({
       )
     })
     if (matched) return matched
-    const defMatch = DEFAULT_COMPANIES.find(c => c.id.toLowerCase() === targetCompId || c.slug?.toLowerCase() === targetCompId)
+    const defMatch = DEFAULT_COMPANIES.find(c => String(c.id || "").toLowerCase() === targetCompId || String(c.slug || "").toLowerCase() === targetCompId)
     return defMatch || companies[0] || DEFAULT_COMPANIES[0]
   }, [estimate.companyId, (estimate as any).company, (estimate as any).companyName, activeCompanyId, companies])
 
@@ -261,14 +262,14 @@ export function OfficialEstimateDocument({
   const sgst = gstAmount - cgst
 
   // Scannable UPI QR
+  const upiPayload = resolvedUpiId ? `upi://pay?pa=${resolvedUpiId}&pn=${encodeURIComponent(resolvedAccountHolder)}&am=${grandTotal}&cu=INR` : ""
   const resolvedPaymentQrUrl = activeSubBranch?.payment_qr_url || activeBranch?.payment_qr_url || activeCompany?.payment_qr_url || (
-    resolvedUpiId
-      ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(`upi://pay?pa=${resolvedUpiId}&pn=${encodeURIComponent(resolvedAccountHolder)}&am=${grandTotal}&cu=INR`)}`
-      : null
+    upiPayload ? (getQrCodeDataUri(upiPayload, 300) || `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(upiPayload)}`) : null
   )
 
   // Document Verification QR Code
-  const documentQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(`SAAMPARK-ESTIMATE:${estimate.estimateNumber}|CLIENT:${estimate.client}|AMOUNT:INR${grandTotal}|DATE:${estimate.date}`)}`
+  const docVerifyData = `SAAMPARK-ESTIMATE:${estimate.estimateNumber}|CLIENT:${estimate.client}|AMOUNT:INR${grandTotal}|DATE:${estimate.date}`
+  const documentQrUrl = getQrCodeDataUri(docVerifyData, 300) || `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(docVerifyData)}`
 
   const handlePrint = () => {
     printDocument("printable-estimate", `Estimate_${estimate.estimateNumber}`)
@@ -384,7 +385,7 @@ export function OfficialEstimateDocument({
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-purple-900 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-md transition-all cursor-pointer"
             >
               <Megaphone size={13} />
-              <span>View Form No - 9</span>
+              <span>Marketing Retainer Scope</span>
             </button>
           )}
 
@@ -406,10 +407,16 @@ export function OfficialEstimateDocument({
         
         {/* 1. Top Header: Company Brand, Logo, Statutory IDs & Document Header Card */}
         <div className="flex flex-col gap-2.5 border-b-2 border-zinc-900 pb-3">
-          <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start gap-4">
+          <div 
+            className="flex flex-row justify-between items-start gap-4 w-full print:flex-row print:justify-between print:items-start print-doc-header-row"
+            style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%', flexWrap: 'nowrap' }}
+          >
             {/* Logo Card */}
             {resolvedLogoUrl ? (
-              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200 bg-white flex items-center justify-center p-1.5">
+              <div 
+                className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200 bg-white flex items-center justify-center p-1.5 print:w-24 print:h-24 print:shrink-0"
+                style={{ width: '96px', height: '96px', minWidth: '96px', minHeight: '96px', flexShrink: 0 }}
+              >
                 <img 
                   src={resolvedLogoUrl} 
                   alt={resolvedBrandName} 
@@ -417,7 +424,10 @@ export function OfficialEstimateDocument({
                 />
               </div>
             ) : (
-              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2 text-white text-center">
+              <div 
+                className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2 text-white text-center print:w-24 print:h-24 print:shrink-0"
+                style={{ width: '96px', height: '96px', minWidth: '96px', minHeight: '96px', flexShrink: 0 }}
+              >
                 <Sparkles className="w-5 h-5 mb-1 text-teal-200 drop-shadow-sm" />
                 <div className="font-black text-[11px] tracking-wider uppercase leading-tight font-sans">{resolvedBrandName}</div>
                 <div className="text-[7px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">{resolvedDivisionName || "ENTERPRISE"}</div>
@@ -425,9 +435,12 @@ export function OfficialEstimateDocument({
             )}
 
             {/* Center: BIG SAAMPARK and in below BIGGER SECONDARY LINE */}
-            <div className="flex-1 flex flex-col items-center justify-center text-center min-w-0 px-2 sm:px-4">
+            <div 
+              className="flex-1 flex flex-col items-center justify-center text-center min-w-[280px] px-2 sm:px-4 shrink print:min-w-[320px] print:flex-1 print-doc-header-center"
+              style={{ flex: '1 1 auto', minWidth: '280px', textAlign: 'center' }}
+            >
               <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                <h1 className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-wider leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs">
+                <h1 className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-wider leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs whitespace-pre-wrap break-words print:whitespace-pre-wrap">
                   {resolvedBrandName}
                 </h1>
                 {resolvedTrademarkSymbol && resolvedTrademarkSymbol !== "none" ? (
@@ -451,7 +464,7 @@ export function OfficialEstimateDocument({
 
               {/* Secondary Line */}
               {resolvedDivisionName ? (
-                <h2 className="text-xs sm:text-sm md:text-[15px] font-black tracking-widest text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center">
+                <h2 className="text-xs sm:text-sm md:text-[15px] font-black tracking-widest text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center whitespace-pre-wrap break-words print:text-[13px] print:whitespace-pre-wrap">
                   {resolvedDivisionName}
                 </h2>
               ) : null}
@@ -474,7 +487,10 @@ export function OfficialEstimateDocument({
             </div>
 
             {/* Right: Header Card with Status Badge & Dates */}
-            <div className={`w-full sm:w-56 rounded-xl ${theme.cardHeaderGradient} text-white p-3.5 shadow-md shrink-0 flex flex-col self-start space-y-2`}>
+            <div 
+              className={`w-56 min-w-[210px] max-w-[224px] rounded-xl ${theme.cardHeaderGradient} text-white p-3.5 shadow-md shrink-0 flex flex-col self-start space-y-2 print:w-56 print:min-w-[210px] print:shrink-0 print-doc-header-card`}
+              style={{ width: '224px', minWidth: '210px', maxWidth: '224px', flexShrink: 0 }}
+            >
               <div className="flex items-center justify-between border-b border-white/20 pb-1.5">
                 <span className="font-black text-[11px] tracking-wider uppercase">
                   {isNonGst ? "COMMERCIAL ESTIMATE" : "OFFICIAL ESTIMATE"}
@@ -517,45 +533,47 @@ export function OfficialEstimateDocument({
 
           {/* Address & Contact Row */}
           {(resolvedAddress || hasContactInfo) && (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-x-4 gap-y-1 text-[9.5px] text-zinc-700 pt-1.5 border-t border-zinc-100 w-full">
-              {resolvedAddress && (
-                <div className="flex items-start gap-1.5 min-w-0 flex-1">
-                  <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0 mt-0.5`}>
-                    <MapPin size={8} />
-                  </span>
-                  <strong className="text-zinc-900 text-[9px] shrink-0">Office:</strong>
-                  <span className="text-zinc-700 text-[9px] leading-normal break-words whitespace-normal">{resolvedAddress}</span>
-                </div>
-              )}
+            <div className="w-full pt-1.5 border-t border-zinc-100 text-[9.5px] text-zinc-700">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+                {resolvedAddress && (
+                  <div className="flex items-center gap-1.5 flex-grow basis-auto min-w-[280px]">
+                    <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                      <MapPin size={8} />
+                    </span>
+                    <strong className="text-zinc-900 text-[9px] shrink-0">Office:</strong>
+                    <span className="text-zinc-700 text-[9px] leading-snug font-medium">{resolvedAddress}</span>
+                  </div>
+                )}
 
-              {hasContactInfo && (
-                <div className="flex items-center gap-3 flex-wrap justify-end text-[9px]">
-                  {resolvedPhone && (
-                    <p className="flex items-center gap-1">
-                      <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                        <Phone size={7.5} />
-                      </span>
-                      <span className="font-mono text-zinc-800 font-semibold">{resolvedPhone}</span>
-                    </p>
-                  )}
-                  {resolvedEmail && (
-                    <p className="flex items-center gap-1">
-                      <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                        <Mail size={7.5} />
-                      </span>
-                      <span className="text-zinc-700">{resolvedEmail}</span>
-                    </p>
-                  )}
-                  {resolvedWebsite && (
-                    <p className="flex items-center gap-1">
-                      <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                        <Globe size={7.5} />
-                      </span>
-                      <span className="text-zinc-700">{resolvedWebsite}</span>
-                    </p>
-                  )}
-                </div>
-              )}
+                {hasContactInfo && (
+                  <div className="flex items-center gap-3 flex-wrap justify-end text-[9px] flex-grow-0 ml-auto">
+                    {resolvedPhone && (
+                      <p className="flex items-center gap-1 shrink-0">
+                        <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                          <Phone size={7.5} />
+                        </span>
+                        <span className="font-mono text-zinc-800 font-semibold">{resolvedPhone}</span>
+                      </p>
+                    )}
+                    {resolvedEmail && (
+                      <p className="flex items-center gap-1 shrink-0">
+                        <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                          <Mail size={7.5} />
+                        </span>
+                        <span className="text-zinc-700">{resolvedEmail}</span>
+                      </p>
+                    )}
+                    {resolvedWebsite && (
+                      <p className="flex items-center gap-1 max-w-[220px] truncate">
+                        <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                          <Globe size={7.5} />
+                        </span>
+                        <span className="text-zinc-700 truncate">{resolvedWebsite}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -691,12 +709,12 @@ export function OfficialEstimateDocument({
               <span className="text-[10px] font-bold uppercase tracking-wider text-teal-900 block mb-0.5">
                 Total Commercial Estimate in Words:
               </span>
-              <p className="font-serif italic font-bold text-teal-950 text-sm">
+              <p className="font-sans font-bold text-teal-950 text-sm">
                 {numberToIndianWords(grandTotal)}
               </p>
             </div>
 
-            {/* Digital Marketing & Social Media Campaign Package Card (Form No - 9) */}
+            {/* Digital Marketing & Social Media Campaign Package Card */}
             {estimate.marketingPackage?.enabled && (
               <div className="p-3.5 rounded-xl border border-purple-200 bg-purple-50/60 text-xs space-y-2">
                 <div className="flex items-center justify-between border-b border-purple-200 pb-1.5">
@@ -843,7 +861,7 @@ export function OfficialEstimateDocument({
               {resolvedSignatureUrl ? (
                 <img src={resolvedSignatureUrl} alt="Signature" className="h-14 object-contain" />
               ) : (
-                <div className="h-12 flex items-center justify-center italic font-serif text-zinc-400">
+                <div className="h-12 flex items-center justify-center font-sans font-semibold text-zinc-400">
                   [Digitally Authorized]
                 </div>
               )}

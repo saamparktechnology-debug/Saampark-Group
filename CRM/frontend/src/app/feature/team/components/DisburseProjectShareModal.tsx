@@ -13,7 +13,7 @@ import {
   FileText
 } from "lucide-react"
 import { ProjectUserEarningsRecord, PaymentMethod, TeamPayoutRecord } from "../types"
-import { recordTeamPayout, sendTeamPaymentReceiptEmail, getTeamBankingMap } from "../services/teamPaymentService"
+import { recordTeamPayout, sendTeamPaymentReceiptEmail, getTeamBankingMap } from "../service/teamPaymentService"
 import { Button } from "@/components/ui/Button"
 
 interface DisburseProjectShareModalProps {

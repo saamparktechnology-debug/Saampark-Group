@@ -7,7 +7,7 @@ import {
   CheckCircle2, Clock, Users, ArrowUpRight, Megaphone
 } from "lucide-react"
 import { MarketingLead, MarketingCampaign } from "../types"
-import { MarketingService } from "../services/marketingService"
+import { MarketingService } from "../service/marketingService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { Button } from "@/components/ui/Button"

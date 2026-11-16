@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import { Task, TaskStatus } from "./types"
-import { taskService } from "./services/taskService"
+import { useDeleteTaskMutation, useTasksQuery, useUpdateTaskMutation, tasksQueryKey } from "./hooks/useTasks"
+import { useQueryClient } from "@tanstack/react-query"
 import { TaskList } from "./components/TaskList"
 import { TaskKanban } from "./components/TaskKanban"
 import { TasksGantt } from "./components/TasksGantt"
@@ -16,14 +17,18 @@ import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 export default function TasksMain() {
-  const [tasks, setTasks] = React.useState<Task[]>([])
+  const queryClient = useQueryClient()
+  const targetComp = activeCompanyId || user?.companyId || "tech"
+  const { data: tasks = [], isLoading } = useTasksQuery(targetComp)
+  const updateTaskMutation = useUpdateTaskMutation(targetComp)
+  const deleteTaskMutation = useDeleteTaskMutation(targetComp)
   const [activeViewTab, setActiveViewTab] = React.useState<"list" | "kanban" | "gantt">("list")
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false)
   const { user, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches, companies } = useAuthStore()
   const [selectedTask, setSelectedTask] = React.useState<Task | null>(null)
   const [isManageLabelsOpen, setIsManageLabelsOpen] = React.useState(false)
-  const [isLoading, setIsLoading] = React.useState(true)
+  
 
   const roleLower = (user?.role || "").toLowerCase().trim()
   const isSuperAdmin = roleLower.includes("super") || roleLower === "super admin" || roleLower === "superadmin"
@@ -45,7 +50,7 @@ export default function TasksMain() {
       const { activeCompanyId: freshCompanyId, user: freshUser } = useAuthStore.getState()
       const targetComp = freshCompanyId || freshUser?.companyId || "tech"
       try {
-        const { getLeads } = await import("@/app/feature/leads/services/leadService")
+        const { getLeads } = await import("@/app/feature/leads/service/leadService")
         await getLeads(targetComp)
       } catch {}
       const data = await taskService.getTasks(targetComp)
@@ -77,7 +82,7 @@ export default function TasksMain() {
   }, [fetchTasks])
 
   const handleTaskAdded = (newTask: Task) => {
-    setTasks((prev) => [newTask, ...prev])
+    queryClient.setQueryData<Task[]>(tasksQueryKey(targetComp), (prev = []) => [newTask, ...prev])
   }
 
   const handleTaskUpdated = (updatedTask: Task) => {
@@ -174,7 +179,7 @@ export default function TasksMain() {
     }
 
     const checkBranch = (t: any) => {
-      if (!targetBranch || targetBranch === "all") return true
+      if (!targetBranch || targetBranch === "all" || targetBranch === "hq" || targetBranch === "main" || targetBranchId === "main" || targetBranchId === "hq") return true
       const tBranch = String(t.branchId || t.branch_id || "").toLowerCase().trim()
       const tBranchName = String(t.branchName || t.branch_name || "").toLowerCase().trim()
       // Strict: if branch filter active, task MUST have a matching branch
@@ -184,15 +189,23 @@ export default function TasksMain() {
     }
 
     const checkSubBranch = (t: any) => {
-      if (!targetSubBranch || targetSubBranch === "all") return true
+      if (!targetSubBranch || targetSubBranch === "all" || targetSubBranch === "hq" || targetSubBranch === "main" || targetSubBranchId === "main" || targetSubBranchId === "hq") return true
       const tSub = String(t.subBranchId || t.sub_branch_id || "").toLowerCase().trim()
       const tSubName = String(t.subBranchName || t.sub_branch_name || "").toLowerCase().trim()
-      if (!tSub && !tSubName) return true // sub-branch is optional
+      if (!tSub && !tSubName) return false
       return (tSub && (tSub === targetSubBranchId || (targetSubBranchName && tSub === targetSubBranchName))) ||
              (tSubName && (tSubName === targetSubBranchName || tSubName === targetSubBranchId))
     }
 
     let scopedList = tasks.filter(t => checkCompany(t) && checkBranch(t) && checkSubBranch(t))
+
+    // Newly created tasks on top
+    scopedList.sort((a, b) => {
+      const timeA = new Date(a.createdAt || a.dueDate || 0).getTime()
+      const timeB = new Date(b.createdAt || b.dueDate || 0).getTime()
+      if (timeA !== timeB && !isNaN(timeA) && !isNaN(timeB)) return timeB - timeA
+      return String(b.id || "").localeCompare(String(a.id || ""), undefined, { numeric: true })
+    })
 
     if (isSuperAdmin || isAdmin) {
       return scopedList

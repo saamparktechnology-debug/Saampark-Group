@@ -22,7 +22,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { confirmTwoStepBulkDelete } from "@/lib/confirmDialog"
-import { getUsers, getUserAvatar } from "@/app/feature/users/services/userService"
+import { getUsers, getUserAvatar } from "@/app/feature/users/service/userService"
 import { UserItem } from "@/app/feature/users/types"
 import { formatDisplayDate } from "@/lib/utils"
 

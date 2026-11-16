@@ -47,19 +47,19 @@ import {
   MapPin,
 } from "lucide-react"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
-import { Project, ProjectMilestone } from "../types"
-import { addOrUpdateProjectMilestone } from "../services/projectService"
+import { Project, ProjectMilestone, isMarketingProject } from "../types"
+import { addOrUpdateProjectMilestone } from "../service/projectService"
 import { useAuthStore } from "@/store/useAuthStore"
-import { getUserAvatar } from "@/app/feature/users/services/userService"
-import { getInvoices, addInvoice, generateInvoiceNumber, updateInvoiceStatus, InvoiceItem, InvoiceStatus } from "@/app/feature/sales/invoices/services/invoiceService"
-import { taskService } from "@/app/feature/tasks/services/taskService"
+import { getUserAvatar } from "@/app/feature/users/service/userService"
+import { getInvoices, addInvoice, generateInvoiceNumber, updateInvoiceStatus, InvoiceItem, InvoiceStatus } from "@/app/feature/sales/invoices/service/invoiceService"
+import { taskService } from "@/app/feature/tasks/service/taskService"
 import { Task, TaskPriority, TaskStatus, getTaskCountdownChip } from "@/app/feature/tasks/types"
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { printPDFReport, exportToExcel } from "@/lib/exportUtils"
 import { formatDisplayDate } from "@/lib/utils"
 import { OfficialQuotationDocument } from "@/app/feature/quotations/components/OfficialQuotationDocument"
 import { OfficialEstimateDocument } from "@/app/feature/estimates/components/OfficialEstimateDocument"
-import { OfficialFormNo9Document } from "@/components/documents/OfficialFormNo9Document"
+import { ProjectCompletionModal } from "./ProjectCompletionModal"
 import { DigitalMarketingPackage, createDefaultMarketingPackage } from "@/types/digitalMarketing"
 
 interface ProjectDetailViewProps {
@@ -123,14 +123,15 @@ export function ProjectDetailView({
     return false
   }, [user, selectedProject])
 
+  const isSelectedProjectMarketing = isMarketingProject(selectedProject)
   const canManageProgress = isAdmin || isAssignedTeamMember
   const [activeTab, setActiveTab] = React.useState(() => {
     if (initialTab && initialTab !== "Overview") {
-      if (initialTab === "Digital Marketing (Form 9)" && !isMarketingAllowed) return "Overview"
-      return initialTab
+      if ((initialTab === "Digital Marketing Retainer" || initialTab === "Digital Marketing (Form 9)") && (!isMarketingAllowed || !isSelectedProjectMarketing)) return "Overview"
+      return initialTab === "Digital Marketing (Form 9)" ? "Digital Marketing Retainer" : initialTab
     }
-    if (isMarketingAllowed && (selectedProject.projectType === "Digital Marketing Campaign" || (selectedProject as any).marketingPackage?.enabled)) {
-      return "Digital Marketing (Form 9)"
+    if (isMarketingAllowed && isSelectedProjectMarketing) {
+      return "Digital Marketing Retainer"
     }
     return "Overview"
   })
@@ -140,6 +141,60 @@ export function ProjectDetailView({
   const [leftSearch, setLeftSearch] = React.useState("")
   const [leftFilter, setLeftFilter] = React.useState("All")
   const [currentPage, setCurrentPage] = React.useState(1)
+
+  // Developer / Team Member Progress Update State
+  const [isUpdateProgressModalOpen, setIsUpdateProgressModalOpen] = React.useState(false)
+  const [progressValue, setProgressValue] = React.useState<number>(selectedProject.progress || 0)
+  const [statusValue, setStatusValue] = React.useState<string>(selectedProject.status || "Open")
+  const [progressLogNote, setProgressLogNote] = React.useState<string>("")
+  const [isSavingProgress, setIsSavingProgress] = React.useState(false)
+
+  React.useEffect(() => {
+    if (selectedProject) {
+      setProgressValue(selectedProject.progress || 0)
+      setStatusValue(selectedProject.status || "Open")
+    }
+  }, [selectedProject])
+
+  const handleSaveProgress = async () => {
+    if ((statusValue === "Completed" || statusValue === "Finished") && selectedProject.status !== "Completed" && selectedProject.status !== "Finished") {
+      setIsUpdateProgressModalOpen(false)
+      setIsCompletionModalOpen(true)
+      return
+    }
+
+    setIsSavingProgress(true)
+    try {
+      const updatedProject = {
+        ...selectedProject,
+        progress: Number(progressValue),
+        status: statusValue as any,
+      }
+      if (progressLogNote.trim()) {
+        const newMs: ProjectMilestone = {
+          id: `log_${Date.now()}`,
+          stage: "Custom",
+          title: `Progress Update: ${progressValue}% (${statusValue})`,
+          notes: progressLogNote.trim(),
+          status: progressValue >= 100 ? "Completed" : "In Progress",
+          developer: user?.name || user?.email || "Team Member",
+          date: new Date().toISOString().split("T")[0],
+        }
+        updatedProject.milestones = [newMs, ...(selectedProject.milestones || [])]
+      }
+      onSelectProject(updatedProject)
+
+      const { updateProject } = await import("../service/projectService")
+      await updateProject(selectedProject.id, updatedProject)
+
+      setIsUpdateProgressModalOpen(false)
+      setProgressLogNote("")
+    } catch (e) {
+      console.error("Failed to update progress:", e)
+    } finally {
+      setIsSavingProgress(false)
+    }
+  }
 
   // Developer Milestone Add/Update State
   const [isMilestoneModalOpen, setIsMilestoneModalOpen] = React.useState(false)
@@ -194,6 +249,7 @@ export function ProjectDetailView({
     if (isClient) {
       return [
         "Overview",
+        ...(isSelectedProjectMarketing ? ["Digital Marketing Retainer"] : []),
         "Milestones",
         "Tasks List",
         "Invoices",
@@ -203,7 +259,7 @@ export function ProjectDetailView({
     }
     const base = [
       "Overview",
-      ...(isMarketingAllowed ? ["Digital Marketing (Form 9)"] : []),
+      ...(isMarketingAllowed && isSelectedProjectMarketing ? ["Digital Marketing Retainer"] : []),
       "Invoices",
       "Tasks List",
       "Tasks Kanban",
@@ -219,12 +275,12 @@ export function ProjectDetailView({
       base.push("Timesheets")
     }
     return base
-  }, [isClient, isAdmin])
+  }, [isClient, isAdmin, isMarketingAllowed, isSelectedProjectMarketing])
 
   // Commercial Origin Documents & Form 9 State
   const [viewingQuotation, setViewingQuotation] = React.useState<any | null>(null)
   const [viewingEstimate, setViewingEstimate] = React.useState<any | null>(null)
-  const [isForm9ModalOpen, setIsForm9ModalOpen] = React.useState(false)
+  const [isCompletionModalOpen, setIsCompletionModalOpen] = React.useState(false)
   const [allQuotations, setAllQuotations] = React.useState<any[]>([])
   const [allEstimates, setAllEstimates] = React.useState<any[]>([])
   const [marketingPkgLocal, setMarketingPkgLocal] = React.useState<DigitalMarketingPackage | null>(null)
@@ -1424,10 +1480,10 @@ export function ProjectDetailView({
                 <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
                   Digital Marketing &amp; Ads Execution Hub
                 </h3>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200 border border-amber-200">
-                  FORM NO - 9
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-200 border border-purple-200">
+                  SAAMPARK DIGITAL RETAINER
                 </span>
-                <span className="text-[10px] font-black px-2 py-0.5 rounded bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-200">
+                <span className="text-[10px] font-black px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200">
                   {currentMarketingPkg.planName} ({currentMarketingPkg.packageDuration})
                 </span>
               </div>
@@ -1437,14 +1493,13 @@ export function ProjectDetailView({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsForm9ModalOpen(true)}
+          <a
+            href={`/feature/marketing?client=${encodeURIComponent(selectedProject?.client || "")}`}
             className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-md transition-all cursor-pointer shrink-0"
           >
-            <Printer size={15} />
-            <span>View / Print Form No - 9 Sheet</span>
-          </button>
+            <Megaphone size={15} />
+            <span>Open Marketing Campaign Hub</span>
+          </a>
         </div>
 
         {/* Performance Report 5 Metrics Grid */}
@@ -1817,6 +1872,50 @@ export function ProjectDetailView({
             >
               <Star size={16} fill={isStarred ? "currentColor" : "none"} />
             </button>
+
+            {/* Direct Quick Status Changer */}
+            <select
+              value={selectedProject.status || "Open"}
+              onChange={async (e) => {
+                const newStatus = e.target.value as any
+                if (newStatus === "Completed" || newStatus === "Finished") {
+                  setIsCompletionModalOpen(true)
+                  return
+                }
+                const newProgress = newStatus === "Open" ? 0 : (selectedProject.progress === 100 ? 50 : selectedProject.progress)
+                const updated = {
+                  ...selectedProject,
+                  status: newStatus,
+                  progress: newProgress,
+                }
+                onSelectProject(updated)
+                const { updateProject } = await import("../service/projectService")
+                await updateProject(selectedProject.id, {
+                  status: newStatus,
+                  progress: newProgress,
+                })
+                window.dispatchEvent(new CustomEvent("saampark_projects_updated"))
+              }}
+              className={`ml-2 px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer outline-none transition-colors ${
+                selectedProject.status === "Completed" || selectedProject.status === "Finished"
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800"
+                  : selectedProject.status === "Cancelled"
+                  ? "bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800"
+                  : selectedProject.status === "Under Review"
+                  ? "bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800"
+                  : selectedProject.status === "Hold"
+                  ? "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800"
+                  : "bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800"
+              }`}
+            >
+              <option value="Open">Open</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Under Review">Under Review</option>
+              <option value="Hold">Hold</option>
+              <option value="Completed">Completed</option>
+              <option value="Finished">Finished</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
           </div>
 
           {/* Action buttons */}
@@ -1835,10 +1934,10 @@ export function ProjectDetailView({
             {canManageProgress && (
               <button
                 type="button"
-                onClick={() => openAddMilestone("Frontend")}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 transition-colors cursor-pointer"
+                onClick={() => setIsUpdateProgressModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 transition-colors cursor-pointer"
               >
-                <Code2 size={13} />
+                <CheckCircle2 size={13} />
                 <span>Update Progress</span>
               </button>
             )}
@@ -1918,6 +2017,32 @@ export function ProjectDetailView({
                       <div><strong className="text-zinc-700 dark:text-zinc-300">Start date:</strong> {formatDisplayDate(selectedProject.startDate)}</div>
                       <div><strong className="text-zinc-700 dark:text-zinc-300">Deadline:</strong> <span className="text-red-600 dark:text-red-400 font-bold font-mono">{selectedProject.deadline ? formatDisplayDate(selectedProject.deadline) : "-"}</span></div>
                       <div><strong className="text-zinc-700 dark:text-zinc-300">Status:</strong> {selectedProject.status}</div>
+                      {(selectedProject.status === "Completed" || selectedProject.status === "Finished") && (
+                        <div className="mt-2.5 p-3 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-1">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                            <Clock size={13} className="text-emerald-600" />
+                            <span>{(selectedProject as any).planDuration || "Service & Hosting Plan"}</span>
+                          </div>
+                          {(selectedProject as any).countdownStartDate && (
+                            <div className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                              Started: <span className="font-mono font-semibold">{formatDisplayDate((selectedProject as any).countdownStartDate)}</span>
+                            </div>
+                          )}
+                          {(selectedProject as any).countdownEndDate ? (
+                            <div className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                              Expires: <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{formatDisplayDate((selectedProject as any).countdownEndDate)}</span>
+                            </div>
+                          ) : (selectedProject as any).firstPostDate ? (
+                            <div className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                              First Post: <span className="font-mono font-semibold">{formatDisplayDate((selectedProject as any).firstPostDate)}</span>
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-amber-600 font-medium">
+                              ⏳ Awaiting First Campaign Post to Start Countdown
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1975,53 +2100,334 @@ export function ProjectDetailView({
                 {/* Commercial Origin Documents (Quotation & Estimate) */}
                 {renderCommercialOriginDocumentsCard()}
 
+                {/* PROJECT ARCHITECTURE SPECIFICATIONS CARD */}
+                {!isSelectedProjectMarketing ? (
+                  /* Technical Project Architecture Card */
+                  <div className="bg-white dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 rounded-xl p-5 shadow-xs space-y-3.5">
+                    <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2">
+                      <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                        <Code2 size={16} />
+                        <span>Technical Architecture & Infrastructure</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                        Normal / Tech Project
+                      </span>
+                    </div>
+
+                    {/* Tech Stack Pills */}
+                    <div>
+                      <span className="text-[11px] font-semibold text-zinc-500 block mb-1.5">Technology Stack:</span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {((selectedProject as any).techStack && (selectedProject as any).techStack.length > 0
+                          ? (selectedProject as any).techStack
+                          : ["Next.js", "React", "Node.js", "PostgreSQL", "Tailwind CSS"]
+                        ).map((tech: string) => (
+                          <span
+                            key={tech}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/70 dark:border-blue-900/60"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                            {tech}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Git Repo & Live Domain Links */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/70 dark:border-zinc-700/60 space-y-1">
+                        <span className="text-[10px] text-zinc-400 font-semibold uppercase flex items-center gap-1">
+                          <Code2 size={11} className="text-zinc-500" />
+                          <span>Git Repository</span>
+                        </span>
+                        {(selectedProject as any).gitUrl ? (
+                          <a
+                            href={(selectedProject as any).gitUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 truncate"
+                          >
+                            <span className="truncate">{(selectedProject as any).gitUrl}</span>
+                            <ExternalLink size={12} className="shrink-0" />
+                          </a>
+                        ) : (
+                          <span className="text-xs text-zinc-400">Git repo configured via deployment</span>
+                        )}
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/70 dark:border-zinc-700/60 space-y-1">
+                        <span className="text-[10px] text-zinc-400 font-semibold uppercase flex items-center gap-1">
+                          <ExternalLink size={11} className="text-zinc-500" />
+                          <span>Live Web Domain</span>
+                        </span>
+                        {(selectedProject as any).liveUrl ? (
+                          <a
+                            href={(selectedProject as any).liveUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 truncate"
+                          >
+                            <span className="truncate">{(selectedProject as any).liveUrl}</span>
+                            <ExternalLink size={12} className="shrink-0" />
+                          </a>
+                        ) : (
+                          <span className="text-xs text-zinc-400">Staging / Production domain</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Hosting Infrastructure */}
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-800/40 border border-slate-200 dark:border-zinc-700 flex items-center justify-between text-xs">
+                      <span className="text-zinc-500 font-medium">Hosting Infrastructure:</span>
+                      <span className="font-bold text-zinc-800 dark:text-zinc-200">
+                        {(selectedProject as any).hostingEnvironment || "Dedicated Linux VPS (Hostinger / DigitalOcean)"}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  /* Digital Marketing Retainer Specifications Card */
+                  <div className="bg-white dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 rounded-xl p-5 shadow-xs space-y-3.5">
+                    <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2">
+                      <div className="flex items-center gap-2 text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">
+                        <Megaphone size={16} />
+                        <span>Campaign Deliverables & Retainer Quotas</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                        Digital Marketing Retainer
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      <div className="p-2.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900/40">
+                        <span className="text-[10px] text-zinc-500 block">Plan Tier</span>
+                        <span className="font-bold text-xs text-purple-700 dark:text-purple-300">
+                          {(selectedProject as any).marketingRetainer?.planTier || (selectedProject as any).marketingPackage?.planName || "Package 02 - Grow"}
+                        </span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900/40">
+                        <span className="text-[10px] text-zinc-500 block">Monthly Posters</span>
+                        <span className="font-black font-mono text-sm text-purple-700 dark:text-purple-300">
+                          {(selectedProject as any).marketingRetainer?.postersQuota ?? (selectedProject as any).marketingPackage?.postersCount ?? 12}
+                        </span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900/40">
+                        <span className="text-[10px] text-zinc-500 block">Monthly Reels</span>
+                        <span className="font-black font-mono text-sm text-purple-700 dark:text-purple-300">
+                          {(selectedProject as any).marketingRetainer?.reelsQuota ?? (selectedProject as any).marketingPackage?.reelsCount ?? 2}
+                        </span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40">
+                        <span className="text-[10px] text-zinc-500 block">Monthly Ad Budget</span>
+                        <span className="font-black font-mono text-sm text-emerald-700 dark:text-emerald-300">
+                          ₹{((selectedProject as any).marketingRetainer?.monthlyAdBudget || 0).toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                      <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/70 dark:border-zinc-700/60">
+                        <span className="text-[10px] text-zinc-400 font-semibold block uppercase">Model Shoot Schedule:</span>
+                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                          {(selectedProject as any).marketingRetainer?.shootDate || "Scheduled during campaign kickoff"}
+                        </span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/70 dark:border-zinc-700/60">
+                        <span className="text-[10px] text-zinc-400 font-semibold block uppercase">Target Geography:</span>
+                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                          {(selectedProject as any).marketingRetainer?.targetGeo || "Regional / Local commerce radius"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {(selectedProject as any).marketingRetainer?.driveUrl && (
+                      <div className="p-2.5 rounded-xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-900/40 flex items-center justify-between text-xs">
+                        <span className="text-zinc-500 font-medium">Creative Assets & Photoshoots:</span>
+                        <a
+                          href={(selectedProject as any).marketingRetainer.driveUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
+                        >
+                          <span>Open Google Drive</span>
+                          <ExternalLink size={12} />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Developer Milestones & Updates Card in Overview */}
                 {renderMilestonesView()}
 
-                {/* Project Members Card */}
-                <div className="bg-white dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 rounded-xl p-5 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Assigned Team Members</h3>
-                    <button
-                      type="button"
-                      onClick={() => onOpenEditModal(selectedProject)}
-                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 rounded-md hover:bg-blue-100 transition-colors cursor-pointer"
-                    >
-                      <Plus size={13} />
-                      <span>Manage Team</span>
-                    </button>
-                  </div>
+                {/* Project Members Card with Pro-Rata Commission Attribution */}
+                {(() => {
+                  const numProjTotal = parseFloat(
+                    String(selectedProject.totalAmount ?? selectedProject.baseAmount ?? selectedProject.price ?? "0").replace(/[^0-9.]/g, "")
+                  ) || 0
 
-                  <div className="space-y-3">
-                    {(selectedProject.members || []).length === 0 ? (
-                      <p className="text-zinc-400 text-xs py-2 text-center">No team assigned yet. Click 'Manage Team' to assign developer.</p>
-                    ) : (
-                      (selectedProject.members || []).map((m) => (
-                        <div key={m.id} className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={(m as any).avatarUrl || m.avatar || getUserAvatar(m.name, undefined, m.name)}
-                              alt={m.name}
-                              className="w-8 h-8 rounded-full object-cover bg-surface border border-border shrink-0"
-                            />
-                            <div>
-                              <div className="font-bold text-zinc-800 dark:text-zinc-200">{m.name}</div>
-                              <div className="text-[11px] text-zinc-400">{m.role || "Developer"}</div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 text-zinc-400">
-                            {m.email && <span className="text-[10px] text-zinc-500 font-mono">{m.email}</span>}
-                          </div>
+                  const effectiveClientPaid = typeof selectedProject.paidAmount === "number"
+                    ? selectedProject.paidAmount
+                    : (selectedProject.paymentStatus === "Paid" || selectedProject.status === "Completed"
+                      ? numProjTotal
+                      : (typeof selectedProject.advanceAmount === "number" ? selectedProject.advanceAmount : 0))
+
+                  const effectiveClientDue = Math.max(0, numProjTotal - effectiveClientPaid)
+                  const paidRatio = numProjTotal > 0 ? Math.min(1, effectiveClientPaid / numProjTotal) : 0
+                  const isSubRetainer = isSelectedProjectMarketing || Boolean(selectedProject.subscriptionId) || String(selectedProject.title).toLowerCase().includes("package")
+
+                  return (
+                    <div className="bg-white dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 rounded-xl p-5 shadow-xs space-y-4">
+                      <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2">
+                        <div>
+                          <h3 className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                            Assigned Team Members & Pro-Rata Commission
+                          </h3>
+                          <p className="text-[10px] text-zinc-400 mt-0.5">
+                            Commissions unlock pro-rata as client makes payments (e.g. 10% advance unlocks 10% commission).
+                          </p>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </div>
+                        <button
+                          type="button"
+                          onClick={() => onOpenEditModal(selectedProject)}
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 rounded-md hover:bg-blue-100 transition-colors cursor-pointer shrink-0"
+                        >
+                          <Plus size={13} />
+                          <span>Manage Team</span>
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {(selectedProject.members || []).length === 0 ? (
+                          <p className="text-zinc-400 text-xs py-2 text-center">No team assigned yet. Click 'Manage Team' to assign developer.</p>
+                        ) : (
+                          (selectedProject.members || []).map((m) => {
+                            const sharePct = typeof m.sharePercentage === "number" ? m.sharePercentage : 15
+                            const memberTotalPayout = m.payoutType === "fixed" && typeof m.payoutAmount === "number"
+                              ? m.payoutAmount
+                              : Math.round((numProjTotal * sharePct) / 100)
+                            const memberEarnedPayout = Math.round(paidRatio * memberTotalPayout)
+                            const memberPendingPayout = Math.max(0, memberTotalPayout - memberEarnedPayout)
+
+                            return (
+                              <div
+                                key={m.id}
+                                className="p-3.5 rounded-xl bg-zinc-50/70 dark:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-700/60 space-y-2.5 text-xs"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <img
+                                      src={(m as any).avatarUrl || m.avatar || getUserAvatar(m.name, undefined, m.name)}
+                                      alt={m.name}
+                                      className="w-8 h-8 rounded-full object-cover bg-surface border border-purple-200 shrink-0"
+                                    />
+                                    <div>
+                                      <div className="font-bold text-zinc-800 dark:text-zinc-200">{m.name}</div>
+                                      <div className="text-[11px] text-zinc-400">{m.role || "Developer"}</div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                      {m.payoutType === "fixed" ? `Fixed ₹${(m.payoutAmount || 0).toLocaleString("en-IN")}` : `${sharePct}% Commission`}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Pro-Rata Attribution Strip */}
+                                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-zinc-200/60 dark:border-zinc-700/60 text-[10.5px]">
+                                  <div className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-700">
+                                    <span className="text-zinc-400 block text-[9.5px]">Total Potential:</span>
+                                    <span className="font-bold font-mono text-zinc-800 dark:text-zinc-200">
+                                      ₹{memberTotalPayout.toLocaleString("en-IN")}
+                                    </span>
+                                  </div>
+                                  <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                                    <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-300 font-semibold text-[9.5px]">
+                                      <span>Earned (Pro-Rata):</span>
+                                      <span className="font-bold">{(paidRatio * 100).toFixed(0)}%</span>
+                                    </div>
+                                    <span className="font-black font-mono text-emerald-700 dark:text-emerald-300 text-xs">
+                                      ₹{memberEarnedPayout.toLocaleString("en-IN")}
+                                    </span>
+                                    <div className="text-[9px] text-emerald-600 dark:text-emerald-400 truncate">
+                                      {effectiveClientPaid > 0 ? `On ₹${effectiveClientPaid.toLocaleString("en-IN")} advance` : "Awaiting payment"}
+                                    </div>
+                                  </div>
+                                  <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
+                                    <span className="text-amber-700 dark:text-amber-300 block text-[9.5px] font-semibold">Pending Due:</span>
+                                    <span className="font-bold font-mono text-amber-700 dark:text-amber-300 text-xs">
+                                      ₹{memberPendingPayout.toLocaleString("en-IN")}
+                                    </span>
+                                    <div className="text-[9px] text-amber-600 dark:text-amber-400 truncate">
+                                      {effectiveClientDue > 0 ? `Unlocks on ₹${effectiveClientDue.toLocaleString("en-IN")}` : "Fully settled"}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {isSubRetainer && (
+                                  <div className="px-2 py-1 rounded-md bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/40 text-[10px] text-indigo-700 dark:text-indigo-300 font-semibold flex items-center justify-between">
+                                    <span>🔄 Retainer Recurring Payout:</span>
+                                    <span className="font-mono font-bold">
+                                      ₹{memberTotalPayout.toLocaleString("en-IN")} per monthly paid billing cycle
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
 
               </div>
 
               {/* Right Column: Activity Timeline & Project In-Charge */}
               <div className="space-y-6">
+                {/* ATTACHED OFFICIAL INVOICE CARD */}
+                <div className="bg-white dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 rounded-xl p-5 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                      <Receipt size={14} className="text-blue-600" />
+                      <span>Attached Official Invoice</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("Invoices")}
+                      className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      View Invoices →
+                    </button>
+                  </div>
+
+                  <div className="p-3 bg-blue-50/50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 rounded-xl space-y-2 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-500">Invoice ID:</span>
+                      <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
+                        {selectedProject.invoiceNumber || selectedProject.invoiceId || "Live Attached"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-500">Total Invoiced:</span>
+                      <span className="font-mono font-black text-zinc-900 dark:text-zinc-100 text-sm">
+                        {selectedProject.price}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 font-semibold">
+                      <span>Client Paid / Advance:</span>
+                      <span className="font-mono font-bold">
+                        ₹{(typeof selectedProject.paidAmount === "number" ? selectedProject.paidAmount : (selectedProject.advanceAmount || 0)).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-amber-600 dark:text-amber-400 font-semibold">
+                      <span>Balance Due:</span>
+                      <span className="font-mono font-bold">
+                        ₹{(typeof selectedProject.dueAmount === "number" ? selectedProject.dueAmount : 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Project In-Charge / Billed By */}
                 <div className="bg-white dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 rounded-xl p-5 shadow-xs space-y-3">
                   <h3 className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Admin & Billing Information</h3>
@@ -2093,7 +2499,7 @@ export function ProjectDetailView({
               </div>
 
             </div>
-          ) : activeTab === "Digital Marketing (Form 9)" ? (
+          ) : (activeTab === "Digital Marketing Retainer" || activeTab === "Digital Marketing (Form 9)") ? (
             renderDigitalMarketingView()
           ) : activeTab === "Milestones" ? (
             renderMilestonesView()
@@ -2572,7 +2978,112 @@ export function ProjectDetailView({
         </div>
       )}
 
-      {/* ── OFFICIAL DOCUMENT VIEWERS (QUOTATION, ESTIMATE, FORM 9) ── */}
+      {/* ── UPDATE PROJECT PROGRESS MODAL (FOR TEAM MEMBERS & ADMINS) ── */}
+      {isUpdateProgressModalOpen && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600">
+                  <CheckCircle2 size={18} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100">
+                    Update Project Progress
+                  </h3>
+                  <p className="text-[11px] text-zinc-400 truncate max-w-[260px]">
+                    {selectedProject.title}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsUpdateProgressModalOpen(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Progress % Slider & Number */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-xs font-bold">
+                <label className="text-zinc-700 dark:text-zinc-300">Completion Percentage</label>
+                <span className="font-mono text-blue-600 text-sm font-extrabold">{progressValue}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={progressValue}
+                onChange={(e) => setProgressValue(Number(e.target.value))}
+                className="w-full accent-blue-600 cursor-pointer"
+              />
+              <div className="flex justify-between text-[10px] text-zinc-400 font-mono">
+                <span>0%</span>
+                <span>25%</span>
+                <span>50%</span>
+                <span>75%</span>
+                <span>100%</span>
+              </div>
+            </div>
+
+            {/* Status Selection */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                Project Status
+              </label>
+              <select
+                value={statusValue}
+                onChange={(e) => setStatusValue(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold outline-none focus:border-blue-500"
+              >
+                <option value="Open">Open (Pending Kickoff)</option>
+                <option value="In Progress">In Progress (Active Development)</option>
+                <option value="Under Review">Under Review (Client / QA)</option>
+                <option value="Hold">On Hold</option>
+                <option value="Completed">Completed (100% Delivered)</option>
+              </select>
+            </div>
+
+            {/* Progress Log Note */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                Work Log / Milestone Note (Optional)
+              </label>
+              <textarea
+                rows={2}
+                value={progressLogNote}
+                onChange={(e) => setProgressLogNote(e.target.value)}
+                placeholder="e.g. Completed frontend dashboard UI and linked authentication APIs..."
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-blue-500"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setIsUpdateProgressModalOpen(false)}
+                className="px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveProgress}
+                disabled={isSavingProgress}
+                className="px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                {isSavingProgress ? "Saving..." : "Save Progress"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── OFFICIAL DOCUMENT VIEWERS (QUOTATION, ESTIMATE) ── */}
       {viewingQuotation && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 overflow-y-auto">
           <OfficialQuotationDocument
@@ -2591,18 +3102,49 @@ export function ProjectDetailView({
         </div>
       )}
 
-      {isForm9ModalOpen && (
-        <OfficialFormNo9Document
-          pkg={currentMarketingPkg}
-          clientInfo={{
-            name: selectedProject.client,
-            businessName: selectedProject.client,
-            address: selectedProject.client,
-            category: currentMarketingPkg.category || "Digital Marketing",
+      {/* DUAL CONFIRMATION PROJECT COMPLETION MODAL */}
+      {isCompletionModalOpen && (
+        <ProjectCompletionModal
+          isOpen={isCompletionModalOpen}
+          project={selectedProject}
+          onClose={() => setIsCompletionModalOpen(false)}
+          onConfirmComplete={async (completedData) => {
+            const { updateProject } = await import("../service/projectService")
+            const { sendProjectCompletionEmailNotification } = await import("@/services/emailNotificationService")
+
+            const updated = await updateProject(selectedProject.id, {
+              status: "Completed",
+              progress: 100,
+              completedAt: new Date().toISOString(),
+              countdownStartDate: completedData.countdownStartDate,
+              countdownEndDate: completedData.countdownEndDate,
+              planDuration: completedData.planDuration,
+              planType: completedData.planType as any,
+              firstPostDate: completedData.firstPostDate,
+              clientEmail: completedData.clientEmail,
+            })
+
+            onSelectProject(updated)
+
+            if (completedData.notifyClient && completedData.clientEmail) {
+              await sendProjectCompletionEmailNotification(
+                updated,
+                completedData.clientEmail,
+                selectedProject.client,
+                {
+                  planType: completedData.planType,
+                  countdownDuration: completedData.planDuration,
+                  countdownStartDate: completedData.countdownStartDate,
+                  countdownEndDate: completedData.countdownEndDate,
+                  countdownNotice: completedData.planType === "digital_marketing"
+                    ? (completedData.firstPostDate 
+                        ? `Campaign timeline started from 1st post on ${completedData.firstPostDate} and expires on ${completedData.countdownEndDate}.`
+                        : "Campaign countdown paused until first creative post goes live.")
+                    : `Your service & hosting countdown started today (${new Date().toLocaleDateString("en-IN")}) and remains active until ${completedData.countdownEndDate}.`,
+                }
+              )
+            }
           }}
-          onClose={() => setIsForm9ModalOpen(false)}
-          onUpdatePkg={handleSaveMarketingPackage}
-          isEditable={true}
         />
       )}
 

@@ -6,7 +6,7 @@ import {
   Shield, Calendar, Calculator, CheckCircle2, Clock, Landmark, 
   Stamp, FileCheck, ArrowRight, QrCode, FileText, UserCheck, Sparkles,
   Check, ChevronRight, Layers, Award, ShieldCheck, BadgeCheck, FileCode, CheckSquare, Megaphone,
-  ListChecks, AlertCircle
+  ListChecks, AlertCircle, Edit
 } from "lucide-react"
 import { useAuthStore, Company, Branch, DEFAULT_COMPANIES, getCompanyLogoUrl } from "@/store/useAuthStore"
 import { OfficialFormNo9Document } from "@/components/documents/OfficialFormNo9Document"
@@ -100,6 +100,8 @@ interface OfficialQuotationDocumentProps {
   quotation: QuotationData
   onClose?: () => void
   onAccept?: () => void
+  onDecline?: () => void
+  onRequestModify?: () => void
   onSendEmail?: () => void
   onConvertToInvoice?: () => void
   onConvertToProject?: () => void
@@ -171,6 +173,8 @@ export function OfficialQuotationDocument({
   quotation,
   onClose,
   onAccept,
+  onDecline,
+  onRequestModify,
   onSendEmail,
   onConvertToInvoice,
   onConvertToProject,
@@ -201,10 +205,10 @@ export function OfficialQuotationDocument({
     const targetCompName = String(quotation.companyName || "").toLowerCase().trim()
 
     const matched = companies.find(c => {
-      const cId = c.id.toLowerCase().trim()
-      const cSlug = (c.slug || "").toLowerCase().trim()
-      const cName = c.name.toLowerCase().trim()
-      const cBrand = (c.brand_name || "").toLowerCase().trim()
+      const cId = String(c.id || "").toLowerCase().trim()
+      const cSlug = String(c.slug || "").toLowerCase().trim()
+      const cName = String(c.name || "").toLowerCase().trim()
+      const cBrand = String(c.brand_name || "").toLowerCase().trim()
       return (
         cId === targetCompId || 
         cSlug === targetCompId || 
@@ -213,7 +217,7 @@ export function OfficialQuotationDocument({
       )
     })
     if (matched) return matched
-    const defMatch = DEFAULT_COMPANIES.find(c => c.id.toLowerCase() === targetCompId || c.slug?.toLowerCase() === targetCompId)
+    const defMatch = DEFAULT_COMPANIES.find(c => String(c.id || "").toLowerCase() === targetCompId || String(c.slug || "").toLowerCase() === targetCompId)
     return defMatch || companies[0] || DEFAULT_COMPANIES[0]
   }, [quotation.companyId, (quotation as any).company, quotation.companyName, activeCompanyId, companies])
 
@@ -529,15 +533,15 @@ export function OfficialQuotationDocument({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {quotation.marketingPackage && (
+          {(quotation.marketingPackage || (quotation as any).isMarketingRetainer || quotation.primaryCategory === "Digital Marketing") && (
             <button
               type="button"
               onClick={() => setIsForm9Open(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm transition-all cursor-pointer"
-              title="View the dedicated Form No - 9 Digital Marketing execution sheet"
+              title="View Digital Marketing Retainer execution sheet"
             >
               <Megaphone size={13} />
-              <span>View Form No - 9</span>
+              <span>Marketing Retainer Scope</span>
             </button>
           )}
 
@@ -550,26 +554,61 @@ export function OfficialQuotationDocument({
             <span>Print / Save PDF</span>
           </button>
 
-          {quotation.status !== "Accepted" && onAccept && (
-            <button
-              type="button"
-              onClick={onAccept}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all cursor-pointer"
-              title="Formally accept and approve this quotation"
-            >
-              <CheckCircle2 size={13} />
-              <span>{isClientRole ? "Accept Quotation" : "Mark Accepted"}</span>
-            </button>
+          {/* CLIENT-ONLY ACTIONS: Accept, Request Modification, Decline */}
+          {isClientRole && quotation.status !== "Accepted" && quotation.status !== "Declined" && (
+            <>
+              {onAccept && (
+                <button
+                  type="button"
+                  onClick={onAccept}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all cursor-pointer"
+                  title="Accept and approve this commercial quotation"
+                >
+                  <CheckCircle2 size={13} />
+                  <span>Accept Quotation</span>
+                </button>
+              )}
+              {onRequestModify && (
+                <button
+                  type="button"
+                  onClick={onRequestModify}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-amber-950 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-sm transition-all cursor-pointer"
+                  title="Request changes or modifications to this quotation"
+                >
+                  <Edit size={13} />
+                  <span>Request Modification</span>
+                </button>
+              )}
+              {onDecline && (
+                <button
+                  type="button"
+                  onClick={onDecline}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-all cursor-pointer"
+                  title="Decline this quotation"
+                >
+                  <X size={13} />
+                  <span>Decline</span>
+                </button>
+              )}
+            </>
           )}
 
           {(quotation.status === "Accepted" || quotation.clientAccepted) && (
             <div className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-800 rounded-lg shadow-2xs">
               <CheckCircle2 size={13} className="text-emerald-400" />
-              <span>Accepted</span>
+              <span>✓ Digitally Accepted</span>
             </div>
           )}
 
-          {onConvertToClient && (
+          {quotation.status === "Declined" && (
+            <div className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-rose-300 bg-rose-950/60 border border-rose-800 rounded-lg shadow-2xs">
+              <X size={13} className="text-rose-400" />
+              <span>Declined by Client</span>
+            </div>
+          )}
+
+          {/* ADMIN & TEAM ONLY ACTIONS (Never shown to Clients) */}
+          {!isClientRole && onConvertToClient && (
             <button
               type="button"
               onClick={onConvertToClient}
@@ -581,7 +620,7 @@ export function OfficialQuotationDocument({
             </button>
           )}
 
-          {onSendEstimate && (
+          {!isClientRole && onSendEstimate && (
             <button
               type="button"
               onClick={onSendEstimate}
@@ -593,7 +632,7 @@ export function OfficialQuotationDocument({
             </button>
           )}
 
-          {onSendEmail && (
+          {!isClientRole && onSendEmail && (
             <button
               type="button"
               onClick={onSendEmail}
@@ -604,7 +643,7 @@ export function OfficialQuotationDocument({
             </button>
           )}
 
-          {onConvertToInvoice && (
+          {!isClientRole && onConvertToInvoice && (
             <button
               type="button"
               onClick={onConvertToInvoice}
@@ -631,19 +670,19 @@ export function OfficialQuotationDocument({
       <div className="w-full flex flex-col items-center py-2 print:p-0 print:m-0 overflow-x-auto">
         <div 
           id="printable-quotation" 
-          className="a4-page bg-white text-zinc-900 font-sans p-5 sm:p-6 text-xs shadow-2xl border border-zinc-200/90 rounded-lg w-full max-w-[794px] mx-auto relative flex flex-col gap-4 overflow-visible print:w-[210mm] print:max-w-[210mm] print:h-auto print:min-h-0 print:max-h-none print:overflow-visible print:p-[4mm_6mm] print:gap-3.5 print:m-0 print:shadow-none print:border-none print:rounded-none"
+          className="a4-page block w-full max-w-[820px] mx-auto overflow-visible p-0 bg-transparent space-y-6 print:space-y-0 print:p-0 print:m-0 print:w-[210mm] print:max-w-[210mm]"
         >
         
         {/* ── PAGE 1 CONTAINER: Header, Customer Details & Project Details Only ── */}
         <div 
-          className="quotation-page-1 break-after-page print:break-after-page flex flex-col gap-3.5"
+          className="quotation-page-1 break-after-page print:break-after-page block w-full bg-white text-zinc-900 font-sans p-5 sm:p-6 text-xs shadow-xl border border-zinc-200/90 rounded-lg space-y-3.5 print:p-[4mm_6mm] print:border-none print:shadow-none print:rounded-none min-h-[297mm] print:min-h-0"
           style={{ breakAfter: 'page', pageBreakAfter: 'always' }}
         >
           {/* 1. Top Header: Company Brand, Logo, Statutory IDs & Document Header Card */}
           <div className="avoid-break break-inside-avoid flex flex-col gap-2.5 border-b-2 border-zinc-900 pb-3">
             <div 
-              className="flex flex-row justify-between items-start gap-4 w-full print:flex-row print:justify-between print:items-start"
-              style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}
+              className="flex flex-row justify-between items-start gap-4 w-full print:flex-row print:justify-between print:items-start print-doc-header-row"
+              style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%', flexWrap: 'nowrap' }}
             >
               {/* Logo Card */}
               {resolvedLogoUrl ? (
@@ -671,11 +710,11 @@ export function OfficialQuotationDocument({
 
               {/* Center: BIG SAAMPARK and in below SECONDARY LINE */}
               <div 
-                className="flex-1 flex flex-col items-center justify-center text-center min-w-0 px-2 sm:px-4 print:flex-1 print:text-center"
-                style={{ flex: '1 1 auto', textAlign: 'center', minWidth: 0, padding: '0 8px' }}
+                className="flex-1 flex flex-col items-center justify-center text-center min-w-[280px] px-2 sm:px-4 shrink print:min-w-[320px] print:flex-1 print-doc-header-center"
+                style={{ flex: '1 1 auto', textAlign: 'center', minWidth: '280px', padding: '0 8px' }}
               >
                 <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                  <h1 className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-wider leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs">
+                  <h1 className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-wider leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs whitespace-pre-wrap break-words print:whitespace-pre-wrap">
                     {resolvedBrandName}
                   </h1>
                   {resolvedTrademarkSymbol && resolvedTrademarkSymbol !== "none" ? (
@@ -699,7 +738,7 @@ export function OfficialQuotationDocument({
 
                 {/* Secondary Line */}
                 {resolvedDivisionName ? (
-                  <h2 className="text-xs sm:text-sm md:text-[15px] font-black tracking-widest text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center">
+                  <h2 className="text-xs sm:text-sm md:text-[15px] font-black tracking-widest text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center whitespace-pre-wrap break-words print:text-[13px] print:whitespace-pre-wrap">
                     {resolvedDivisionName}
                   </h2>
                 ) : null}
@@ -723,8 +762,8 @@ export function OfficialQuotationDocument({
 
               {/* Right: Header Card with Status Badge & Dates */}
               <div 
-                className={`w-56 rounded-xl ${theme.cardHeaderGradient} text-white p-3.5 shadow-md shrink-0 flex flex-col self-start space-y-2 print:w-56 print:shrink-0`}
-                style={{ width: '224px', minWidth: '224px', flexShrink: 0 }}
+                className={`w-56 min-w-[210px] max-w-[224px] rounded-xl ${theme.cardHeaderGradient} text-white p-3.5 shadow-md shrink-0 flex flex-col self-start space-y-2 print:w-56 print:min-w-[210px] print:shrink-0 print-doc-header-card`}
+                style={{ width: '224px', minWidth: '210px', maxWidth: '224px', flexShrink: 0 }}
               >
                 <div className="flex items-center justify-between border-b border-white/20 pb-1.5">
                   <span className="font-black text-[11px] tracking-wider uppercase">
@@ -768,48 +807,47 @@ export function OfficialQuotationDocument({
 
             {/* Address & Contact Row (Full Address with wrap) */}
             {(resolvedAddress || hasContactInfo) && (
-              <div 
-                className="flex flex-row items-start justify-between gap-x-4 gap-y-1.5 text-[9.5px] text-zinc-700 pt-1.5 border-t border-zinc-100 w-full print:flex-row print:justify-between print:items-start"
-                style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}
-              >
-                {resolvedAddress && (
-                  <div className="flex items-start gap-1.5 min-w-0 flex-1 max-w-[65%]">
-                    <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0 mt-0.5`}>
-                      <MapPin size={8} />
-                    </span>
-                    <strong className="text-zinc-900 text-[9px] shrink-0">Registered Office:</strong>
-                    <span className="text-zinc-700 text-[9px] leading-relaxed break-words whitespace-normal font-medium">{resolvedAddress}</span>
-                  </div>
-                )}
+              <div className="w-full pt-1.5 border-t border-zinc-100 text-[9.5px] text-zinc-700">
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+                  {resolvedAddress && (
+                    <div className="flex items-center gap-1.5 flex-grow basis-auto min-w-[280px]">
+                      <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                        <MapPin size={8} />
+                      </span>
+                      <strong className="text-zinc-900 text-[9px] shrink-0">Registered Office:</strong>
+                      <span className="text-zinc-700 text-[9px] leading-snug font-medium">{resolvedAddress}</span>
+                    </div>
+                  )}
 
-                {hasContactInfo && (
-                  <div className="flex items-center gap-3 flex-wrap justify-end text-[9px] shrink-0">
-                    {resolvedPhone && (
-                      <p className="flex items-center gap-1">
-                        <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                          <Phone size={7.5} />
-                        </span>
-                        <span className="font-mono text-zinc-800 font-semibold">{resolvedPhone}</span>
-                      </p>
-                    )}
-                    {resolvedEmail && (
-                      <p className="flex items-center gap-1">
-                        <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                          <Mail size={7.5} />
-                        </span>
-                        <span className="text-zinc-700">{resolvedEmail}</span>
-                      </p>
-                    )}
-                    {resolvedWebsite && (
-                      <p className="flex items-center gap-1">
-                        <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                          <Globe size={7.5} />
-                        </span>
-                        <span className="text-zinc-700">{resolvedWebsite}</span>
-                      </p>
-                    )}
-                  </div>
-                )}
+                  {hasContactInfo && (
+                    <div className="flex items-center gap-3 flex-wrap justify-end text-[9px] flex-grow-0 ml-auto">
+                      {resolvedPhone && (
+                        <p className="flex items-center gap-1 shrink-0">
+                          <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                            <Phone size={7.5} />
+                          </span>
+                          <span className="font-mono text-zinc-800 font-semibold">{resolvedPhone}</span>
+                        </p>
+                      )}
+                      {resolvedEmail && (
+                        <p className="flex items-center gap-1 shrink-0">
+                          <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                            <Mail size={7.5} />
+                          </span>
+                          <span className="text-zinc-700">{resolvedEmail}</span>
+                        </p>
+                      )}
+                      {resolvedWebsite && (
+                        <p className="flex items-center gap-1 max-w-[220px] truncate">
+                          <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                            <Globe size={7.5} />
+                          </span>
+                          <span className="text-zinc-700 truncate">{resolvedWebsite}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -960,11 +998,40 @@ export function OfficialQuotationDocument({
               </div>
             </div>
           </div>
+
+          {/* Page 1 Official Footer Banner */}
+          <div className="mt-auto pt-3 border-t border-zinc-200 flex items-center justify-between text-[9px] text-zinc-500 font-medium">
+            <span>Corporate Project Specification &amp; Client Identity Dossier</span>
+            <span className="font-mono font-bold text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">Page 1 of 3</span>
+          </div>
         </div>
         {/* ── END OF PAGE 1 ── */}
 
+        {/* Visual Page Break Indicator on Screen (Hidden when printed) */}
+        <div className="print:hidden flex items-center justify-center my-4 gap-3 select-none">
+          <div className="flex-1 border-t-2 border-dashed border-zinc-300 dark:border-zinc-700" />
+          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-3 py-1 rounded-full border border-zinc-300 dark:border-zinc-700 flex items-center gap-1.5 shadow-2xs">
+            📄 End of Page 1 • Detailed Technical Specifications Follow on Page 2
+          </span>
+          <div className="flex-1 border-t-2 border-dashed border-zinc-300 dark:border-zinc-700" />
+        </div>
+
         {/* ── INTERMEDIATE PAGES: Modules Roadmap, Scope Breakdown Cards & Specifications ── */}
-        <div className="flex flex-col gap-4 w-full">
+        <div 
+          className="quotation-middle-pages break-after-page print:break-after-page block w-full bg-white text-zinc-900 font-sans p-5 sm:p-6 text-xs shadow-xl border border-zinc-200/90 rounded-lg space-y-4 print:p-[4mm_6mm] print:border-none print:shadow-none print:rounded-none min-h-[297mm] print:min-h-0"
+          style={{ breakAfter: 'page', pageBreakAfter: 'always' }}
+        >
+          {/* Running Corporate Header for Intermediate Page */}
+          <div className="avoid-break break-inside-avoid flex items-center justify-between border-b-2 border-zinc-900 pb-2 text-[9.5px]">
+            <div className="flex items-center gap-2">
+              <span className="font-black text-zinc-950 uppercase tracking-wider">{resolvedBrandName} {resolvedDivisionName}</span>
+              <span className="text-zinc-300">|</span>
+              <span className="font-mono text-zinc-600 font-bold">QUOTATION REF: {quotation.number}</span>
+            </div>
+            <span className="font-bold text-teal-800 uppercase tracking-wider text-[9px] bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+              Section II: Technical Scope &amp; Functional Deliverables
+            </span>
+          </div>
 
         {/* 4. Project Modules Roadmap & Deliverables Index (Summary Table) */}
         <div className="avoid-break break-inside-avoid border border-zinc-200 rounded-xl overflow-hidden shadow-2xs">
@@ -1161,52 +1228,134 @@ export function OfficialQuotationDocument({
           </div>
         )}
 
-        {/* 5.7 Form No. 9 Digital Marketing Campaign Summary (If present) */}
-        {quotation.marketingPackage && (
-          <div className="avoid-break break-inside-avoid p-3.5 rounded-xl border-2 border-purple-200 bg-purple-50/50 space-y-2">
-            <div className="flex items-center justify-between border-b border-purple-200 pb-1.5">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded text-[9.5px] font-black bg-purple-600 text-white uppercase tracking-wider">
-                  {quotation.marketingPackage.formNumber || "FORM NO - 9"}
-                </span>
-                <span className="text-xs font-black text-purple-950 uppercase">
-                  Digital Marketing &amp; Social Media Campaign Package
-                </span>
-              </div>
-              <span className="text-[10px] font-bold text-purple-800 bg-purple-100 px-2.5 py-0.5 rounded-full border border-purple-200">
-                Plan: {quotation.marketingPackage.packageName || "Grow - 2"}
-              </span>
-            </div>
+        {/* 5.7 Digital Marketing Retainer Scope & Deliverables SLA (If present) */}
+        {(quotation.marketingPackage || (quotation as any).isMarketingRetainer || quotation.primaryCategory === "Digital Marketing" || quotation.category === "Digital Marketing") && (() => {
+          const mktg = quotation.marketingPackage || (quotation as any).marketingPackage || {}
+          const planName = mktg.planName || mktg.packageName || quotation.primaryCategory || "Digital Marketing Retainer"
+          const duration = mktg.packageDuration || (mktg.durationMonths ? `${mktg.durationMonths} Month Retainer` : "1 Month Retainer")
+          const posters = mktg.postersCount ?? mktg.postersPerMonth ?? 12
+          const videos = mktg.videosCount ?? mktg.videosPerMonth ?? 2
+          const stories = mktg.storyCount ?? mktg.storiesCount ?? 12
+          const locations = mktg.targetLocations || "Regional Business Network & Pan India"
+          const targetProfile = mktg.bestFor || "Growing Commercial Enterprises & Brands"
+          const modelShoot = mktg.hasRealModelShoot ? "Included (Studio / On-Site Model Shoot)" : "Optional Add-on"
+          const totoBranding = mktg.hasTotoAds ? "Included (Route Campaign)" : "Optional Add-on"
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
-              <div className="bg-white p-2 rounded-lg border border-purple-100 shadow-2xs">
-                <span className="text-zinc-500 block text-[8px] uppercase font-bold">Posters Deliverable</span>
-                <strong className="text-purple-900 text-xs">{quotation.marketingPackage.postersPerMonth || 15} Posters / Month</strong>
+          return (
+            <div className="avoid-break break-inside-avoid p-4 rounded-xl border-2 border-purple-200 bg-purple-50/40 space-y-3 font-sans">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-200/80 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded text-[9.5px] font-black bg-purple-700 text-white uppercase tracking-wider">
+                    SAAMPARK DIGITAL RETAINER
+                  </span>
+                  <span className="text-xs font-black text-purple-950 uppercase">
+                    Digital Marketing &amp; Social Media Campaign Specifications
+                  </span>
+                </div>
+                <span className="text-[10.5px] font-bold text-purple-900 bg-purple-100 px-3 py-1 rounded-full border border-purple-300">
+                  Plan: {planName} • {duration}
+                </span>
               </div>
-              <div className="bg-white p-2 rounded-lg border border-purple-100 shadow-2xs">
-                <span className="text-zinc-500 block text-[8px] uppercase font-bold">Video Reels Deliverable</span>
-                <strong className="text-purple-900 text-xs">{quotation.marketingPackage.videosPerMonth || 15} Reels / Month</strong>
+
+              {/* Deliverable Metrics Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
+                <div className="bg-white p-2.5 rounded-lg border border-purple-100 shadow-2xs">
+                  <span className="text-zinc-500 block text-[8px] uppercase font-bold">Posters Deliverable</span>
+                  <strong className="text-purple-950 text-xs block mt-0.5">{posters} Posters / Month</strong>
+                  <span className="text-[8.5px] text-zinc-500">Custom Brand Creatives</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-purple-100 shadow-2xs">
+                  <span className="text-zinc-500 block text-[8px] uppercase font-bold">Video Reels / Shorts</span>
+                  <strong className="text-purple-950 text-xs block mt-0.5">{videos} Reels / Month</strong>
+                  <span className="text-[8.5px] text-zinc-500">Motion &amp; AI-Powered Video</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-purple-100 shadow-2xs">
+                  <span className="text-zinc-500 block text-[8px] uppercase font-bold">Story Updates</span>
+                  <strong className="text-purple-950 text-xs block mt-0.5">{stories} Stories / Month</strong>
+                  <span className="text-[8.5px] text-zinc-500">Daily/Weekly Audience Hooks</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-purple-100 shadow-2xs">
+                  <span className="text-zinc-500 block text-[8px] uppercase font-bold">Execution Window</span>
+                  <strong className="text-purple-950 text-xs block mt-0.5">{duration}</strong>
+                  <span className="text-[8.5px] text-emerald-600 font-semibold">Starts on 1st Live Post</span>
+                </div>
               </div>
-              <div className="bg-white p-2 rounded-lg border border-purple-100 shadow-2xs">
-                <span className="text-zinc-500 block text-[8px] uppercase font-bold">Target Locations</span>
-                <strong className="text-zinc-800 text-xs truncate block">{quotation.marketingPackage.targetLocations || "Regional Business Network"}</strong>
+
+              {/* Marketing Specifics & Deliverables SLA */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+                <div className="bg-white p-2.5 rounded-lg border border-purple-100 space-y-1">
+                  <span className="text-zinc-500 block text-[8px] uppercase font-bold">Target Geography &amp; Audience</span>
+                  <p className="text-[10px] text-zinc-800 font-bold truncate">{locations}</p>
+                  <p className="text-[9px] text-zinc-500">Profile: {targetProfile}</p>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-purple-100 space-y-1">
+                  <span className="text-zinc-500 block text-[8px] uppercase font-bold">Special Campaign Add-ons</span>
+                  <div className="flex items-center justify-between text-[9px]">
+                    <span className="text-zinc-600">Model / Product Shoot:</span>
+                    <strong className="text-purple-900">{modelShoot}</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-[9px]">
+                    <span className="text-zinc-600">Toto Route Branding:</span>
+                    <strong className="text-purple-900">{totoBranding}</strong>
+                  </div>
+                </div>
               </div>
-              <div className="bg-white p-2 rounded-lg border border-purple-100 shadow-2xs">
-                <span className="text-zinc-500 block text-[8px] uppercase font-bold">Execution Window</span>
-                <strong className="text-zinc-800 text-xs">{quotation.marketingPackage.durationMonths || 1} Month Campaign</strong>
+
+              {/* Retainer SLA Declaration */}
+              <div className="p-2 bg-purple-100/60 rounded-lg text-[9px] text-purple-900 flex items-center justify-between">
+                <span>✓ High-resolution source files &amp; scheduled Meta/Google ads distribution included.</span>
+                <span className="font-mono font-bold text-purple-950">Monthly Performance Analytics SLA</span>
               </div>
             </div>
+          )
+        })()}
+
+        {/* 5.7 Special Engagement Notes & Client Specifications (If present) */}
+        {quotation.notes && quotation.notes.trim() !== "" && quotation.notes !== quotation.overview && (
+          <div className="avoid-break break-inside-avoid p-3 rounded-xl border border-blue-200 bg-blue-50/40 space-y-1">
+            <span className="text-[9.5px] font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1">
+              <FileText size={12} className="text-blue-600" />
+              <span>SPECIAL ENGAGEMENT NOTES &amp; CLIENT SPECIFICATIONS</span>
+            </span>
+            <p className="text-[10px] text-zinc-700 whitespace-pre-line leading-relaxed font-sans">
+              {quotation.notes}
+            </p>
           </div>
         )}
 
+        {/* Page 2 Official Footer Banner */}
+        <div className="mt-auto pt-3 border-t border-zinc-200 flex items-center justify-between text-[9px] text-zinc-500 font-medium">
+          <span>Technical Deliverable Architecture &amp; Engineering Specifications</span>
+          <span className="font-mono font-bold text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">Page 2 of 3</span>
         </div>
-        {/* ── END OF INTERMEDIATE PAGES ── */}
+      </div>
+      {/* ── END OF INTERMEDIATE PAGES ── */}
 
-        {/* ── VERY LAST PAGE: Commercial Summary, Banking & Remittance Details, Terms, Dual Signatures ── */}
-        <div 
-          className="quotation-final-page break-before-page print:break-before-page flex flex-col gap-4 w-full pt-1"
-          style={{ breakBefore: 'page', pageBreakBefore: 'always' }}
-        >
+      {/* Visual Page Break Indicator on Screen (Hidden when printed) */}
+      <div className="print:hidden flex items-center justify-center my-4 gap-3 select-none">
+        <div className="flex-1 border-t-2 border-dashed border-zinc-300 dark:border-zinc-700" />
+        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-3 py-1 rounded-full border border-zinc-300 dark:border-zinc-700 flex items-center gap-1.5 shadow-2xs">
+          📄 End of Page 2 • Commercial Settlement, Banking &amp; Signatures on Final Page
+        </span>
+        <div className="flex-1 border-t-2 border-dashed border-zinc-300 dark:border-zinc-700" />
+      </div>
+
+      {/* ── VERY LAST PAGE: Commercial Summary, Banking & Remittance Details, Terms, Dual Signatures ── */}
+      <div 
+        className="quotation-final-page break-before-page print:break-before-page block w-full bg-white text-zinc-900 font-sans p-5 sm:p-6 text-xs shadow-xl border border-zinc-200/90 rounded-lg space-y-4 print:p-[4mm_6mm] print:border-none print:shadow-none print:rounded-none min-h-[297mm] print:min-h-0 pt-4"
+        style={{ breakBefore: 'page', pageBreakBefore: 'always' }}
+      >
+        {/* Running Corporate Header for Final Page */}
+        <div className="avoid-break break-inside-avoid flex items-center justify-between border-b-2 border-zinc-900 pb-2 text-[9.5px]">
+          <div className="flex items-center gap-2">
+            <span className="font-black text-zinc-950 uppercase tracking-wider">{resolvedBrandName} {resolvedDivisionName}</span>
+            <span className="text-zinc-300">|</span>
+            <span className="font-mono text-zinc-600 font-bold">QUOTATION REF: {quotation.number}</span>
+          </div>
+          <span className="font-bold text-emerald-800 uppercase tracking-wider text-[9px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+            Section III: Commercial Settlement &amp; Mutual Sign-off
+          </span>
+        </div>
         {/* 6. Consolidated Commercial Summary Table */}
         <div className="avoid-break break-inside-avoid border border-zinc-200 rounded-xl overflow-hidden shadow-2xs">
           <div className="p-2.5 bg-zinc-900 text-white flex items-center justify-between">
@@ -1295,7 +1444,7 @@ export function OfficialQuotationDocument({
               <span className="text-[9.5px] font-bold uppercase tracking-wider text-teal-900 block mb-0.5">
                 Total Quotation Value in Words:
               </span>
-              <p className="font-serif italic font-bold text-teal-950 text-xs leading-snug">
+              <p className="font-sans font-bold text-teal-950 text-xs leading-snug">
                 {numberToIndianWords(grandTotal)}
               </p>
             </div>
@@ -1432,7 +1581,7 @@ export function OfficialQuotationDocument({
               {resolvedSignatureUrl ? (
                 <img src={resolvedSignatureUrl} alt="Signature" className="h-12 object-contain" />
               ) : (
-                <div className="h-10 flex items-center justify-center italic font-serif text-zinc-400 text-xs">
+                <div className="h-10 flex items-center justify-center font-sans font-semibold text-zinc-400 text-xs">
                   [Digitally Authorized]
                 </div>
               )}
@@ -1469,8 +1618,14 @@ export function OfficialQuotationDocument({
         <div className="avoid-break break-inside-avoid text-center text-[9px] text-zinc-400 pt-1.5 border-t border-zinc-200">
           Corporate Office: {resolvedAddress || "Kolkata, West Bengal"} • Registered under the Companies Act • All disputes subject to local jurisdiction only.
         </div>
+
+        {/* Final Page Official Footer Banner */}
+        <div className="mt-auto pt-2 border-t border-zinc-200 flex items-center justify-between text-[9px] text-zinc-500 font-medium">
+          <span>Binding Corporate Engagement Agreement &amp; Remittance Dossier</span>
+          <span className="font-mono font-bold text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">Page 3 of 3 (Final)</span>
         </div>
-        {/* ── END OF VERY LAST PAGE ── */}
+      </div>
+      {/* ── END OF VERY LAST PAGE ── */}
       </div>
     </div>
 

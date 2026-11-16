@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/Button"
 import { useAuthStore, getCompanyFullName, isMatchingCompany } from "@/store/useAuthStore"
 import { useTimerStore, WorkMode } from "@/store/useTimerStore"
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems } from "@/lib/storageSync"
-import { getUsers, getUserAvatar } from "../../users/services/userService"
+import { getUsers, getUserAvatar } from "../../users/service/userService"
 import MonthlyAttendanceMatrix from "../../attendance/components/MonthlyAttendanceMatrix"
 
 export interface TimeCardRecord {

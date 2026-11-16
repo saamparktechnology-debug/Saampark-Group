@@ -288,6 +288,31 @@ async function testSmtpConnection(config) {
   return { success: true, message: `SMTP connection verified and test email successfully delivered to ${recipient} for ${brandTitle}` };
 }
 
+function getCompanyBranding(companyId, rawName = '') {
+  const norm = String(companyId || rawName || '').toLowerCase();
+  const isConsultancy = norm.includes('consult') || norm.includes('scs');
+  if (isConsultancy) {
+    return {
+      fullName: 'SAAMPARK CONSULTANCY SERVICES PRIVATE LIMITED',
+      shortName: 'SCS',
+      displayName: 'SAAMPARK CONSULTANCY SERVICES (SCS)',
+      phone: '+91 9901518567 / +91 9901518569',
+      email: 'consultancy@saampark.com',
+      website: 'www.saampark.com',
+      office: 'City Centre, Durgapur, Paschim Bardhaman, WB - 713216'
+    };
+  }
+  return {
+    fullName: 'SAAMPARK TECHNOLOGY & RESEARCH PRIVATE LIMITED',
+    shortName: 'STR',
+    displayName: 'SAAMPARK TECHNOLOGY & RESEARCH (STR)',
+    phone: '+91 9901518567 / +91 9901518569',
+    email: 'contact@saamparktechnology.com',
+    website: 'www.saamparktechnology.com',
+    office: 'Webel IT Park, Phase II, Durgapur, WB - 713212'
+  };
+}
+
 /**
  * Send OTP email for password reset (Uses Saampark Group Official Email)
  */
@@ -296,29 +321,43 @@ async function sendPasswordResetOTP(email, name = 'User', companyId = null) {
   storeOTP(email, otp, 'reset');
 
   const { transporter, from } = getGroupEmailConfig();
+  const brand = getCompanyBranding(companyId);
 
   const html = `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden;">
-      <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 32px 40px; text-align: center;">
-        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">SAAMPARK CRM</h1>
-        <p style="color: rgba(255,255,255,0.8); margin: 8px 0 0; font-size: 13px;">Password Reset Request</p>
-      </div>
-      <div style="padding: 40px; background: #16161e;">
-        <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 8px;">Hello <strong>${name}</strong>,</p>
-        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 32px;">
-          We received a request to reset your SAAMPARK CRM password. Use the OTP below to proceed:
-        </p>
-        <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 28px; text-align: center; margin-bottom: 32px;">
-          <p style="color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 12px;">Your OTP Code</p>
-          <div style="font-size: 42px; font-weight: 800; letter-spacing: 12px; color: #6366f1; font-family: monospace;">${otp}</div>
-          <p style="color: #64748b; font-size: 12px; margin: 16px 0 0;">⏱ Valid for <strong style="color: #f59e0b;">10 minutes</strong></p>
+    <div style="background-color: #0b0f19; padding: 32px 16px; min-height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+      <div style="max-width: 540px; margin: 0 auto; background-color: #111827; border: 1px solid #1f2937; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.5);">
+        <div style="background: linear-gradient(135deg, #6366f1, #4f46e5); padding: 36px 40px; text-align: center;">
+          <div style="display: inline-block; padding: 4px 12px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 12px;">
+            ACCOUNT SECURITY • ${brand.shortName}
+          </div>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Password Reset Code</h1>
+          <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">Use this one-time code to safely update your password</p>
         </div>
-        <p style="color: #64748b; font-size: 13px; line-height: 1.6; margin: 0;">
-          If you did not request this, please ignore this email. Your password will remain unchanged.
-        </p>
-      </div>
-      <div style="padding: 20px 40px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
-        <p style="color: #475569; font-size: 12px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb;">
+          <p style="color: #f9fafb; font-size: 16px; font-weight: 600; margin: 0 0 12px;">Hello <strong>${name}</strong>,</p>
+          <p style="color: #9ca3af; font-size: 13.5px; line-height: 1.6; margin: 0 0 24px;">
+            We received a verified request to reset the password for your account associated with <strong style="color: #f9fafb;">${brand.displayName}</strong>.
+          </p>
+
+          <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 24px; text-align: center; margin-bottom: 24px;">
+            <p style="color: #9ca3af; font-size: 11.5px; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 10px; font-weight: 700;">One-Time Security OTP</p>
+            <div style="font-size: 40px; font-weight: 800; letter-spacing: 12px; color: #818cf8; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding: 8px 0;">${otp}</div>
+            <div style="display: inline-block; margin-top: 10px; padding: 4px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9999px;">
+              <span style="color: #fbbf24; font-size: 12px; font-weight: 600;">⏱ Valid for 10 minutes</span>
+            </div>
+          </div>
+
+          <div style="background: rgba(99, 102, 241, 0.08); border-left: 4px solid #6366f1; padding: 14px 18px; border-radius: 8px; margin-bottom: 24px;">
+            <p style="color: #c7d2fe; font-size: 12.5px; line-height: 1.5; margin: 0;">
+              <strong>Security Alert:</strong> If you did not initiate this request, no action is needed. Your current password remains active and secure.
+            </p>
+          </div>
+        </div>
+        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
+          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
+          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
+          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        </div>
       </div>
     </div>
   `;
@@ -326,7 +365,7 @@ async function sendPasswordResetOTP(email, name = 'User', companyId = null) {
   await transporter.sendMail({
     from,
     to: email,
-    subject: '🔐 Your SAAMPARK CRM Password Reset OTP',
+    subject: `🔐 Your Password Reset Code: ${otp} - ${brand.shortName}`,
     html,
   });
 
@@ -341,29 +380,41 @@ async function sendEmailVerificationOTP(email, name = 'User', companyId = null) 
   storeOTP(email, otp, 'verify');
 
   const { transporter, from } = getGroupEmailConfig();
+  const brand = getCompanyBranding(companyId);
 
   const html = `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden;">
-      <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 32px 40px; text-align: center;">
-        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">SAAMPARK CRM</h1>
-        <p style="color: rgba(255,255,255,0.8); margin: 8px 0 0; font-size: 13px;">Email Verification</p>
-      </div>
-      <div style="padding: 40px; background: #16161e;">
-        <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 8px;">Welcome, <strong>${name}</strong>! 🎉</p>
-        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 32px;">
-          Your SAAMPARK CRM account has been created. Please verify your email address using the OTP below:
-        </p>
-        <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 28px; text-align: center; margin-bottom: 32px;">
-          <p style="color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 12px;">Verification Code</p>
-          <div style="font-size: 42px; font-weight: 800; letter-spacing: 12px; color: #10b981; font-family: monospace;">${otp}</div>
-          <p style="color: #64748b; font-size: 12px; margin: 16px 0 0;">⏱ Valid for <strong style="color: #f59e0b;">10 minutes</strong></p>
+    <div style="background-color: #0b0f19; padding: 32px 16px; min-height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+      <div style="max-width: 540px; margin: 0 auto; background-color: #111827; border: 1px solid #1f2937; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.5);">
+        <div style="background: linear-gradient(135deg, #059669, #0d9488); padding: 36px 40px; text-align: center;">
+          <div style="display: inline-block; padding: 4px 12px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 12px;">
+            ACCOUNT VERIFICATION • ${brand.shortName}
+          </div>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Verify Your Email Address</h1>
+          <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">Confirm your email to complete registration</p>
         </div>
-        <p style="color: #64748b; font-size: 13px; line-height: 1.6; margin: 0;">
-          Once verified, you can log in to your account using your registered credentials.
-        </p>
-      </div>
-      <div style="padding: 20px 40px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
-        <p style="color: #475569; font-size: 12px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb;">
+          <p style="color: #f9fafb; font-size: 16px; font-weight: 600; margin: 0 0 12px;">Welcome, <strong>${name}</strong>! 🎉</p>
+          <p style="color: #9ca3af; font-size: 13.5px; line-height: 1.6; margin: 0 0 24px;">
+            Your account profile at <strong style="color: #f9fafb;">${brand.displayName}</strong> has been created. Please enter the verification code below to verify your email:
+          </p>
+
+          <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 24px; text-align: center; margin-bottom: 24px;">
+            <p style="color: #9ca3af; font-size: 11.5px; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 10px; font-weight: 700;">Verification Code</p>
+            <div style="font-size: 40px; font-weight: 800; letter-spacing: 12px; color: #34d399; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding: 8px 0;">${otp}</div>
+            <div style="display: inline-block; margin-top: 10px; padding: 4px 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 9999px;">
+              <span style="color: #6ee7b7; font-size: 12px; font-weight: 600;">⏱ Valid for 10 minutes</span>
+            </div>
+          </div>
+
+          <p style="color: #9ca3af; font-size: 13px; line-height: 1.5; margin: 0;">
+            Once verified, you will be able to access your personalized workspace.
+          </p>
+        </div>
+        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
+          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
+          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
+          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        </div>
       </div>
     </div>
   `;
@@ -371,7 +422,7 @@ async function sendEmailVerificationOTP(email, name = 'User', companyId = null) 
   await transporter.sendMail({
     from,
     to: email,
-    subject: '✅ Verify Your SAAMPARK CRM Email',
+    subject: `✅ Verify Your Email: ${otp} - ${brand.shortName}`,
     html,
   });
 
@@ -384,7 +435,58 @@ async function sendEmailVerificationOTP(email, name = 'User', companyId = null) 
 async function sendAdminCreatedAccountEmail(email, name = 'Team Member', role = 'Teams', companyName = 'SAAMPARK Technology', tempPassword = '', companyId = null) {
   const { transporter, from } = await getEmailConfig(companyId);
 
-  const html = `
+  const isClient = role === 'Clients' || String(role).toLowerCase().includes('client');
+
+  const clientHtml = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 560px; margin: 0 auto; background: #0b1120; border-radius: 16px; overflow: hidden; border: 1px solid #1e293b; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);">
+      <div style="background: linear-gradient(135deg, #0284c7, #0f766e); padding: 32px 40px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">SAAMPARK CLIENT PORTAL</h1>
+        <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 13px; font-weight: 600;">Official Client Access &amp; Workspace</p>
+      </div>
+      <div style="padding: 36px 40px; background: #0f172a;">
+        <p style="color: #f1f5f9; font-size: 16px; margin: 0 0 12px;">Hello <strong>${name}</strong>,</p>
+        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
+          Welcome to <strong style="color: #38bdf8;">${companyName}</strong>. Your dedicated Client Portal has been activated, providing secure 24/7 access to your projects, milestone progress, commercial billing, and direct communications.
+        </p>
+
+        <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+          <p style="color: #38bdf8; font-size: 11.5px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px; font-weight: 700;">Your Client Login Credentials</p>
+          <div style="margin-bottom: 12px;">
+            <span style="color: #94a3b8; font-size: 12px; display: block; margin-bottom: 4px;">Login Email:</span>
+            <span style="color: #f8fafc; font-size: 15px; font-weight: 600; font-family: monospace;">${email}</span>
+          </div>
+          <div>
+            <span style="color: #94a3b8; font-size: 12px; display: block; margin-bottom: 4px;">Temporary Password:</span>
+            <span style="color: #fbbf24; font-size: 18px; font-weight: 700; font-family: monospace; letter-spacing: 1px;">${tempPassword}</span>
+          </div>
+        </div>
+
+        <div style="background: rgba(2, 132, 199, 0.08); border-left: 4px solid #0284c7; padding: 18px; border-radius: 8px; margin-bottom: 24px;">
+          <p style="color: #bae6fd; font-size: 13px; margin: 0 0 10px; font-weight: 700;">
+            Features Available in Your Client Portal:
+          </p>
+          <ul style="color: #94a3b8; font-size: 12.5px; margin: 0; padding-left: 18px; line-height: 1.6;">
+            <li>View real-time progress on your active <strong>Projects &amp; Deliverables</strong>.</li>
+            <li>Review and download official <strong>Invoices, Quotations &amp; Estimates</strong>.</li>
+            <li>Track commercial payment milestones, bank remittance details &amp; receipts.</li>
+            <li>Access dedicated digital marketing analytics, live creatives &amp; performance reports.</li>
+            <li>Raise priority support tickets and communicate directly with your project manager.</li>
+          </ul>
+        </div>
+
+        <div style="text-align: center;">
+          <a href="https://crm.saampark.com/login" style="display: inline-block; background: linear-gradient(135deg, #0284c7, #0f766e); color: #ffffff; text-decoration: none; padding: 14px 34px; border-radius: 10px; font-weight: 700; font-size: 14px; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);">
+            Sign In to Client Portal →
+          </a>
+        </div>
+      </div>
+      <div style="padding: 20px 40px; background: #0b1120; text-align: center; border-top: 1px solid #1e293b;">
+        <p style="color: #475569; font-size: 12px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+      </div>
+    </div>
+  `;
+
+  const employeeHtml = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
       <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 32px 40px; text-align: center;">
         <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">SAAMPARK CRM</h1>
@@ -435,8 +537,10 @@ async function sendAdminCreatedAccountEmail(email, name = 'Team Member', role = 
   await transporter.sendMail({
     from,
     to: email,
-    subject: `Welcome to ${companyName} - Account Credentials & Onboarding Steps`,
-    html,
+    subject: isClient 
+      ? `Welcome to ${companyName} - Your Client Portal Login Credentials` 
+      : `Welcome to ${companyName} - Account Credentials & Onboarding Steps`,
+    html: isClient ? clientHtml : employeeHtml,
   });
 }
 
@@ -470,99 +574,115 @@ async function sendInvoiceDetailsEmail({
   companyId = null,
 }) {
   const { transporter, from } = await getEmailConfig(companyId);
+  const brand = getCompanyBranding(companyId);
 
   const effectiveDownloadUrl = downloadUrl || (viewUrl.includes('?') ? `${viewUrl}&action=download` : `${viewUrl}?action=download`);
 
   const itemsHtml = (items && items.length > 0)
     ? items.map(it => `
-        <tr style="border-bottom: 1px solid #2d2d3d;">
-          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px;">${it.serviceName || project}</td>
-          <td style="padding: 10px 12px; color: #94a3b8; font-size: 13px; text-align: center;">${it.qty || 1}</td>
-          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px; text-align: right;">₹${(it.rate || 0).toLocaleString('en-IN')}</td>
-          <td style="padding: 10px 12px; color: #10b981; font-weight: 700; font-size: 13px; text-align: right;">₹${(it.totalAmount || (it.rate || 0) * (it.qty || 1)).toLocaleString('en-IN')}</td>
+        <tr style="border-bottom: 1px solid #1f2937;">
+          <td style="padding: 12px 14px; color: #f3f4f6; font-size: 13px; font-weight: 500;">${it.serviceName || project}</td>
+          <td style="padding: 12px 14px; color: #9ca3af; font-size: 13px; text-align: center;">${it.qty || 1}</td>
+          <td style="padding: 12px 14px; color: #d1d5db; font-size: 13px; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">₹${(it.rate || 0).toLocaleString('en-IN')}</td>
+          <td style="padding: 12px 14px; color: #34d399; font-weight: 700; font-size: 13px; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">₹${(it.totalAmount || (it.rate || 0) * (it.qty || 1)).toLocaleString('en-IN')}</td>
         </tr>
       `).join('')
     : `
-        <tr style="border-bottom: 1px solid #2d2d3d;">
-          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px;">${project}</td>
-          <td style="padding: 10px 12px; color: #94a3b8; font-size: 13px; text-align: center;">1</td>
-          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px; text-align: right;">${totalAmount}</td>
-          <td style="padding: 10px 12px; color: #10b981; font-weight: 700; font-size: 13px; text-align: right;">${totalAmount}</td>
+        <tr style="border-bottom: 1px solid #1f2937;">
+          <td style="padding: 12px 14px; color: #f3f4f6; font-size: 13px; font-weight: 500;">${project}</td>
+          <td style="padding: 12px 14px; color: #9ca3af; font-size: 13px; text-align: center;">1</td>
+          <td style="padding: 12px 14px; color: #d1d5db; font-size: 13px; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${totalAmount}</td>
+          <td style="padding: 12px 14px; color: #34d399; font-weight: 700; font-size: 13px; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${totalAmount}</td>
         </tr>
       `;
 
   const html = `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
-      <div style="background: linear-gradient(135deg, #059669, #0f766e); padding: 32px 40px; text-align: center;">
-        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">SAAMPARK TECHNOLOGY</h1>
-        <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">TAX INVOICE & BILLING DETAILS</p>
-      </div>
-
-      <div style="padding: 32px 36px; background: #16161e;">
-        <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
-        <p style="color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 0 0 24px;">
-          Please find below the invoice details for <strong style="color: #e2e8f0;">${project}</strong> issued by <strong>SAAMPARK TECHNOLOGY & RESEARCH PRIVATE LIMITED</strong>.
-        </p>
-
-        <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-          <table style="width: 100%; font-size: 13px; color: #cbd5e1; border-collapse: collapse;">
-            <tr>
-              <td style="padding: 6px 0; color: #94a3b8;">Invoice Number:</td>
-              <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #38bdf8; font-family: monospace;">${invoiceId}</td>
-            </tr>
-            <tr>
-              <td style="padding: 6px 0; color: #94a3b8;">Invoice Date:</td>
-              <td style="padding: 6px 0; text-align: right; color: #e2e8f0;">${billDate || new Date().toLocaleDateString('en-GB')}</td>
-            </tr>
-            <tr>
-              <td style="padding: 6px 0; color: #94a3b8;">Due Date:</td>
-              <td style="padding: 6px 0; text-align: right; color: #f59e0b; font-weight: 600;">${dueDate || 'Immediate'}</td>
-            </tr>
-          </table>
+    <div style="background-color: #0b0f19; padding: 32px 16px; min-height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+      <div style="max-width: 600px; margin: 0 auto; background-color: #111827; border: 1px solid #1f2937; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.5);">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #059669, #0f766e); padding: 36px 40px; text-align: center;">
+          <div style="display: inline-block; padding: 4px 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 12px;">
+            TAX INVOICE • ${brand.shortName}
+          </div>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Official Tax Invoice</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 6px 0 0; font-size: 13px;">${brand.fullName}</p>
         </div>
 
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
-          <thead>
-            <tr style="background: #1e1e2e; border-bottom: 2px solid #2d2d3d;">
-              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: left; text-transform: uppercase;">Service</th>
-              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: center; text-transform: uppercase;">Qty</th>
-              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase;">Rate</th>
-              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase;">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
+        <!-- Body -->
+        <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb;">
+          <p style="color: #f9fafb; font-size: 16px; font-weight: 600; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
+          <p style="color: #9ca3af; font-size: 13.5px; line-height: 1.6; margin: 0 0 24px;">
+            Please find your official tax invoice details for <strong style="color: #f9fafb;">${project}</strong> issued by <strong>${brand.fullName}</strong>.
+          </p>
 
-        <div style="background: #1e1e2e; border-radius: 12px; padding: 20px; margin-bottom: 28px;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #94a3b8;">
-            <span>Grand Total:</span>
-            <strong style="color: #e2e8f0;">${totalAmount}</strong>
+          <!-- Metadata Box -->
+          <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 20px; margin-bottom: 24px;">
+            <table style="width: 100%; font-size: 13px; color: #d1d5db; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Invoice Number:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${invoiceId}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Issue Date:</td>
+                <td style="padding: 6px 0; text-align: right; color: #f3f4f6;">${billDate || new Date().toLocaleDateString('en-GB')}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Payment Due Date:</td>
+                <td style="padding: 6px 0; text-align: right; color: #fbbf24; font-weight: 600;">${dueDate || 'Immediate'}</td>
+              </tr>
+            </table>
           </div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #10b981;">
-            <span>Amount Received:</span>
-            <strong>${receivedAmount}</strong>
+
+          <!-- Items Table -->
+          <div style="border: 1px solid #1f2937; border-radius: 12px; overflow: hidden; margin-bottom: 24px;">
+            <table style="width: 100%; border-collapse: collapse; background-color: #161f30;">
+              <thead>
+                <tr style="background-color: #1e293b; border-bottom: 2px solid #334155;">
+                  <th style="padding: 12px 14px; color: #94a3b8; font-size: 11px; text-align: left; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Service / Item</th>
+                  <th style="padding: 12px 14px; color: #94a3b8; font-size: 11px; text-align: center; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Qty</th>
+                  <th style="padding: 12px 14px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Rate</th>
+                  <th style="padding: 12px 14px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+              </tbody>
+            </table>
           </div>
-          <div style="display: flex; justify-content: space-between; padding-top: 10px; border-top: 1px solid #2d2d3d; font-size: 15px;">
-            <span style="color: #f87171; font-weight: 700;">Balance Due:</span>
-            <strong style="color: #f87171; font-size: 16px;">${dueAmount}</strong>
+
+          <!-- Commercial Total Box -->
+          <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 22px; margin-bottom: 28px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13.5px; color: #9ca3af;">
+              <span>Grand Total:</span>
+              <strong style="color: #f3f4f6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${totalAmount}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13.5px; color: #34d399;">
+              <span>Amount Received:</span>
+              <strong style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${receivedAmount}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding-top: 12px; border-top: 1px solid #374151; font-size: 15px;">
+              <span style="color: #f87171; font-weight: 700;">Balance Due:</span>
+              <strong style="color: #f87171; font-size: 17px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${dueAmount}</strong>
+            </div>
+          </div>
+
+          <!-- CTA Buttons -->
+          <div style="text-align: center; margin-bottom: 10px;">
+            <a href="${viewUrl}" style="display: inline-block; background: linear-gradient(135deg, #059669, #0d9488); color: #ffffff; text-decoration: none; padding: 13px 26px; border-radius: 12px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4);">
+              💳 View &amp; Settle Invoice →
+            </a>
+            <a href="${effectiveDownloadUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 13px 26px; border-radius: 12px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);">
+              📥 Download Verified PDF
+            </a>
           </div>
         </div>
 
-        <div style="text-align: center; margin-bottom: 20px;">
-          <a href="${viewUrl}" style="display: inline-block; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
-            💳 View & Pay Digital Invoice →
-          </a>
-          <a href="${effectiveDownloadUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);">
-            📥 Download Official PDF
-          </a>
+        <!-- Footer -->
+        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
+          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
+          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
+          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
         </div>
-      </div>
-
-      <div style="padding: 20px 36px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
-        <p style="color: #64748b; font-size: 12px; margin: 0 0 4px;">📞 +91 9901518567 / +91 9901518569 | 🌐 www.saamparktechnology.com</p>
-        <p style="color: #475569; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
       </div>
     </div>
   `;
@@ -570,7 +690,7 @@ async function sendInvoiceDetailsEmail({
   await transporter.sendMail({
     from,
     to,
-    subject: `📄 Invoice ${invoiceId} for ${project} - Saampark Technology`,
+    subject: `📄 Tax Invoice ${invoiceId} for ${project} - ${brand.shortName}`,
     html,
   });
 }
@@ -595,6 +715,7 @@ async function sendQuotationDetailsEmail({
   companyId = null,
 }) {
   const { transporter, from } = await getEmailConfig(companyId);
+  const brand = getCompanyBranding(companyId);
 
   const displayNum = quotationNumber || quotationId;
   const vUrl = viewUrl || `https://crm.saampark.com/public/quotation?id=${quotationId}`;
@@ -605,108 +726,120 @@ async function sendQuotationDetailsEmail({
 
   const itemsHtml = (items && items.length > 0)
     ? items.map(it => `
-        <tr style="border-bottom: 1px solid #2d2d3d;">
-          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px;">${it.name || it.serviceName || 'Item'}</td>
-          <td style="padding: 10px 12px; color: #94a3b8; font-size: 13px; text-align: center;">${it.quantity || it.qty || 1}</td>
-          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px; text-align: right;">₹${(it.unitPrice || it.rate || 0).toLocaleString('en-IN')}</td>
-          <td style="padding: 10px 12px; color: #10b981; font-weight: 700; font-size: 13px; text-align: right;">₹${(it.total || it.totalAmount || 0).toLocaleString('en-IN')}</td>
+        <tr style="border-bottom: 1px solid #1f2937;">
+          <td style="padding: 12px 14px; color: #f3f4f6; font-size: 13px; font-weight: 500;">${it.name || it.serviceName || 'Item'}</td>
+          <td style="padding: 12px 14px; color: #9ca3af; font-size: 13px; text-align: center;">${it.quantity || it.qty || 1}</td>
+          <td style="padding: 12px 14px; color: #d1d5db; font-size: 13px; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">₹${(it.unitPrice || it.rate || 0).toLocaleString('en-IN')}</td>
+          <td style="padding: 12px 14px; color: #34d399; font-weight: 700; font-size: 13px; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">₹${(it.total || it.totalAmount || 0).toLocaleString('en-IN')}</td>
         </tr>
       `).join('')
     : `
-        <tr style="border-bottom: 1px solid #2d2d3d;">
-          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px;">Commercial Scope Proposal</td>
-          <td style="padding: 10px 12px; color: #94a3b8; font-size: 13px; text-align: center;">1</td>
-          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px; text-align: right;">${totalAmount}</td>
-          <td style="padding: 10px 12px; color: #10b981; font-weight: 700; font-size: 13px; text-align: right;">${totalAmount}</td>
+        <tr style="border-bottom: 1px solid #1f2937;">
+          <td style="padding: 12px 14px; color: #f3f4f6; font-size: 13px; font-weight: 500;">Commercial Scope Proposal</td>
+          <td style="padding: 12px 14px; color: #9ca3af; font-size: 13px; text-align: center;">1</td>
+          <td style="padding: 12px 14px; color: #d1d5db; font-size: 13px; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${totalAmount}</td>
+          <td style="padding: 12px 14px; color: #34d399; font-weight: 700; font-size: 13px; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${totalAmount}</td>
         </tr>
       `;
 
   const html = `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
-      <div style="background: linear-gradient(135deg, #2563eb, #1d4ed8); padding: 32px 40px; text-align: center;">
-        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">SAAMPARK GROUP</h1>
-        <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">OFFICIAL COMMERCIAL QUOTATION</p>
-      </div>
-
-      <div style="padding: 32px 36px; background: #16161e;">
-        <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
-        <p style="color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 0 0 20px;">
-          We have prepared official Quotation <strong style="color: #38bdf8;">${displayNum}</strong> for your project requirements. Please review the pricing breakdown below and select your response:
-        </p>
-
-        <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
-          <table style="width: 100%; font-size: 13px; color: #cbd5e1; border-collapse: collapse;">
-            <tr>
-              <td style="padding: 5px 0; color: #94a3b8;">Quotation Number:</td>
-              <td style="padding: 5px 0; text-align: right; font-weight: 700; color: #38bdf8; font-family: monospace;">${displayNum}</td>
-            </tr>
-            <tr>
-              <td style="padding: 5px 0; color: #94a3b8;">Prepared By:</td>
-              <td style="padding: 5px 0; text-align: right; color: #e2e8f0;">${adminName}</td>
-            </tr>
-            <tr>
-              <td style="padding: 5px 0; color: #94a3b8;">Valid Until:</td>
-              <td style="padding: 5px 0; text-align: right; color: #f59e0b; font-weight: 600;">${validUntil || '30 Days from issue'}</td>
-            </tr>
-            <tr>
-              <td style="padding: 5px 0; color: #94a3b8;">Total Value:</td>
-              <td style="padding: 5px 0; text-align: right; font-weight: 800; color: #10b981; font-size: 15px;">${totalAmount}</td>
-            </tr>
-          </table>
+    <div style="background-color: #0b0f19; padding: 32px 16px; min-height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+      <div style="max-width: 600px; margin: 0 auto; background-color: #111827; border: 1px solid #1f2937; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.5);">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #2563eb, #1d4ed8); padding: 36px 40px; text-align: center;">
+          <div style="display: inline-block; padding: 4px 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 12px;">
+            PROJECT PROPOSAL • ${brand.shortName}
+          </div>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Official Commercial Quotation</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 6px 0 0; font-size: 13px;">${brand.fullName}</p>
         </div>
 
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-          <thead>
-            <tr style="background: #1e1e2e; border-bottom: 2px solid #2d2d3d;">
-              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: left; text-transform: uppercase;">Item / Service</th>
-              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: center; text-transform: uppercase;">Qty</th>
-              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase;">Rate</th>
-              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase;">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
+        <!-- Body -->
+        <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb;">
+          <p style="color: #f9fafb; font-size: 16px; font-weight: 600; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
+          <p style="color: #9ca3af; font-size: 13.5px; line-height: 1.6; margin: 0 0 20px;">
+            We have prepared official Quotation <strong style="color: #38bdf8;">${displayNum}</strong> for your project requirements. Please review the commercial breakdown below and select your response:
+          </p>
 
-        <!-- Interactive Action Buttons -->
-        <div style="background: #111118; border: 1px solid #27273a; border-radius: 12px; padding: 22px; text-align: center; margin: 24px 0 16px;">
-          <p style="color: #cbd5e1; font-size: 13px; font-weight: 700; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.5px;">Please select your action below:</p>
-          
-          <div style="margin-bottom: 14px;">
-            <!-- Button 1: Accept -->
-            <a href="${aUrl}" style="display: inline-block; background: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 10px rgba(22, 163, 74, 0.3);">
-              ✅ Accept Quotation
-            </a>
-            <!-- Button 2: Need Modification -->
-            <a href="${mUrl}" style="display: inline-block; background: #d97706; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 10px rgba(217, 119, 6, 0.3);">
-              ✏️ Need Modification
-            </a>
-            <!-- Button 3: Decline / Don't Accept -->
-            <a href="${decUrl}" style="display: inline-block; background: #dc2626; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 10px rgba(220, 38, 38, 0.3);">
-              ❌ Decline / Don't Accept
-            </a>
+          <!-- Metadata Box -->
+          <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 20px; margin-bottom: 24px;">
+            <table style="width: 100%; font-size: 13px; color: #d1d5db; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Quotation Number:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${displayNum}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Prepared By:</td>
+                <td style="padding: 6px 0; text-align: right; color: #f3f4f6;">${adminName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Valid Until:</td>
+                <td style="padding: 6px 0; text-align: right; color: #fbbf24; font-weight: 600;">${validUntil || '30 Days from issue'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Total Commercial Value:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 800; color: #34d399; font-size: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${totalAmount}</td>
+              </tr>
+            </table>
           </div>
 
-          <div style="border-top: 1px solid #27273a; padding-top: 14px; margin-top: 14px;">
-            <!-- Download Button in Mail -->
-            <a href="${dUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 10px 22px; border-radius: 8px; font-weight: 700; font-size: 12px; margin: 4px; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);">
-              📥 Download Official Quotation (PDF)
-            </a>
-            <a href="${vUrl}" style="display: inline-block; background: #334155; color: #e2e8f0; text-decoration: none; padding: 10px 22px; border-radius: 8px; font-weight: 600; font-size: 12px; margin: 4px;">
-              👁️ View Online Portal
-            </a>
+          <!-- Items Table -->
+          <div style="border: 1px solid #1f2937; border-radius: 12px; overflow: hidden; margin-bottom: 24px;">
+            <table style="width: 100%; border-collapse: collapse; background-color: #161f30;">
+              <thead>
+                <tr style="background-color: #1e293b; border-bottom: 2px solid #334155;">
+                  <th style="padding: 12px 14px; color: #94a3b8; font-size: 11px; text-align: left; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Item / Service</th>
+                  <th style="padding: 12px 14px; color: #94a3b8; font-size: 11px; text-align: center; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Qty</th>
+                  <th style="padding: 12px 14px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Rate</th>
+                  <th style="padding: 12px 14px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+              </tbody>
+            </table>
           </div>
+
+          <!-- Interactive Action Buttons -->
+          <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 22px; text-align: center; margin: 24px 0 16px;">
+            <p style="color: #d1d5db; font-size: 13px; font-weight: 700; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.5px;">Please select your response:</p>
+            
+            <div style="margin-bottom: 14px;">
+              <!-- Button 1: Accept -->
+              <a href="${aUrl}" style="display: inline-block; background: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.4);">
+                ✅ Accept Quotation
+              </a>
+              <!-- Button 2: Need Modification -->
+              <a href="${mUrl}" style="display: inline-block; background: #d97706; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.4);">
+                ✏️ Request Modification
+              </a>
+              <!-- Button 3: Decline / Don't Accept -->
+              <a href="${decUrl}" style="display: inline-block; background: #dc2626; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);">
+                ❌ Decline
+              </a>
+            </div>
+
+            <div style="border-top: 1px solid #374151; padding-top: 14px; margin-top: 14px;">
+              <a href="${dUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 10px 22px; border-radius: 10px; font-weight: 700; font-size: 12px; margin: 4px; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.35);">
+                📥 Download Official PDF
+              </a>
+              <a href="${vUrl}" style="display: inline-block; background: #374151; color: #f3f4f6; text-decoration: none; padding: 10px 22px; border-radius: 10px; font-weight: 600; font-size: 12px; margin: 4px;">
+                👁️ View Digital Portal
+              </a>
+            </div>
+          </div>
+
+          <p style="color: #6b7280; font-size: 12px; text-align: center; margin: 0;">
+            Upon acceptance, this quotation initiates the official project onboarding and estimation.
+          </p>
         </div>
 
-        <p style="color: #64748b; font-size: 12px; text-align: center; margin: 0;">
-          Upon acceptance, this quotation will automatically proceed to official project Estimation.
-        </p>
-      </div>
-
-      <div style="padding: 20px 36px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
-        <p style="color: #64748b; font-size: 12px; margin: 0 0 4px;">📞 +91 9901518567 / +91 9901518569 | 🌐 www.saamparktechnology.com</p>
-        <p style="color: #475569; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        <!-- Footer -->
+        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
+          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
+          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
+          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        </div>
       </div>
     </div>
   `;
@@ -714,7 +847,7 @@ async function sendQuotationDetailsEmail({
   await transporter.sendMail({
     from,
     to,
-    subject: `📑 Commercial Quotation ${displayNum} (${totalAmount}) - Saampark Group`,
+    subject: `📑 Commercial Quotation ${displayNum} (${totalAmount}) - ${brand.shortName}`,
     html,
   });
 }
@@ -740,6 +873,7 @@ async function sendEstimateDetailsEmail({
   companyId = null,
 }) {
   const { transporter, from } = await getEmailConfig(companyId);
+  const brand = getCompanyBranding(companyId);
 
   const displayNum = estimateNumber || estimateId;
   const vUrl = viewUrl || `https://crm.saampark.com/public/estimate?id=${estimateId}`;
@@ -750,108 +884,120 @@ async function sendEstimateDetailsEmail({
 
   const itemsHtml = (items && items.length > 0)
     ? items.map(it => `
-        <tr style="border-bottom: 1px solid #2d2d3d;">
-          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px;">${it.name || it.serviceName || 'Service'}</td>
-          <td style="padding: 10px 12px; color: #94a3b8; font-size: 13px; text-align: center;">${it.quantity || it.qty || 1}</td>
-          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px; text-align: right;">₹${(it.unitPrice || it.rate || 0).toLocaleString('en-IN')}</td>
-          <td style="padding: 10px 12px; color: #10b981; font-weight: 700; font-size: 13px; text-align: right;">₹${(it.total || it.totalAmount || 0).toLocaleString('en-IN')}</td>
+        <tr style="border-bottom: 1px solid #1f2937;">
+          <td style="padding: 12px 14px; color: #f3f4f6; font-size: 13px; font-weight: 500;">${it.name || it.serviceName || 'Service'}</td>
+          <td style="padding: 12px 14px; color: #9ca3af; font-size: 13px; text-align: center;">${it.quantity || it.qty || 1}</td>
+          <td style="padding: 12px 14px; color: #d1d5db; font-size: 13px; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">₹${(it.unitPrice || it.rate || 0).toLocaleString('en-IN')}</td>
+          <td style="padding: 12px 14px; color: #34d399; font-weight: 700; font-size: 13px; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">₹${(it.total || it.totalAmount || 0).toLocaleString('en-IN')}</td>
         </tr>
       `).join('')
     : `
-        <tr style="border-bottom: 1px solid #2d2d3d;">
-          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px;">${projectTitle}</td>
-          <td style="padding: 10px 12px; color: #94a3b8; font-size: 13px; text-align: center;">1</td>
-          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px; text-align: right;">${totalAmount}</td>
-          <td style="padding: 10px 12px; color: #10b981; font-weight: 700; font-size: 13px; text-align: right;">${totalAmount}</td>
+        <tr style="border-bottom: 1px solid #1f2937;">
+          <td style="padding: 12px 14px; color: #f3f4f6; font-size: 13px; font-weight: 500;">${projectTitle}</td>
+          <td style="padding: 12px 14px; color: #9ca3af; font-size: 13px; text-align: center;">1</td>
+          <td style="padding: 12px 14px; color: #d1d5db; font-size: 13px; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${totalAmount}</td>
+          <td style="padding: 12px 14px; color: #34d399; font-weight: 700; font-size: 13px; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${totalAmount}</td>
         </tr>
       `;
 
   const html = `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
-      <div style="background: linear-gradient(135deg, #0284c7, #0369a1); padding: 32px 40px; text-align: center;">
-        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">SAAMPARK GROUP</h1>
-        <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">PROJECT COST ESTIMATE</p>
-      </div>
-
-      <div style="padding: 32px 36px; background: #16161e;">
-        <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
-        <p style="color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 0 0 20px;">
-          Here is your cost estimate <strong style="color: #38bdf8;">${displayNum}</strong> for <strong>${projectTitle}</strong>. Please review the itemized breakdown and confirm your response:
-        </p>
-
-        <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
-          <table style="width: 100%; font-size: 13px; color: #cbd5e1; border-collapse: collapse;">
-            <tr>
-              <td style="padding: 5px 0; color: #94a3b8;">Estimate Number:</td>
-              <td style="padding: 5px 0; text-align: right; font-weight: 700; color: #38bdf8; font-family: monospace;">${displayNum}</td>
-            </tr>
-            <tr>
-              <td style="padding: 5px 0; color: #94a3b8;">Project:</td>
-              <td style="padding: 5px 0; text-align: right; color: #e2e8f0;">${projectTitle}</td>
-            </tr>
-            <tr>
-              <td style="padding: 5px 0; color: #94a3b8;">Valid Until:</td>
-              <td style="padding: 5px 0; text-align: right; color: #f59e0b; font-weight: 600;">${validUntil || '30 Days from issue'}</td>
-            </tr>
-            <tr>
-              <td style="padding: 5px 0; color: #94a3b8;">Estimated Total:</td>
-              <td style="padding: 5px 0; text-align: right; font-weight: 800; color: #10b981; font-size: 15px;">${totalAmount}</td>
-            </tr>
-          </table>
+    <div style="background-color: #0b0f19; padding: 32px 16px; min-height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+      <div style="max-width: 600px; margin: 0 auto; background-color: #111827; border: 1px solid #1f2937; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.5);">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #0284c7, #0369a1); padding: 36px 40px; text-align: center;">
+          <div style="display: inline-block; padding: 4px 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 12px;">
+            PROJECT ESTIMATE • ${brand.shortName}
+          </div>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Official Project Cost Estimate</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 6px 0 0; font-size: 13px;">${brand.fullName}</p>
         </div>
 
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-          <thead>
-            <tr style="background: #1e1e2e; border-bottom: 2px solid #2d2d3d;">
-              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: left; text-transform: uppercase;">Service / Scope</th>
-              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: center; text-transform: uppercase;">Qty</th>
-              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase;">Rate</th>
-              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase;">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
+        <!-- Body -->
+        <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb;">
+          <p style="color: #f9fafb; font-size: 16px; font-weight: 600; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
+          <p style="color: #9ca3af; font-size: 13.5px; line-height: 1.6; margin: 0 0 20px;">
+            Here is your official cost estimate <strong style="color: #38bdf8;">${displayNum}</strong> for <strong>${projectTitle}</strong>. Please review the itemized scope and choose your response:
+          </p>
 
-        <!-- Interactive Action Buttons -->
-        <div style="background: #111118; border: 1px solid #27273a; border-radius: 12px; padding: 22px; text-align: center; margin: 24px 0 16px;">
-          <p style="color: #cbd5e1; font-size: 13px; font-weight: 700; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.5px;">Please select your action below:</p>
-          
-          <div style="margin-bottom: 14px;">
-            <!-- Button 1: Accept -->
-            <a href="${aUrl}" style="display: inline-block; background: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 10px rgba(22, 163, 74, 0.3);">
-              ✅ Accept Estimate
-            </a>
-            <!-- Button 2: Need Modification -->
-            <a href="${mUrl}" style="display: inline-block; background: #d97706; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 10px rgba(217, 119, 6, 0.3);">
-              ✏️ Need Modification
-            </a>
-            <!-- Button 3: Decline / Don't Accept -->
-            <a href="${decUrl}" style="display: inline-block; background: #dc2626; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 10px rgba(220, 38, 38, 0.3);">
-              ❌ Decline / Don't Accept
-            </a>
+          <!-- Metadata Box -->
+          <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 20px; margin-bottom: 24px;">
+            <table style="width: 100%; font-size: 13px; color: #d1d5db; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Estimate Number:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${displayNum}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Project Title:</td>
+                <td style="padding: 6px 0; text-align: right; color: #f3f4f6; font-weight: 600;">${projectTitle}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Valid Until:</td>
+                <td style="padding: 6px 0; text-align: right; color: #fbbf24; font-weight: 600;">${validUntil || '30 Days from issue'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Estimated Total:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 800; color: #34d399; font-size: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${totalAmount}</td>
+              </tr>
+            </table>
           </div>
 
-          <div style="border-top: 1px solid #27273a; padding-top: 14px; margin-top: 14px;">
-            <!-- Download Button in Mail -->
-            <a href="${dUrl}" style="display: inline-block; background: #0284c7; color: #ffffff; text-decoration: none; padding: 10px 22px; border-radius: 8px; font-weight: 700; font-size: 12px; margin: 4px; box-shadow: 0 4px 10px rgba(2, 132, 199, 0.3);">
-              📥 Download Official Estimate (PDF)
-            </a>
-            <a href="${vUrl}" style="display: inline-block; background: #334155; color: #e2e8f0; text-decoration: none; padding: 10px 22px; border-radius: 8px; font-weight: 600; font-size: 12px; margin: 4px;">
-              👁️ View Online Portal
-            </a>
+          <!-- Items Table -->
+          <div style="border: 1px solid #1f2937; border-radius: 12px; overflow: hidden; margin-bottom: 24px;">
+            <table style="width: 100%; border-collapse: collapse; background-color: #161f30;">
+              <thead>
+                <tr style="background-color: #1e293b; border-bottom: 2px solid #334155;">
+                  <th style="padding: 12px 14px; color: #94a3b8; font-size: 11px; text-align: left; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Service / Scope</th>
+                  <th style="padding: 12px 14px; color: #94a3b8; font-size: 11px; text-align: center; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Qty</th>
+                  <th style="padding: 12px 14px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Rate</th>
+                  <th style="padding: 12px 14px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+              </tbody>
+            </table>
           </div>
+
+          <!-- Interactive Action Buttons -->
+          <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 22px; text-align: center; margin: 24px 0 16px;">
+            <p style="color: #d1d5db; font-size: 13px; font-weight: 700; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.5px;">Please select your response:</p>
+            
+            <div style="margin-bottom: 14px;">
+              <!-- Button 1: Accept -->
+              <a href="${aUrl}" style="display: inline-block; background: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.4);">
+                ✅ Accept Estimate
+              </a>
+              <!-- Button 2: Need Modification -->
+              <a href="${mUrl}" style="display: inline-block; background: #d97706; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.4);">
+                ✏️ Request Modification
+              </a>
+              <!-- Button 3: Decline / Don't Accept -->
+              <a href="${decUrl}" style="display: inline-block; background: #dc2626; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);">
+                ❌ Decline
+              </a>
+            </div>
+
+            <div style="border-top: 1px solid #374151; padding-top: 14px; margin-top: 14px;">
+              <a href="${dUrl}" style="display: inline-block; background: #0284c7; color: #ffffff; text-decoration: none; padding: 10px 22px; border-radius: 10px; font-weight: 700; font-size: 12px; margin: 4px; box-shadow: 0 4px 10px rgba(2, 132, 199, 0.35);">
+                📥 Download Official PDF
+              </a>
+              <a href="${vUrl}" style="display: inline-block; background: #374151; color: #f3f4f6; text-decoration: none; padding: 10px 22px; border-radius: 10px; font-weight: 600; font-size: 12px; margin: 4px;">
+                👁️ View Digital Portal
+              </a>
+            </div>
+          </div>
+
+          <p style="color: #6b7280; font-size: 12px; text-align: center; margin: 0;">
+            Upon acceptance, this estimate can be immediately converted into an official tax invoice and deliverables schedule.
+          </p>
         </div>
 
-        <p style="color: #64748b; font-size: 12px; text-align: center; margin: 0;">
-          Upon acceptance, this estimate can be immediately converted into a tax invoice and project deliverables schedule.
-        </p>
-      </div>
-
-      <div style="padding: 20px 36px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
-        <p style="color: #64748b; font-size: 12px; margin: 0 0 4px;">📞 +91 9901518567 / +91 9901518569 | 🌐 www.saamparktechnology.com</p>
-        <p style="color: #475569; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        <!-- Footer -->
+        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
+          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
+          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
+          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        </div>
       </div>
     </div>
   `;
@@ -859,7 +1005,7 @@ async function sendEstimateDetailsEmail({
   await transporter.sendMail({
     from,
     to,
-    subject: `📋 Cost Estimate ${displayNum} for ${projectTitle} (${totalAmount}) - Saampark Group`,
+    subject: `📋 Cost Estimate ${displayNum} for ${projectTitle} (${totalAmount}) - ${brand.shortName}`,
     html,
   });
 }
@@ -872,26 +1018,38 @@ async function sendPinResetOTP(email, name = 'User', companyId = null) {
   storeOTP(email, otp, 'pin_reset');
 
   const { transporter, from } = await getEmailConfig(companyId);
+  const brand = getCompanyBranding(companyId);
 
   const html = `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 500px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
-      <div style="background: linear-gradient(135deg, #6366f1, #4f46e5); padding: 28px 36px; text-align: center;">
-        <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800;">SAAMPARK CRM</h1>
-        <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">Security PIN Verification</p>
-      </div>
-      <div style="padding: 30px 36px; background: #16161e; text-align: center;">
-        <p style="color: #e2e8f0; font-size: 14px; margin: 0 0 16px;">Hello <strong>${name}</strong>,</p>
-        <p style="color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 0 0 24px;">
-          Use the following 6-digit verification code to configure or update your 4-digit security PIN:
-        </p>
-        <div style="background: #1e1e2e; border: 2px dashed #4f46e5; border-radius: 12px; padding: 18px 24px; display: inline-block; margin-bottom: 24px;">
-          <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #a5b4fc; font-family: monospace;">${otp}</span>
+    <div style="background-color: #0b0f19; padding: 32px 16px; min-height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+      <div style="max-width: 520px; margin: 0 auto; background-color: #111827; border: 1px solid #1f2937; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.5);">
+        <div style="background: linear-gradient(135deg, #6366f1, #4f46e5); padding: 36px 40px; text-align: center;">
+          <div style="display: inline-block; padding: 4px 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 12px;">
+            SECURITY VERIFICATION • ${brand.shortName}
+          </div>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Security PIN Verification</h1>
+          <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">Confirm your authorization to update your 4-digit security PIN</p>
         </div>
-        <p style="color: #64748b; font-size: 12px; margin: 0 0 6px;">This OTP will expire in <strong>10 minutes</strong>.</p>
-        <p style="color: #64748b; font-size: 11px; margin: 0;">If you did not request this code, please secure your account immediately.</p>
-      </div>
-      <div style="padding: 16px 36px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
-        <p style="color: #475569; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb; text-align: center;">
+          <p style="color: #f9fafb; font-size: 16px; font-weight: 600; margin: 0 0 12px;">Hello <strong>${name}</strong>,</p>
+          <p style="color: #9ca3af; font-size: 13.5px; line-height: 1.6; margin: 0 0 24px;">
+            Please enter the following 6-digit verification code in the CRM prompt to set or reset your 4-digit Security PIN:
+          </p>
+          <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 22px 32px; display: inline-block; margin-bottom: 24px;">
+            <div style="font-size: 38px; font-weight: 800; letter-spacing: 10px; color: #a5b4fc; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${otp}</div>
+            <div style="display: inline-block; margin-top: 8px; padding: 3px 10px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9999px;">
+              <span style="color: #fbbf24; font-size: 11.5px; font-weight: 600;">⏱ Expires in 10 minutes</span>
+            </div>
+          </div>
+          <p style="color: #6b7280; font-size: 12px; margin: 0;">
+            Never share this OTP with anyone. Management will never ask for your verification code.
+          </p>
+        </div>
+        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
+          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
+          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
+          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        </div>
       </div>
     </div>
   `;
@@ -899,7 +1057,7 @@ async function sendPinResetOTP(email, name = 'User', companyId = null) {
   await transporter.sendMail({
     from,
     to: email,
-    subject: `🔐 Your Security PIN Verification Code: ${otp} - SAAMPARK CRM`,
+    subject: `🔐 Security PIN Code: ${otp} - ${brand.shortName}`,
     html,
   });
 
@@ -914,33 +1072,65 @@ async function sendProjectCompletionEmail({
   clientName = 'Valued Client',
   projectTitle,
   invoiceId = '',
+  planType = 'general',
+  countdownDuration = '',
+  countdownStartDate = '',
+  countdownEndDate = '',
+  countdownNotice = '',
   companyId = null,
 }) {
   const { transporter, from } = await getEmailConfig(companyId);
+  const brand = getCompanyBranding(companyId);
+  const isDigitalMarketing = planType === 'digital_marketing' || String(projectTitle).toLowerCase().includes('marketing');
 
   const html = `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
-      <div style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); padding: 32px 40px; text-align: center;">
-        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800;">🎉 Project Completed!</h1>
-        <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">${projectTitle}</p>
-      </div>
-      <div style="padding: 36px 40px; background: #16161e;">
-        <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
-        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
-          We are thrilled to let you know that your project <strong style="color: #38bdf8;">${projectTitle}</strong> has been successfully completed by our engineering and design team.
-        </p>
-        <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-          <p style="color: #10b981; font-weight: 700; margin: 0 0 8px; font-size: 14px;">✔ All Milestones & Deliverables Fulfilled</p>
-          <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.5;">
-            All requested features, documentation, and assets are now fully deployed and ready for your access.
-          </p>
+    <div style="background-color: #0b0f19; padding: 32px 16px; min-height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+      <div style="max-width: 580px; margin: 0 auto; background-color: #111827; border: 1px solid #1f2937; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.5);">
+        <div style="background: linear-gradient(135deg, #0284c7, #2563eb); padding: 36px 40px; text-align: center;">
+          <div style="display: inline-block; padding: 4px 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 12px;">
+            PROJECT MILESTONE • ${brand.shortName}
+          </div>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">🎉 Project Successfully Completed!</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 6px 0 0; font-size: 13px;">${projectTitle}</p>
         </div>
-        <p style="color: #64748b; font-size: 13px; line-height: 1.6; margin: 0;">
-          Thank you for choosing <strong>SAAMPARK Technology</strong>. If you need any assistance, reach out to our dedicated support.
-        </p>
-      </div>
-      <div style="padding: 20px 40px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
-        <p style="color: #475569; font-size: 12px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb;">
+          <p style="color: #f9fafb; font-size: 16px; font-weight: 600; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
+          <p style="color: #9ca3af; font-size: 13.5px; line-height: 1.6; margin: 0 0 24px;">
+            We are thrilled to inform you that all deliverables, engineering requirements, and milestones for <strong style="color: #38bdf8;">${projectTitle}</strong> have been successfully fulfilled and signed off by <strong>${brand.fullName}</strong>.
+          </p>
+
+          <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 22px; margin-bottom: 24px;">
+            <p style="color: #34d399; font-weight: 700; margin: 0 0 8px; font-size: 14px;">✔ 100% Technical Specifications Deployed</p>
+            <p style="color: #9ca3af; font-size: 13px; margin: 0 0 ${countdownDuration || countdownEndDate ? '16px' : '0'}; line-height: 1.5;">
+              All source assets, production builds, user documentation, and service credentials are now active and accessible in your Client Portal.
+            </p>
+
+            ${(countdownDuration || countdownEndDate) ? `
+              <div style="border-top: 1px solid #374151; padding-top: 14px;">
+                <p style="color: #38bdf8; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 800; margin: 0 0 10px;">SERVICE COUNTDOWN &amp; TIMELINE</p>
+                <table style="width: 100%; font-size: 13px; color: #d1d5db; border-collapse: collapse;">
+                  ${countdownDuration ? `<tr><td style="padding: 4px 0; color: #9ca3af;">Service / Plan:</td><td style="padding: 4px 0; text-align: right; font-weight: 700; color: #ffffff;">${countdownDuration}</td></tr>` : ''}
+                  ${countdownStartDate ? `<tr><td style="padding: 4px 0; color: #9ca3af;">Countdown Starts:</td><td style="padding: 4px 0; text-align: right; color: #34d399; font-weight: 600;">${countdownStartDate}</td></tr>` : ''}
+                  ${countdownEndDate ? `<tr><td style="padding: 4px 0; color: #9ca3af;">Service Valid Until:</td><td style="padding: 4px 0; text-align: right; color: #fbbf24; font-weight: 700;">${countdownEndDate}</td></tr>` : ''}
+                </table>
+                <p style="color: #94a3b8; font-size: 12px; margin: 10px 0 0; line-height: 1.4;">
+                  ${countdownNotice || (isDigitalMarketing ? 'Note: For Digital Marketing Retainers, the campaign timeline starts strictly from the 1st live published post date.' : 'Your warranty and hosting timeline has officially started from today\'s completion sign-off.')}
+                </p>
+              </div>
+            ` : ''}
+          </div>
+
+          <div style="text-align: center; margin-bottom: 20px;">
+            <a href="https://crm.saampark.com/login" style="display: inline-block; background: linear-gradient(135deg, #0284c7, #2563eb); color: #ffffff; text-decoration: none; padding: 13px 30px; border-radius: 12px; font-weight: 700; font-size: 13.5px; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);">
+              Access Your Project Workspace →
+            </a>
+          </div>
+        </div>
+        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
+          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
+          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
+          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        </div>
       </div>
     </div>
   `;
@@ -948,7 +1138,7 @@ async function sendProjectCompletionEmail({
   await transporter.sendMail({
     from,
     to,
-    subject: `🚀 Project Completed: ${projectTitle} - Saampark Technology`,
+    subject: `🚀 Project Completed: ${projectTitle} - ${brand.shortName}`,
     html,
   });
 }
@@ -963,34 +1153,44 @@ async function sendClientWelcomeEmail({
   companyId = null,
 }) {
   const { transporter, from } = await getEmailConfig(companyId);
+  const brand = getCompanyBranding(companyId, companyName);
 
   const html = `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
-      <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 32px 40px; text-align: center;">
-        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800;">Welcome to SAAMPARK! 👋</h1>
-        <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">Client Portal Access</p>
-      </div>
-      <div style="padding: 36px 40px; background: #16161e;">
-        <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
-        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
-          Welcome to <strong style="color: #818cf8;">SAAMPARK Group</strong>. Your client account has been registered for <strong style="color: #e2e8f0;">${companyName}</strong>.
-        </p>
-        <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-          <p style="color: #94a3b8; font-size: 12px; text-transform: uppercase; margin: 0 0 8px; font-weight: 700;">Your Benefits</p>
-          <ul style="color: #cbd5e1; font-size: 13px; line-height: 1.6; padding-left: 20px; margin: 0;">
-            <li>Real-time project tracking & milestones</li>
-            <li>Instant digital invoices and GST compliance</li>
-            <li>Direct support tickets and communication</li>
-          </ul>
+    <div style="background-color: #0b0f19; padding: 32px 16px; min-height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+      <div style="max-width: 560px; margin: 0 auto; background-color: #111827; border: 1px solid #1f2937; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.5);">
+        <div style="background: linear-gradient(135deg, #0284c7, #0f766e); padding: 36px 40px; text-align: center;">
+          <div style="display: inline-block; padding: 4px 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 12px;">
+            CLIENT WORKSPACE • ${brand.shortName}
+          </div>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Welcome to SAAMPARK Client Portal</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 6px 0 0; font-size: 13px;">Dedicated Client Relationship &amp; Billing Portal</p>
         </div>
-        <div style="text-align: center;">
-          <a href="https://crm.saampark.com/login" style="display: inline-block; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 700; font-size: 14px;">
-            Access Client Portal →
-          </a>
+        <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb;">
+          <p style="color: #f9fafb; font-size: 16px; font-weight: 600; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
+          <p style="color: #9ca3af; font-size: 13.5px; line-height: 1.6; margin: 0 0 24px;">
+            Welcome to <strong style="color: #38bdf8;">${brand.fullName}</strong>. Your dedicated Client Portal is now active, providing 24/7 visibility into your projects, deliverables, milestones, and commercial agreements.
+          </p>
+
+          <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 22px; margin-bottom: 24px;">
+            <p style="color: #38bdf8; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 12px; font-weight: 700;">Client Portal Privileges</p>
+            <ul style="color: #d1d5db; font-size: 13px; line-height: 1.6; padding-left: 20px; margin: 0;">
+              <li>Live milestone progress tracking &amp; deliverable verification</li>
+              <li>Instant digital invoices, GST compliance &amp; payment receipts</li>
+              <li>Direct project ticketing &amp; rapid technical communication</li>
+            </ul>
+          </div>
+
+          <div style="text-align: center; margin-bottom: 20px;">
+            <a href="https://crm.saampark.com/login" style="display: inline-block; background: linear-gradient(135deg, #0284c7, #0f766e); color: #ffffff; text-decoration: none; padding: 13px 30px; border-radius: 12px; font-weight: 700; font-size: 13.5px; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);">
+              Access Client Portal →
+            </a>
+          </div>
         </div>
-      </div>
-      <div style="padding: 20px 40px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
-        <p style="color: #475569; font-size: 12px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
+          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
+          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
+          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        </div>
       </div>
     </div>
   `;
@@ -998,7 +1198,7 @@ async function sendClientWelcomeEmail({
   await transporter.sendMail({
     from,
     to,
-    subject: `👋 Welcome to Saampark Group - ${companyName}`,
+    subject: `👋 Welcome to ${brand.displayName} - Client Portal Access`,
     html,
   });
 }
@@ -1019,49 +1219,65 @@ async function sendPaymentReceiptEmail({
   companyId = null,
 }) {
   const { transporter, from } = await getEmailConfig(companyId);
+  const brand = getCompanyBranding(companyId);
   const isZeroDue = remainingDue === '₹0' || remainingDue === '0' || remainingDue === '₹0.00';
 
   const html = `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
-      <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 32px 40px; text-align: center;">
-        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800;">💳 Payment Receipt</h1>
-        <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">${isZeroDue ? 'FULL PAYMENT SETTLED' : 'PART PAYMENT RECEIVED'}</p>
-      </div>
-      <div style="padding: 36px 40px; background: #16161e;">
-        <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
-        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
-          We have successfully received and recorded your payment of <strong style="color: #10b981; font-size: 16px;">${paidAmount}</strong> for Invoice <strong style="color: #38bdf8;">${invoiceId}</strong> (${project}).
-        </p>
-        <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-          <table style="width: 100%; font-size: 13px; color: #cbd5e1; border-collapse: collapse;">
-            <tr>
-              <td style="padding: 6px 0; color: #94a3b8;">Amount Paid:</td>
-              <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #10b981;">${paidAmount}</td>
-            </tr>
-            <tr>
-              <td style="padding: 6px 0; color: #94a3b8;">Payment Method:</td>
-              <td style="padding: 6px 0; text-align: right; color: #e2e8f0;">${paymentMethod}</td>
-            </tr>
-            ${txnRef ? `<tr><td style="padding: 6px 0; color: #94a3b8;">Reference:</td><td style="padding: 6px 0; text-align: right; font-family: monospace; color: #94a3b8;">${txnRef}</td></tr>` : ''}
-            <tr>
-              <td style="padding: 6px 0; color: #94a3b8;">Remaining Balance Due:</td>
-              <td style="padding: 6px 0; text-align: right; font-weight: 700; color: ${isZeroDue ? '#10b981' : '#f87171'};">${remainingDue}</td>
-            </tr>
-            ${!isZeroDue && nextDueDate && nextDueDate !== '-' ? `<tr><td style="padding: 6px 0; color: #94a3b8;">Next Due Date:</td><td style="padding: 6px 0; text-align: right; color: #f59e0b; font-weight: 600;">${nextDueDate}</td></tr>` : ''}
-          </table>
-        </div>
-        ${isZeroDue ? `
-          <div style="background: #064e3b; border-left: 4px solid #10b981; padding: 14px; border-radius: 6px;">
-            <p style="color: #a7f3d0; font-size: 13px; margin: 0;">✨ Your invoice has been <strong>Fully Settled</strong> with ₹0 remaining balance. Thank you!</p>
+    <div style="background-color: #0b0f19; padding: 32px 16px; min-height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+      <div style="max-width: 560px; margin: 0 auto; background-color: #111827; border: 1px solid #1f2937; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.5);">
+        <div style="background: linear-gradient(135deg, #059669, #10b981); padding: 36px 40px; text-align: center;">
+          <div style="display: inline-block; padding: 4px 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 12px;">
+            PAYMENT SETTLEMENT • ${brand.shortName}
           </div>
-        ` : `
-          <p style="color: #64748b; font-size: 12px; line-height: 1.5; margin: 0;">
-            Please ensure the remaining balance of ${remainingDue} is settled on or before ${nextDueDate}.
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Official Payment Receipt</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 6px 0 0; font-size: 13px;">${isZeroDue ? 'FULL INVOICE SETTLEMENT' : 'PARTIAL SETTLEMENT RECORDED'}</p>
+        </div>
+        <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb;">
+          <p style="color: #f9fafb; font-size: 16px; font-weight: 600; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
+          <p style="color: #9ca3af; font-size: 13.5px; line-height: 1.6; margin: 0 0 24px;">
+            We have successfully received and registered your payment of <strong style="color: #34d399; font-size: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${paidAmount}</strong> for Invoice <strong style="color: #38bdf8;">${invoiceId}</strong> (${project}).
           </p>
-        `}
-      </div>
-      <div style="padding: 20px 40px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
-        <p style="color: #475569; font-size: 12px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+
+          <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 22px; margin-bottom: 24px;">
+            <table style="width: 100%; font-size: 13px; color: #d1d5db; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 7px 0; color: #9ca3af;">Amount Credited:</td>
+                <td style="padding: 7px 0; text-align: right; font-weight: 700; color: #34d399; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${paidAmount}</td>
+              </tr>
+              <tr>
+                <td style="padding: 7px 0; color: #9ca3af;">Payment Method:</td>
+                <td style="padding: 7px 0; text-align: right; color: #f3f4f6;">${paymentMethod}</td>
+              </tr>
+              ${txnRef ? `<tr><td style="padding: 7px 0; color: #9ca3af;">Transaction Reference:</td><td style="padding: 7px 0; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #38bdf8;">${txnRef}</td></tr>` : ''}
+              <tr style="border-top: 1px solid #374151;">
+                <td style="padding: 10px 0 4px; color: #9ca3af; font-weight: 600;">Remaining Balance:</td>
+                <td style="padding: 10px 0 4px; text-align: right; font-weight: 800; color: ${isZeroDue ? '#34d399' : '#f87171'}; font-size: 15px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${remainingDue}</td>
+              </tr>
+              ${!isZeroDue && nextDueDate && nextDueDate !== '-' ? `<tr><td style="padding: 4px 0 0; color: #9ca3af;">Next Due Date:</td><td style="padding: 4px 0 0; text-align: right; color: #fbbf24; font-weight: 600;">${nextDueDate}</td></tr>` : ''}
+            </table>
+          </div>
+
+          ${isZeroDue ? `
+            <div style="background: rgba(16, 185, 129, 0.1); border-left: 4px solid #10b981; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+              <p style="color: #a7f3d0; font-size: 13px; margin: 0; line-height: 1.5;">✨ <strong>Invoice Fully Settled:</strong> Your commercial balance for this invoice is ₹0. Thank you for your partnership!</p>
+            </div>
+          ` : `
+            <p style="color: #9ca3af; font-size: 12.5px; line-height: 1.5; margin: 0 0 20px;">
+              Please ensure the remaining balance of <strong style="color: #f87171;">${remainingDue}</strong> is settled on or before ${nextDueDate}.
+            </p>
+          `}
+
+          <div style="text-align: center; margin-bottom: 10px;">
+            <a href="https://crm.saampark.com/sales/invoices?view=${invoiceId}" style="display: inline-block; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff; text-decoration: none; padding: 13px 28px; border-radius: 12px; font-weight: 700; font-size: 13.5px; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);">
+              View Ledger &amp; Invoice →
+            </a>
+          </div>
+        </div>
+        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
+          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
+          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
+          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        </div>
       </div>
     </div>
   `;
@@ -1069,7 +1285,7 @@ async function sendPaymentReceiptEmail({
   await transporter.sendMail({
     from,
     to,
-    subject: `💳 Payment Receipt: ${paidAmount} Received for ${invoiceId}`,
+    subject: `💳 Payment Receipt: ${paidAmount} Received for ${invoiceId} - ${brand.shortName}`,
     html,
   });
 }
@@ -1087,42 +1303,52 @@ async function sendPaymentDueReminderEmail({
   companyId = null,
 }) {
   const { transporter, from } = await getEmailConfig(companyId);
+  const brand = getCompanyBranding(companyId);
 
   const html = `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
-      <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 32px 40px; text-align: center;">
-        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800;">⏰ Payment Reminder</h1>
-        <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">Invoice: ${invoiceId}</p>
-      </div>
-      <div style="padding: 36px 40px; background: #16161e;">
-        <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
-        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
-          This is a friendly reminder that an outstanding payment of <strong style="color: #f59e0b; font-size: 16px;">${dueAmount}</strong> is pending for Invoice <strong style="color: #38bdf8;">${invoiceId}</strong> (${project}).
-        </p>
-        <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-          <table style="width: 100%; font-size: 13px; color: #cbd5e1; border-collapse: collapse;">
-            <tr>
-              <td style="padding: 6px 0; color: #94a3b8;">Pending Amount Due:</td>
-              <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #f59e0b; font-size: 15px;">${dueAmount}</td>
-            </tr>
-            <tr>
-              <td style="padding: 6px 0; color: #94a3b8;">Due Date:</td>
-              <td style="padding: 6px 0; text-align: right; color: #e2e8f0; font-weight: 600;">${dueDate}</td>
-            </tr>
-            <tr>
-              <td style="padding: 6px 0; color: #94a3b8;">UPI ID for Settlement:</td>
-              <td style="padding: 6px 0; text-align: right; font-family: monospace; color: #38bdf8; font-weight: 700;">saampark@sbi</td>
-            </tr>
-          </table>
+    <div style="background-color: #0b0f19; padding: 32px 16px; min-height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+      <div style="max-width: 560px; margin: 0 auto; background-color: #111827; border: 1px solid #1f2937; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.5);">
+        <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 36px 40px; text-align: center;">
+          <div style="display: inline-block; padding: 4px 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 12px;">
+            PAYMENT DUE REMINDER • ${brand.shortName}
+          </div>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Outstanding Payment Notice</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 6px 0 0; font-size: 13px;">Invoice Reference: ${invoiceId}</p>
         </div>
-        <div style="text-align: center;">
-          <a href="https://crm.saampark.com/sales/invoices?view=${invoiceId}" style="display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 700; font-size: 14px;">
-            View Invoice & Settle Due →
-          </a>
+        <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb;">
+          <p style="color: #f9fafb; font-size: 16px; font-weight: 600; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
+          <p style="color: #9ca3af; font-size: 13.5px; line-height: 1.6; margin: 0 0 24px;">
+            This is a friendly reminder that a payment of <strong style="color: #fbbf24; font-size: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${dueAmount}</strong> is pending for Invoice <strong style="color: #38bdf8;">${invoiceId}</strong> (${project}).
+          </p>
+
+          <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 22px; margin-bottom: 24px;">
+            <table style="width: 100%; font-size: 13px; color: #d1d5db; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 7px 0; color: #9ca3af;">Pending Due Amount:</td>
+                <td style="padding: 7px 0; text-align: right; font-weight: 800; color: #fbbf24; font-size: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${dueAmount}</td>
+              </tr>
+              <tr>
+                <td style="padding: 7px 0; color: #9ca3af;">Due Date:</td>
+                <td style="padding: 7px 0; text-align: right; color: #f3f4f6; font-weight: 600;">${dueDate}</td>
+              </tr>
+              <tr>
+                <td style="padding: 7px 0; color: #9ca3af;">UPI Settlement ID:</td>
+                <td style="padding: 7px 0; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #38bdf8; font-weight: 700;">saampark@sbi</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="text-align: center; margin-bottom: 10px;">
+            <a href="https://crm.saampark.com/sales/invoices?view=${invoiceId}" style="display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; text-decoration: none; padding: 13px 30px; border-radius: 12px; font-weight: 700; font-size: 13.5px; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);">
+              View Invoice &amp; Settle Due →
+            </a>
+          </div>
         </div>
-      </div>
-      <div style="padding: 20px 40px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
-        <p style="color: #475569; font-size: 12px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
+          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
+          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
+          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        </div>
       </div>
     </div>
   `;
@@ -1130,7 +1356,98 @@ async function sendPaymentDueReminderEmail({
   await transporter.sendMail({
     from,
     to,
-    subject: `⏰ Payment Due Reminder: ${dueAmount} for ${invoiceId} - Saampark Technology`,
+    subject: `⏰ Payment Due Reminder: ${dueAmount} for ${invoiceId} - ${brand.shortName}`,
+    html,
+  });
+}
+
+/**
+ * Send Digital Marketing Retainer Expiry & Campaign Renewal Email
+ */
+async function sendRetainerExpiryEmail({
+  to,
+  clientName = 'Valued Client',
+  invoiceId = '',
+  packageName = 'Digital Marketing Retainer',
+  durationText = '1 Month',
+  firstPostDate = '',
+  expiryDate = '',
+  remainingDays = '',
+  companyId = null,
+}) {
+  const { transporter, from } = await getEmailConfig(companyId);
+  const brand = getCompanyBranding(companyId);
+
+  const html = `
+    <div style="background-color: #0b0f19; padding: 32px 16px; min-height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+      <div style="max-width: 580px; margin: 0 auto; background-color: #111827; border: 1px solid #1f2937; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.5);">
+        <div style="background: linear-gradient(135deg, #7c3aed, #4f46e5); padding: 36px 40px; text-align: center;">
+          <div style="display: inline-block; padding: 4px 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 12px;">
+            CAMPAIGN RENEWAL NOTICE • ${brand.shortName}
+          </div>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Digital Marketing Retainer Expiring Soon</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 6px 0 0; font-size: 13px;">${packageName} (${durationText})</p>
+        </div>
+        <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb;">
+          <p style="color: #f9fafb; font-size: 16px; font-weight: 600; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
+          <p style="color: #9ca3af; font-size: 13.5px; line-height: 1.6; margin: 0 0 24px;">
+            Your ongoing Digital Marketing Monthly Retainer plan (<strong style="color: #a78bfa;">${packageName}</strong>) is nearing its scheduled campaign duration.
+          </p>
+
+          <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 22px; margin-bottom: 24px;">
+            <p style="color: #a78bfa; font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; margin: 0 0 12px; font-weight: 800;">RETAINER TIMELINE &amp; COUNTDOWN</p>
+            <table style="width: 100%; font-size: 13px; color: #d1d5db; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Retainer Plan:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #ffffff;">${packageName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Plan Duration:</td>
+                <td style="padding: 6px 0; text-align: right; color: #f3f4f6;">${durationText}</td>
+              </tr>
+              ${firstPostDate ? `
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">1st Post (Start Date):</td>
+                <td style="padding: 6px 0; text-align: right; color: #38bdf8; font-weight: 600;">${firstPostDate}</td>
+              </tr>` : ''}
+              ${expiryDate ? `
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Scheduled Expiry:</td>
+                <td style="padding: 6px 0; text-align: right; color: #fbbf24; font-weight: 700;">${expiryDate}</td>
+              </tr>` : ''}
+              ${remainingDays ? `
+              <tr style="border-top: 1px solid #374151;">
+                <td style="padding: 10px 0 4px; color: #9ca3af;">Remaining Campaign Time:</td>
+                <td style="padding: 10px 0 4px; text-align: right; font-weight: 800; color: #f87171; font-size: 14px;">${remainingDays} Days Left</td>
+              </tr>` : ''}
+            </table>
+          </div>
+
+          <div style="background: rgba(124, 58, 237, 0.1); border-left: 4px solid #8b5cf6; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+            <p style="color: #c4b5fd; font-size: 13px; margin: 0; line-height: 1.5;">
+              💡 <strong>Maintain Campaign Momentum:</strong> To ensure uninterrupted creative posting, social media engagement, and lead generation without pausing ad sets, please confirm your upcoming month's retainer renewal.
+            </p>
+          </div>
+
+          <div style="text-align: center; margin-bottom: 12px;">
+            <a href="https://crm.saampark.com/sales/invoices${invoiceId ? `?view=${invoiceId}` : ''}" style="display: inline-block; background: linear-gradient(135deg, #7c3aed, #4f46e5); color: #ffffff; text-decoration: none; padding: 13px 32px; border-radius: 12px; font-weight: 700; font-size: 13.5px; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);">
+              Review Campaign &amp; Renew Retainer →
+            </a>
+          </div>
+        </div>
+        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
+          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
+          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
+          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject: `🔔 Campaign Notice: Your ${packageName} Retainer is Expiring Soon - ${brand.shortName}`,
     html,
   });
 }
@@ -1177,7 +1494,7 @@ async function sendKycSuccessEmail({
   const maskedAcc = accountNumber ? (accountNumber.length > 4 ? `•••• •••• ${accountNumber.slice(-4)}` : accountNumber) : '';
 
   const html = `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 580px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 580px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
       <div style="background: linear-gradient(135deg, #059669, #10b981); padding: 36px 40px; text-align: center;">
         <div style="display: inline-block; width: 56px; height: 56px; line-height: 56px; border-radius: 28px; background: rgba(255,255,255,0.2); font-size: 28px; margin-bottom: 12px;">✅</div>
         <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">KYC VERIFICATION SUCCESSFUL</h1>
@@ -1266,7 +1583,7 @@ async function sendKycRejectedEmail({
   const { transporter, from } = await getEmailConfig(companyId);
 
   const html = `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 580px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 580px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
       <div style="background: linear-gradient(135deg, #e11d48, #be123c); padding: 36px 40px; text-align: center;">
         <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">KYC VERIFICATION UPDATE REQUIRED</h1>
         <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 13px;">${companyName} - Employee Verification</p>
@@ -1326,6 +1643,7 @@ module.exports = {
   sendClientWelcomeEmail,
   sendPaymentReceiptEmail,
   sendPaymentDueReminderEmail,
+  sendRetainerExpiryEmail,
   sendGenericEmail,
   sendKycSuccessEmail,
   sendKycRejectedEmail,

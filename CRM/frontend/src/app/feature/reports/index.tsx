@@ -11,19 +11,19 @@ import {
 
 import { Button } from "@/components/ui/Button"
 import { useAuthStore, SubBranch, isMatchingCompany, getCanonicalCompanyId } from "@/store/useAuthStore"
-import { getUsers, getUserAvatar } from "../users/services/userService"
-import { getInvoices, InvoiceItem, parseCurrencyNumber } from "../sales/invoices/services/invoiceService"
-import { getPayments, PaymentItem } from "../sales/payments/services/paymentService"
+import { getUsers, getUserAvatar } from "../users/service/userService"
+import { getInvoices, InvoiceItem, parseCurrencyNumber } from "../sales/invoices/service/invoiceService"
+import { getPayments, PaymentItem } from "../sales/payments/service/paymentService"
 import { fetchModuleDataFromDB, filterGlobalDeletedItems, isGlobalItemDeleted } from "@/lib/storageSync"
-import { getClients } from "../clients/services/clientService"
+import { getClients } from "../clients/service/clientService"
 import { ClientItem } from "../clients/types"
-import { taskService } from "../tasks/services/taskService"
+import { taskService } from "../tasks/service/taskService"
 import { Task } from "../tasks/types"
-import { getLeads } from "../leads/services/leadService"
+import { getLeads } from "../leads/service/leadService"
 import { Lead } from "../leads/types"
-import { getSubscriptions } from "../subscriptions/services/subscriptionService"
+import { getSubscriptions } from "../subscriptions/service/subscriptionService"
 import { Subscription, BillingCycle } from "../subscriptions/types"
-import { getProjects } from "../projects/services/projectService"
+import { getProjects } from "../projects/service/projectService"
 import { OfficialFormNo9Document } from "@/components/documents/OfficialFormNo9Document"
 import { Repeat, Package, Zap, CalendarDays, RefreshCw } from "lucide-react"
 import { resolveExportScope, exportToExcel, printPDFReport } from "@/lib/exportUtils"
@@ -721,10 +721,11 @@ export default function ReportsMain() {
       // Search Query
       if (invoiceSearchQuery.trim()) {
         const q = invoiceSearchQuery.toLowerCase().trim()
-        const clientGst = (clientMap[inv.client.toLowerCase().trim()]?.gstNumber || "").toLowerCase()
+        const clientGst = (clientMap[String(inv.client || "").toLowerCase().trim()]?.gstNumber || "").toLowerCase()
         const match =
-          inv.id.toLowerCase().includes(q) ||
-          inv.client.toLowerCase().includes(q) ||
+          String(inv.id || "").toLowerCase().includes(q) ||
+          String(inv.invoiceNumber || "").toLowerCase().includes(q) ||
+          String(inv.client || "").toLowerCase().includes(q) ||
           (inv.project || "").toLowerCase().includes(q) ||
           (inv.branchName || "").toLowerCase().includes(q) ||
           clientGst.includes(q)
@@ -1820,14 +1821,14 @@ export default function ReportsMain() {
                   <tr>
                     <th className="py-3 px-3.5 w-10 text-center">#</th>
                     <th className="py-3 px-3.5">Campaign &amp; Client</th>
-                    <th className="py-3 px-3.5">Plan / Form 9</th>
+                    <th className="py-3 px-3.5">Marketing Retainer Plan</th>
                     <th className="py-3 px-3.5">Duration</th>
                     <th className="py-3 px-3.5">Posters Progress</th>
                     <th className="py-3 px-3.5">Video Reels</th>
                     <th className="py-3 px-3.5">Assigned Squad</th>
                     <th className="py-3 px-3.5 text-right">Value</th>
                     <th className="py-3 px-3.5 text-center">Status</th>
-                    <th className="py-3 px-3.5 text-center">Form No - 9</th>
+                    <th className="py-3 px-3.5 text-center">Retainer Contract</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">

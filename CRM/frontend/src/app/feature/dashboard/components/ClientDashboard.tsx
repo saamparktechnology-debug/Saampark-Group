@@ -17,18 +17,23 @@ import {
   Plus,
 } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
-import { getInvoices, InvoiceItem } from "../../sales/invoices/services/invoiceService"
-import { getProjects } from "../../projects/services/projectService"
-import { getInstallments } from "../../subscriptions/services/subscriptionService"
+import { getInvoices, InvoiceItem } from "../../sales/invoices/service/invoiceService"
+import { getProjects } from "../../projects/service/projectService"
+import { getInstallments } from "../../subscriptions/service/subscriptionService"
+import { MarketingService } from "../../marketing/service/marketingService"
+import { MarketingCampaign } from "../../marketing/types"
 import { Project } from "../../projects/types"
 import { InstallmentItem } from "../../subscriptions/types"
 import { InvoiceModal } from "../../sales/invoices/components/InvoiceModal"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
+import Link from "next/link"
 
 export function ClientDashboard() {
   const { user } = useAuthStore()
   const [invoices, setInvoices] = React.useState<InvoiceItem[]>([])
   const [projects, setProjects] = React.useState<Project[]>([])
+  const [campaigns, setCampaigns] = React.useState<MarketingCampaign[]>([])
+  const [quotations, setQuotations] = React.useState<any[]>([])
   const [installments, setInstallments] = React.useState<InstallmentItem[]>([])
   const [tickets, setTickets] = React.useState<any[]>([])
   const [selectedInvoice, setSelectedInvoice] = React.useState<InvoiceItem | null>(null)
@@ -40,24 +45,30 @@ export function ClientDashboard() {
     const loadClientData = async () => {
       setIsLoading(true)
       try {
-        const [allInvs, allProjs, allInsts, allTkts] = await Promise.all([
+        const [allInvs, allProjs, allInsts, allTkts, allCamps, allQuotes] = await Promise.all([
           getInvoices("all").catch(() => []),
           getProjects("all").catch(() => []),
           getInstallments("all").catch(() => []),
           import("@/lib/storageSync").then((m) =>
             m.fetchModuleDataFromDB<any[]>("tickets", [], "all").catch(() => [])
           ),
+          MarketingService.getCampaigns("all").catch(() => []),
+          import("@/lib/storageSync").then((m) =>
+            m.fetchModuleDataFromDB<any[]>("quotations", [], "all").catch(() => [])
+          ),
         ])
-
-        const userEmail = (user.email || "").toLowerCase().trim()
-        const userName = (user.name || "").toLowerCase().trim()
-        const compName = ((user as any).companyName || "").toLowerCase().trim()
 
         // Filter Invoices for this client
         const myInvs = (allInvs || []).filter((inv) => isRecordAssignedToClient(inv, user))
 
         // Filter Projects for this client
         const myProjs = (allProjs || []).filter((p) => isRecordAssignedToClient(p, user))
+
+        // Filter Campaigns for this client
+        const myCamps = (allCamps || []).filter((c) => isRecordAssignedToClient(c, user))
+
+        // Filter Quotations for this client
+        const myQuotes = (allQuotes || []).filter((q) => isRecordAssignedToClient(q, user))
 
         // Filter Installments for this client
         const myInsts = (allInsts || []).filter((inst) => isRecordAssignedToClient(inst, user))
@@ -67,6 +78,8 @@ export function ClientDashboard() {
 
         setInvoices(myInvs)
         setProjects(myProjs)
+        setCampaigns(myCamps)
+        setQuotations(myQuotes)
         setInstallments(myInsts)
         setTickets(myTkts)
       } catch (err) {
@@ -246,6 +259,150 @@ export function ClientDashboard() {
           </div>
         )}
       </div>
+
+      {/* ── Digital Marketing Retainer Status ───────────────────────────── */}
+      {campaigns.length > 0 && (
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-600 flex items-center justify-center">
+                <Briefcase size={15} />
+              </div>
+              <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                Digital Marketing Retainer & Campaign Status
+              </h2>
+            </div>
+            <Link
+              href="/feature/marketing"
+              className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
+            >
+              <span>Full Marketing Hub</span>
+              <ArrowUpRight size={12} />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {campaigns.map((camp) => {
+              const posted = camp.totalPosted || 0
+              const total = camp.totalCommitment || 1
+              const pct = Math.min(100, Math.round((posted / total) * 100))
+              return (
+                <div key={camp.id} className="p-4 rounded-2xl border border-purple-100 dark:border-purple-900/40 bg-purple-50/30 dark:bg-purple-950/20 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{camp.packageName}</h3>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">Duration: {camp.packageDurationMonths || 1} Month(s) · Ends: {camp.endDate}</p>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                      {camp.stage || "Active"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 py-2 text-center bg-white dark:bg-zinc-800/80 rounded-xl border border-purple-100 dark:border-purple-900/30">
+                    <div>
+                      <p className="text-[10px] text-zinc-400 font-medium">Posters</p>
+                      <p className="text-xs font-black text-purple-600 dark:text-purple-400">
+                        {camp.services?.poster?.posted || 0} / {camp.services?.poster?.commitment || 12}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-zinc-400 font-medium">Video Reels</p>
+                      <p className="text-xs font-black text-indigo-600 dark:text-indigo-400">
+                        {camp.services?.video?.posted || 0} / {camp.services?.video?.commitment || 2}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-zinc-400 font-medium">Leads</p>
+                      <p className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                        {camp.totalLeads || 0}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
+                      <span>Deliverables Delivered</span>
+                      <span className="font-mono">{posted} / {total} ({pct}%)</span>
+                    </div>
+                    <div className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-purple-500 to-indigo-600 rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Quotations & Commercial Proposals ────────────────────────────── */}
+      {quotations.length > 0 && (
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-600 flex items-center justify-center">
+                <FileText size={15} />
+              </div>
+              <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                Official Quotations & Proposals
+              </h2>
+            </div>
+            <Link
+              href="/feature/quotations"
+              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+            >
+              <span>View All Quotations</span>
+              <ArrowUpRight size={12} />
+            </Link>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-zinc-100 dark:border-zinc-800 text-zinc-500 font-semibold pb-2">
+                  <th className="pb-2">Quotation #</th>
+                  <th className="pb-2">Date</th>
+                  <th className="pb-2">Valid Till</th>
+                  <th className="pb-2">Amount</th>
+                  <th className="pb-2">Status</th>
+                  <th className="pb-2 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                {quotations.map((q: any) => (
+                  <tr key={q.id || q.number} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                    <td className="py-3 font-mono font-bold text-zinc-900 dark:text-zinc-100">
+                      {q.number || q.id}
+                    </td>
+                    <td className="py-3 text-zinc-500 font-mono">{q.date || "-"}</td>
+                    <td className="py-3 text-zinc-500 font-mono">{q.validTill || "-"}</td>
+                    <td className="py-3 font-mono font-bold text-zinc-900 dark:text-zinc-100">
+                      ₹{Number(q.total || q.totalAmount || 0).toLocaleString("en-IN")}
+                    </td>
+                    <td className="py-3">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                        {q.status || "Active"}
+                      </span>
+                    </td>
+                    <td className="py-3 text-right">
+                      <Link
+                        href="/feature/quotations"
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-[11px] inline-flex items-center gap-1 shadow-2xs transition-colors"
+                      >
+                        <span>View Details</span>
+                        <ArrowUpRight size={12} />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ── Tax Invoices & Official Documents ───────────────────────────────── */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xs space-y-4">

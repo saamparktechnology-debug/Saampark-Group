@@ -3,8 +3,8 @@
 import * as React from "react"
 import { X, Check, User, Mail, Phone, Briefcase, Building2, Layers, DollarSign, CreditCard } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
-import { createTeamMember } from "@/app/feature/users/services/userService"
-import { updateMemberBankingDetails } from "../services/teamPaymentService"
+import { createTeamMember } from "@/app/feature/users/service/userService"
+import { updateMemberBankingDetails } from "../service/teamPaymentService"
 import { Button } from "@/components/ui/Button"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
 

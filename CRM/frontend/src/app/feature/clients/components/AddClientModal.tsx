@@ -4,10 +4,10 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Check, HelpCircle, User, Building, MapPin } from "lucide-react"
 import { ClientItem } from "../types"
-import { getUsers } from "@/app/feature/users/services/userService"
+import { getUsers } from "@/app/feature/users/service/userService"
 import { useAuthStore, isMatchingCompany, getSelectableCompanies } from "@/store/useAuthStore"
 import { sendClientWelcomeEmailNotification } from "@/services/emailNotificationService"
-import { formatDisplayEmail, getClientCategories, saveClientCategory, DEFAULT_CLIENT_CATEGORIES } from "../services/clientService"
+import { formatDisplayEmail, getClientCategories, saveClientCategory, DEFAULT_CLIENT_CATEGORIES } from "../service/clientService"
 import { lookupPincode } from "@/lib/pincodeService"
 
 interface AddClientModalProps {

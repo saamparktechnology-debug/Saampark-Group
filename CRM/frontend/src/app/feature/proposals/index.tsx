@@ -8,30 +8,16 @@ import {
 } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
-import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
-import { getClients } from "@/app/feature/clients/services/clientService"
-import { addProject } from "@/app/feature/projects/services/projectService"
-import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
-import { addOrder } from "@/app/feature/sales/orders/services/orderService"
+import { ProposalItem } from "./types"
+import { useDeleteProposalMutation, useProposalsQuery, useSaveProposalsMutation } from "./hooks/useProposals"
+import { getClients } from "@/app/feature/clients/service/clientService"
+import { addProject } from "@/app/feature/projects/service/projectService"
+import { addInvoice } from "@/app/feature/sales/invoices/service/invoiceService"
+import { addOrder } from "@/app/feature/sales/orders/service/orderService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 import { formatDisplayDate } from "@/lib/utils"
-
-export interface ProposalItem {
-  id: string
-  proposalNumber: string
-  title: string
-  client: string
-  clientEmail?: string
-  proposalDate: string
-  validUntil: string
-  amount: string
-  amountNum: number
-  deliverables: string[]
-  description: string
-  status: "Draft" | "Sent" | "Accepted" | "Declined"
-}
 
 export default function ProposalsMain() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
@@ -47,7 +33,9 @@ export default function ProposalsMain() {
   const clientEmailNorm = (user?.email || "").toLowerCase().trim()
   const clientNameNorm = (user?.name || "").toLowerCase().trim()
 
-  const [proposals, setProposals] = React.useState<ProposalItem[]>([])
+  const { data: proposals = [] } = useProposalsQuery(targetComp)
+  const saveProposalsMutation = useSaveProposalsMutation(targetComp)
+  const deleteProposalMutation = useDeleteProposalMutation(targetComp)
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedStatus, setSelectedStatus] = React.useState<string>("all")
   const [selectedProposal, setSelectedProposal] = React.useState<ProposalItem | null>(null)
@@ -69,24 +57,7 @@ export default function ProposalsMain() {
     setTimeout(() => setToastMessage(null), 4000)
   }
 
-  const loadProposals = React.useCallback(async () => {
-    const data = await fetchModuleDataFromDB<ProposalItem[]>("proposals", [], targetComp)
-    setProposals(Array.isArray(data) ? filterGlobalDeletedItems(data) : [])
-  }, [targetComp])
-
-  React.useEffect(() => {
-    loadProposals()
-    window.addEventListener("storage", loadProposals)
-    window.addEventListener("saampark_data_synced", loadProposals)
-    window.addEventListener("saampark_company_switched", loadProposals)
-    window.addEventListener("saampark_branch_switched", loadProposals)
-    return () => {
-      window.removeEventListener("storage", loadProposals)
-      window.removeEventListener("saampark_data_synced", loadProposals)
-      window.removeEventListener("saampark_company_switched", loadProposals)
-      window.removeEventListener("saampark_branch_switched", loadProposals)
-    }
-  }, [loadProposals])
+  
 
   React.useEffect(() => {
     if (isCreateModalOpen) {
@@ -102,12 +73,17 @@ export default function ProposalsMain() {
 
   // Filter by company, branch, and role
   const displayedProposals = React.useMemo(() => {
-    const { activeCompanyId: freshComp, activeBranchId: freshBranch, branches: freshBranches } = useAuthStore.getState()
+    const { activeCompanyId: freshComp, activeBranchId: freshBranch, activeSubBranchId: freshSubBranch, branches: freshBranches, subBranches: freshSubBranches } = useAuthStore.getState()
     const userComp = (freshComp || user?.companyId || "").toLowerCase().trim()
     const targetBranch = freshBranch
-    const branchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const branchObj = (freshBranches || []).find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
     const targetBranchId = String(branchObj?.id || targetBranch || "").toLowerCase().trim()
     const targetBranchName = branchObj?.name?.toLowerCase().trim() || ""
+
+    const targetSubBranch = freshSubBranch
+    const targetSubBranchObj = (freshSubBranches || []).find(sb => sb.id === targetSubBranch || (sb as any).name?.toLowerCase() === (targetSubBranch || "").toLowerCase())
+    const targetSubBranchId = String(targetSubBranchObj?.id || targetSubBranch || "").toLowerCase().trim()
+    const targetSubBranchName = targetSubBranchObj?.name?.toLowerCase().trim() || ""
 
     return proposals.filter((p) => {
       // Company filter
@@ -117,10 +93,17 @@ export default function ProposalsMain() {
         if (!pComp && userComp !== "tech") return false
       }
       // Branch filter (strict)
-      if (targetBranch && targetBranch !== "all") {
+      if (targetBranch && targetBranch !== "all" && targetBranch !== "main" && targetBranch !== "hq") {
         const pBranch = String((p as any).branchId || "").toLowerCase().trim()
         if (!pBranch) return false
         const match = pBranch === targetBranchId || (targetBranchName && pBranch === targetBranchName)
+        if (!match) return false
+      }
+      // Sub-Branch filter (strict)
+      if (targetSubBranch && targetSubBranch !== "all" && targetSubBranch !== "main" && targetSubBranch !== "hq" && targetSubBranch !== "all_subbranches") {
+        const pSubBranch = String((p as any).subBranchId || (p as any).sub_branch_id || "").toLowerCase().trim()
+        if (!pSubBranch) return false
+        const match = pSubBranch === targetSubBranchId || (targetSubBranchName && pSubBranch === targetSubBranchName)
         if (!match) return false
       }
       // Client role: only their own proposals
@@ -141,6 +124,11 @@ export default function ProposalsMain() {
 
       if (selectedStatus === "all") return matchSearch
       return matchSearch && p.status === selectedStatus
+    }).sort((a, b) => {
+      const timeA = new Date(a.proposalDate || (a as any).createdAt || 0).getTime()
+      const timeB = new Date(b.proposalDate || (b as any).createdAt || 0).getTime()
+      if (timeA && timeB && timeA !== timeB) return timeB - timeA
+      return String(b.id || "").localeCompare(String(a.id || ""))
     })
   }, [displayedProposals, searchQuery, selectedStatus])
 
@@ -174,8 +162,7 @@ export default function ProposalsMain() {
     }
 
     const updated = [newProp, ...proposals]
-    setProposals(updated)
-    await saveModuleDataToDB("proposals", updated, targetComp)
+    await saveProposalsMutation.mutateAsync(updated)
     showToast(`✅ Proposal ${newProp.proposalNumber} dispatched to ${client}!`)
     setIsCreateModalOpen(false)
     setTitle("")
@@ -185,16 +172,14 @@ export default function ProposalsMain() {
 
   const handleClientAccept = async (prop: ProposalItem) => {
     const updated = proposals.map(p => p.id === prop.id ? { ...p, status: "Accepted" as const } : p)
-    setProposals(updated)
-    await saveModuleDataToDB("proposals", updated, targetComp)
+    await saveProposalsMutation.mutateAsync(updated)
     showToast(`🎉 Accepted Proposal ${prop.proposalNumber}!`)
     setSelectedProposal(null)
   }
 
   const handleClientDecline = async (prop: ProposalItem) => {
     const updated = proposals.map(p => p.id === prop.id ? { ...p, status: "Declined" as const } : p)
-    setProposals(updated)
-    await saveModuleDataToDB("proposals", updated, targetComp)
+    await saveProposalsMutation.mutateAsync(updated)
     showToast(`Proposal ${prop.proposalNumber} marked as declined.`)
     setSelectedProposal(null)
   }
@@ -269,8 +254,7 @@ export default function ProposalsMain() {
     if (await confirmTwoStepDelete(label, "proposal")) {
       await markGlobalItemDeleted(id, "proposals")
       const updated = proposals.filter(p => p.id !== id)
-      setProposals(updated)
-      await saveModuleDataToDB("proposals", updated)
+      await saveProposalsMutation.mutateAsync(updated)
       showToast("Proposal removed.")
     }
   }

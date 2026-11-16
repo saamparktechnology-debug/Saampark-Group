@@ -12,9 +12,9 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
-import { getProjects } from "@/app/feature/projects/services/projectService"
+import { getProjects } from "@/app/feature/projects/service/projectService"
 import { Project, ProjectMember } from "@/app/feature/projects/types"
-import { getInvoices, InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
+import { getInvoices, InvoiceItem } from "@/app/feature/sales/invoices/service/invoiceService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { formatDisplayDate } from "@/lib/utils"
 
@@ -206,7 +206,7 @@ export default function ExpensesMain() {
         if (!eComp && userComp !== "tech") return false
       }
       // Branch filter (strict)
-      if (targetBranch && targetBranch !== "all") {
+      if (targetBranch && targetBranch !== "all" && targetBranch !== "main" && targetBranch !== "hq") {
         const eBranch = String((e as any).branchId || (e as any).branch_id || "").toLowerCase().trim()
         const eBranchName = String((e as any).branchName || (e as any).branch_name || "").toLowerCase().trim()
         if (!eBranch && !eBranchName) return false
@@ -216,7 +216,7 @@ export default function ExpensesMain() {
         if (!isMatch) return false
       }
       // Sub-Branch filter (strict)
-      if (targetSubBranch && targetSubBranch !== "all") {
+      if (targetSubBranch && targetSubBranch !== "all" && targetSubBranch !== "main" && targetSubBranch !== "hq" && targetSubBranch !== "all_subbranches") {
         const eSubBranch = String((e as any).subBranchId || (e as any).sub_branch_id || "").toLowerCase().trim()
         const eSubBranchName = String((e as any).subBranchName || (e as any).sub_branch_name || "").toLowerCase().trim()
         if (!eSubBranch && !eSubBranchName) return false
@@ -234,6 +234,11 @@ export default function ExpensesMain() {
       if (!matchSearch) return false
       if (selectedCategory === "all") return true
       return e.category === selectedCategory
+    }).sort((a, b) => {
+      const timeA = new Date(a.date || (a as any).createdAt || 0).getTime()
+      const timeB = new Date(b.date || (b as any).createdAt || 0).getTime()
+      if (timeA && timeB && timeA !== timeB) return timeB - timeA
+      return String(b.id || "").localeCompare(String(a.id || ""))
     })
   }, [expenses, searchQuery, selectedCategory, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches, user])
 

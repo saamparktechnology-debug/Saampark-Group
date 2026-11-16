@@ -10,11 +10,11 @@ import {
 import { useAuthStore, getCompanyFullName, getCompanyLogoUrl } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { EstimateService } from "@/services/salesService"
-import { getClients } from "@/app/feature/clients/services/clientService"
+import { getClients } from "@/app/feature/clients/service/clientService"
 import { createNotification } from "@/services/notificationService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { DocumentStudioModal } from "@/components/documents/DocumentStudioModal"
-import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
+import { addInvoice } from "@/app/feature/sales/invoices/service/invoiceService"
 import { sendEstimateDetailsEmailNotification } from "@/services/emailNotificationService"
 import { formatDisplayDate } from "@/lib/utils"
 
@@ -127,14 +127,19 @@ export default function EstimatesMain() {
   }, [activeCompanyId])
 
   const filtered = React.useMemo(() => {
-    const { activeCompanyId: freshComp, activeBranchId: freshBranch, branches: freshBranches } = useAuthStore.getState()
+    const { activeCompanyId: freshComp, activeBranchId: freshBranch, activeSubBranchId: freshSubBranch, branches: freshBranches, subBranches: freshSubBranches } = useAuthStore.getState()
     const userComp = (freshComp || user?.companyId || "").toLowerCase().trim()
     const targetBranch = freshBranch
-    const branchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const branchObj = (freshBranches || []).find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
     const targetBranchId = String(branchObj?.id || targetBranch || "").toLowerCase().trim()
     const targetBranchName = branchObj?.name?.toLowerCase().trim() || ""
 
-    return estimates.filter(e => {
+    const targetSubBranch = freshSubBranch
+    const subBranchObj = (freshSubBranches || []).find(sb => sb.id === targetSubBranch || sb.name.toLowerCase() === (targetSubBranch || "").toLowerCase())
+    const targetSubBranchId = String(subBranchObj?.id || targetSubBranch || "").toLowerCase().trim()
+    const targetSubBranchName = subBranchObj?.name?.toLowerCase().trim() || ""
+
+    const result = estimates.filter(e => {
       // Company filter
       if (userComp && userComp !== "all") {
         const eComp = (e.companyId || "").toLowerCase().trim()
@@ -142,10 +147,17 @@ export default function EstimatesMain() {
         if (!eComp && userComp !== "tech") return false
       }
       // Branch filter (strict)
-      if (targetBranch && targetBranch !== "all") {
+      if (targetBranch && targetBranch !== "all" && targetBranch !== "hq" && targetBranch !== "main" && targetBranchId !== "main" && targetBranchId !== "hq") {
         const eBranch = String((e as any).branchId || "").toLowerCase().trim()
         if (!eBranch) return false
         const match = eBranch === targetBranchId || (targetBranchName && eBranch === targetBranchName)
+        if (!match) return false
+      }
+      // Sub-Branch filter (strict)
+      if (targetSubBranch && targetSubBranch !== "all" && targetSubBranch !== "hq" && targetSubBranch !== "main" && targetSubBranchId !== "main" && targetSubBranchId !== "hq") {
+        const eSub = String((e as any).subBranchId || "").toLowerCase().trim()
+        if (!eSub) return false
+        const match = eSub === targetSubBranchId || (targetSubBranchName && eSub === targetSubBranchName)
         if (!match) return false
       }
       // Search + status
@@ -155,6 +167,16 @@ export default function EstimatesMain() {
         (e.customerEmail && e.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()))
       return match
     })
+
+    // Newly created estimates on top
+    result.sort((a, b) => {
+      const timeA = new Date((a as any).date || (a as any).createdAt || 0).getTime()
+      const timeB = new Date((b as any).date || (b as any).createdAt || 0).getTime()
+      if (timeA !== timeB && !isNaN(timeA) && !isNaN(timeB)) return timeB - timeA
+      return String(b.id || "").localeCompare(String(a.id || ""), undefined, { numeric: true })
+    })
+
+    return result
   }, [estimates, activeCompanyId, activeBranchId, branches, searchQuery, statusFilter, user])
 
   const [taxScheme, setTaxScheme] = React.useState<"gst" | "nongst">("gst")
@@ -352,30 +374,7 @@ export default function EstimatesMain() {
               className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md shadow-blue-600/20 cursor-pointer"
             >
               <Plus size={15} />
-              <span>+ Standard Estimate</span>
-            </button>
-            <button 
-              onClick={() => {
-                setEditingItem({
-                  companyId: "consultancy",
-                  category: "Digital Marketing",
-                  marketingPackage: {
-                    enabled: true,
-                    planName: "Grow - 2",
-                    packageDuration: "3 Months",
-                    postersCount: 20,
-                    videosCount: 15,
-                    hasRealModelShoot: true,
-                    packagePrice: 12000,
-                    specialNote: "Digital Marketing Retainer Cost Estimation"
-                  }
-                } as any)
-                setIsStudioOpen(true)
-              }} 
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl transition-all shadow-md cursor-pointer"
-            >
-              <Sparkles size={14} />
-              <span>+ Marketing Retainer (Form 9)</span>
+              <span>+ Create Estimate</span>
             </button>
           </div>
         )}

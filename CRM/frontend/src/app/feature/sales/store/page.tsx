@@ -8,8 +8,8 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { useAuthStore } from "@/store/useAuthStore"
-import { addOrder } from "@/app/feature/sales/orders/services/orderService"
-import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
+import { addOrder } from "@/app/feature/sales/orders/service/orderService"
+import { addInvoice } from "@/app/feature/sales/invoices/service/invoiceService"
 import { fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
 
 export interface StoreServiceProduct {

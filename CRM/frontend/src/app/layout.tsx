@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { QueryProvider } from "@/components/QueryProvider";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { GlobalModals } from "@/components/modals/GlobalModals";
 import { ActionFeedbackModal } from "@/components/ui/ActionFeedbackModal";
@@ -40,6 +41,9 @@ export default function RootLayout({
       className={`${inter.variable} h-full antialiased`}
     >
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" />
         <link rel="icon" type="image/png" href="/saampark-logo.png?v=root_logo_v3" />
         <link rel="shortcut icon" href="/saampark-logo.png?v=root_logo_v3" />
         <link rel="apple-touch-icon" href="/saampark-logo.png?v=root_logo_v3" />
@@ -51,13 +55,15 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange={false}
         >
-          <AuthGuard>
-            <AppLayout>
-              {children}
-            </AppLayout>
-            <GlobalModals />
-            <ActionFeedbackModal />
-          </AuthGuard>
+          <QueryProvider>
+            <AuthGuard>
+              <AppLayout>
+                {children}
+              </AppLayout>
+              <GlobalModals />
+              <ActionFeedbackModal />
+            </AuthGuard>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

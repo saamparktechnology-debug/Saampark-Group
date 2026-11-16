@@ -16,13 +16,15 @@ import {
   Info,
   Receipt,
   Megaphone,
+  Clock,
 } from "lucide-react"
 import { Project } from "../types"
 import { ProjectFiltersDropdown } from "./ProjectFiltersDropdown"
+import { ProjectCompletionModal } from "./ProjectCompletionModal"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
-import { getUserAvatar } from "@/app/feature/users/services/userService"
+import { getUserAvatar } from "@/app/feature/users/service/userService"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 import { formatDisplayDate } from "@/lib/utils"
 
@@ -54,8 +56,26 @@ export function ProjectList({
   const canDeleteProject = typeof canPerformAction === 'function' ? canPerformAction(user, "Projects", "delete") : true
 
   const [activeFilter, setActiveFilter] = React.useState("All projects")
+  const [categoryFilter, setCategoryFilter] = React.useState<"all" | "software" | "marketing">("all")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [isFiltersDropdownOpen, setIsFiltersDropdownOpen] = React.useState(false)
+  const [completionProject, setCompletionProject] = React.useState<Project | null>(null)
+
+  const isMarketingProject = (p: any) => {
+    if (!p) return false
+    const cat = String(p.category || "").toLowerCase()
+    const pTitle = String(p.title || "").toLowerCase()
+    const isTech = cat.includes("website") || cat.includes("software") || cat.includes("app") || cat.includes("android") || cat.includes("ios") || pTitle.includes("cab booking") || pTitle.includes("website") || pTitle.includes("app")
+    if (isTech) return false
+    const pLabels = Array.isArray(p.labels) ? p.labels : []
+    return p.projectType === "Digital Marketing Campaign" ||
+      Boolean(p.marketingPackage?.enabled) ||
+      pLabels.includes("Digital Marketing") ||
+      cat.includes("marketing")
+  }
+
+  const softwareProjectsCount = (Array.isArray(projects) ? projects : []).filter(p => !isMarketingProject(p)).length
+  const marketingProjectsCount = (Array.isArray(projects) ? projects : []).filter(p => isMarketingProject(p)).length
 
   // Filtering projects based on active filter pill / dropdown & search query
   const filteredProjects = (Array.isArray(projects) ? projects : []).filter((p) => {
@@ -68,13 +88,12 @@ export function ProjectList({
     const matchesSearch = !q || pTitle.includes(q) || pClient.includes(q) || pId.includes(q)
     const pLabels = Array.isArray(p.labels) ? p.labels : []
 
+    const isMarketing = isMarketingProject(p)
+    if (categoryFilter === "software" && isMarketing) return false
+    if (categoryFilter === "marketing" && !isMarketing) return false
+
     if (activeFilter === "Digital Marketing") {
-      return matchesSearch && (
-        p.projectType === "Digital Marketing Campaign" ||
-        Boolean((p as any).marketingPackage?.enabled) ||
-        pLabels.includes("Digital Marketing") ||
-        String((p as any).category || "").toLowerCase().includes("marketing")
-      )
+      return matchesSearch && isMarketing
     }
     if (activeFilter === "Completed") return matchesSearch && (p.status === "Completed" || p.status === "Finished")
     if (activeFilter === "High Priority") return matchesSearch && (pLabels.includes("Urgent") || pLabels.includes("High"))
@@ -159,6 +178,49 @@ export function ProjectList({
             </button>
           )}
         </div>
+      </div>
+
+      {/* ---------------- WORKSPACE SEPARATION (Software vs Digital Marketing) ---------------- */}
+      <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl border border-zinc-200/80 dark:border-zinc-700/80 text-xs font-bold w-fit">
+        <button
+          type="button"
+          onClick={() => setCategoryFilter("all")}
+          className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+            categoryFilter === "all"
+              ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs"
+              : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+          }`}
+        >
+          All Projects ({projects.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setCategoryFilter("software")}
+          className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+            categoryFilter === "software"
+              ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs"
+              : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+          }`}
+        >
+          <span>💻 Software &amp; General</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-600 font-mono">
+            {softwareProjectsCount}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setCategoryFilter("marketing")}
+          className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+            categoryFilter === "marketing"
+              ? "bg-white dark:bg-zinc-900 text-purple-600 dark:text-purple-400 shadow-xs"
+              : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+          }`}
+        >
+          <span>📊 Digital Marketing Retainers</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-50 dark:bg-purple-950 text-purple-600 font-mono">
+            {marketingProjectsCount}
+          </span>
+        </button>
       </div>
 
       {/* ---------------- CONTROL TOOLBAR (Image 1 & 2) ---------------- */}
@@ -345,27 +407,48 @@ export function ProjectList({
                             </span>
                           )}
 
-                          {/* Digital Marketing Project Badge */}
-                          {(p.projectType === "Digital Marketing Campaign" || (p as any).marketingPackage?.enabled || String((p as any).category || "").toLowerCase().includes("marketing")) && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800 text-[9.5px] font-bold">
-                              <Megaphone size={9} />
-                              <span>Digital Marketing (Form 9)</span>
-                            </span>
-                          )}
+                          {/* Digital Marketing Project Badge (Strictly for genuine marketing campaigns, never for tech projects) */}
+                          {(() => {
+                            const cat = String((p as any).category || "").toLowerCase()
+                            const pTitle = String(p.title || "").toLowerCase()
+                            const isTech = cat.includes("website") || cat.includes("software") || cat.includes("app") || cat.includes("android") || cat.includes("ios") || pTitle.includes("cab booking") || pTitle.includes("website") || pTitle.includes("app")
+                            const isMarketing = !isTech && (
+                              cat === "digital marketing" || 
+                              (p.projectType === "Digital Marketing Campaign" && !isTech) ||
+                              ((p as any).marketingPackage?.enabled && !isTech)
+                            )
+                            if (!isMarketing) return null
+                            return (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800 text-[9.5px] font-bold">
+                                <Megaphone size={9} />
+                                <span>Digital Marketing Retainer</span>
+                              </span>
+                            )
+                          })()}
 
                           {Array.isArray(p.labels) && p.labels.length > 0 &&
-                            p.labels.map((lbl) => (
-                              <span
-                                key={lbl}
-                                className={`px-2 py-0.5 rounded text-[10px] font-medium ${
-                                  lbl === "Urgent"
-                                    ? "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300"
-                                    : "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
-                                }`}
-                              >
-                                {lbl}
-                              </span>
-                            ))}
+                            p.labels
+                              .filter((lbl) => {
+                                const cat = String((p as any).category || "").toLowerCase()
+                                const pTitle = String(p.title || "").toLowerCase()
+                                const isTech = cat.includes("website") || cat.includes("software") || cat.includes("app") || cat.includes("android") || cat.includes("ios") || pTitle.includes("cab booking") || pTitle.includes("website") || pTitle.includes("app")
+                                if (isTech && (lbl.toLowerCase() === "digital marketing" || lbl.toLowerCase().includes("marketing retainer"))) {
+                                  return false
+                                }
+                                return true
+                              })
+                              .map((lbl) => (
+                                <span
+                                  key={lbl}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-medium ${
+                                    lbl === "Urgent"
+                                      ? "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300"
+                                      : "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                                  }`}
+                                >
+                                  {lbl}
+                                </span>
+                              ))}
                         </div>
                       </div>
                     </td>
@@ -469,7 +552,7 @@ export function ProjectList({
                             value={p.progress || 1}
                             onChange={async (e) => {
                               const val = Number(e.target.value)
-                              const { updateProject } = await import("../services/projectService")
+                              const { updateProject } = await import("../service/projectService")
                               await updateProject(p.id, { progress: val })
                               p.progress = val
                             }}
@@ -487,17 +570,17 @@ export function ProjectList({
                           <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300">
                             Payment Pending
                           </span>
-                          {(user?.role === "Super Admin" || user?.role === "Admin") && (
+                          {(isSuperAdmin || (user?.role || "").toLowerCase().includes("admin") || canEditProject) && (
                             <button
                               type="button"
                               onClick={async () => {
-                                const { updateProject } = await import("../services/projectService")
-                                const { updateInvoiceStatus } = await import("@/app/feature/sales/invoices/services/invoiceService")
+                                const { updateProject } = await import("../service/projectService")
+                                const { updateInvoiceStatus } = await import("@/app/feature/sales/invoices/service/invoiceService")
                                 await updateProject(p.id, { status: "In Progress", paymentStatus: "Paid" })
                                 await updateInvoiceStatus(p.title, "Fully paid").catch(() => {})
                                 window.location.reload()
                               }}
-                              className="block px-2 py-0.5 rounded bg-emerald-600 text-white font-bold text-[10px] hover:bg-emerald-700 shadow-2xs"
+                              className="block px-2 py-0.5 rounded bg-emerald-600 text-white font-bold text-[10px] hover:bg-emerald-700 shadow-2xs cursor-pointer"
                               title="Approve payment and mark project active"
                             >
                               Approve Payment & Activate
@@ -505,29 +588,65 @@ export function ProjectList({
                           )}
                         </div>
                       ) : (
-                        <select
-                          value={p.status}
-                          disabled={!(user?.role === "Super Admin" || user?.role === "Admin")}
-                          onChange={async (e) => {
-                            const newStatus = e.target.value as any
-                            const { updateProject } = await import("../services/projectService")
-                            await updateProject(p.id, { status: newStatus })
-                            p.status = newStatus
-                          }}
-                          className={`px-2 py-1 rounded text-xs font-semibold border bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 ${
-                            p.status === "Completed" || p.status === "Finished"
-                              ? "text-emerald-600 border-emerald-300"
-                              : p.status === "Cancelled"
-                              ? "text-rose-600 border-rose-300"
-                              : "text-blue-600 border-blue-300"
-                          }`}
-                        >
-                          <option value="In Progress">In Progress</option>
-                          <option value="Open">Open</option>
-                          <option value="Hold">Hold</option>
-                          <option value="Finished">Finished / Completed</option>
-                          <option value="Cancelled">Cancelled</option>
-                        </select>
+                        <div>
+                          <select
+                            value={p.status || "Open"}
+                            disabled={!(isSuperAdmin || (user?.role || "").toLowerCase().includes("admin") || canEditProject)}
+                            onChange={async (e) => {
+                              const newStatus = e.target.value as any
+                              if (newStatus === "Finished" || newStatus === "Completed") {
+                                setCompletionProject(p)
+                                return
+                              }
+                              const { updateProject } = await import("../service/projectService")
+                              const newProgress = newStatus === "Open" ? 0 : (p.progress === 100 ? 50 : p.progress)
+                              p.status = newStatus
+                              p.progress = newProgress
+                              await updateProject(p.id, { 
+                                status: newStatus,
+                                progress: newProgress
+                              })
+                              window.dispatchEvent(new CustomEvent("saampark_projects_updated"))
+                            }}
+                            className={`px-2 py-1 rounded text-xs font-semibold border bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 cursor-pointer ${
+                              p.status === "Completed" || p.status === "Finished"
+                                ? "text-emerald-600 border-emerald-300"
+                                : p.status === "Cancelled"
+                                ? "text-rose-600 border-rose-300"
+                                : p.status === "Under Review"
+                                ? "text-purple-600 border-purple-300"
+                                : p.status === "Hold"
+                                ? "text-amber-600 border-amber-300"
+                                : "text-blue-600 border-blue-300"
+                            }`}
+                          >
+                            <option value="Open">Open</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Under Review">Under Review</option>
+                            <option value="Hold">Hold</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Finished">Finished</option>
+                            <option value="Cancelled">Cancelled</option>
+                          </select>
+
+                          {(p.status === "Completed" || p.status === "Finished") && (
+                            <div className="mt-1">
+                              {(p as any).countdownEndDate ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                                  <Clock size={10} />
+                                  <span>Till {formatDisplayDate((p as any).countdownEndDate)}</span>
+                                </span>
+                              ) : (p as any).firstPostDate ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800">
+                                  <Clock size={10} />
+                                  <span>From {formatDisplayDate((p as any).firstPostDate)}</span>
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-zinc-400">Completed</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </td>
 
@@ -612,6 +731,56 @@ export function ProjectList({
           </table>
         </div>
       </div>
+
+      {/* DUAL CONFIRMATION PROJECT COMPLETION MODAL */}
+      {completionProject && (
+        <ProjectCompletionModal
+          isOpen={Boolean(completionProject)}
+          project={completionProject}
+          onClose={() => setCompletionProject(null)}
+          onConfirmComplete={async (completedData) => {
+            const { updateProject } = await import("../service/projectService")
+            const { sendProjectCompletionEmailNotification } = await import("@/services/emailNotificationService")
+
+            const updated = await updateProject(completionProject.id, {
+              status: "Completed",
+              progress: 100,
+              completedAt: new Date().toISOString(),
+              countdownStartDate: completedData.countdownStartDate,
+              countdownEndDate: completedData.countdownEndDate,
+              planDuration: completedData.planDuration,
+              planType: completedData.planType as any,
+              firstPostDate: completedData.firstPostDate,
+              clientEmail: completedData.clientEmail,
+            })
+
+            completionProject.status = "Completed"
+            completionProject.progress = 100
+            ;(completionProject as any).countdownEndDate = completedData.countdownEndDate
+            ;(completionProject as any).countdownStartDate = completedData.countdownStartDate
+            ;(completionProject as any).firstPostDate = completedData.firstPostDate
+
+            if (completedData.notifyClient && completedData.clientEmail) {
+              await sendProjectCompletionEmailNotification(
+                updated,
+                completedData.clientEmail,
+                completionProject.client,
+                {
+                  planType: completedData.planType,
+                  countdownDuration: completedData.planDuration,
+                  countdownStartDate: completedData.countdownStartDate,
+                  countdownEndDate: completedData.countdownEndDate,
+                  countdownNotice: completedData.planType === "digital_marketing"
+                    ? (completedData.firstPostDate 
+                        ? `Campaign timeline started from 1st post on ${completedData.firstPostDate} and expires on ${completedData.countdownEndDate}.`
+                        : "Campaign countdown paused until first creative post goes live.")
+                    : `Your service & hosting countdown started today (${new Date().toLocaleDateString("en-IN")}) and remains active until ${completedData.countdownEndDate}.`,
+                }
+              )
+            }
+          }}
+        />
+      )}
 
     </div>
   )

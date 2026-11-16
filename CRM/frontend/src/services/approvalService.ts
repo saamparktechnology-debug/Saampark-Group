@@ -1,7 +1,7 @@
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
 import { createNotification } from "@/services/notificationService"
 
-export type ApprovalType = 'invoice' | 'quotation' | 'subscription' | 'estimate' | 'other'
+export type ApprovalType = 'invoice' | 'quotation' | 'subscription' | 'estimate' | 'payout' | 'other'
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
 
 export interface ApprovalRequest {
@@ -226,7 +226,7 @@ export async function approveApprovalRequest(
         }).catch(() => {})
       }
     } else if (req.type === "subscription") {
-      const { getSubscriptions, updateSubscription } = await import("@/app/feature/subscriptions/services/subscriptionService")
+      const { getSubscriptions, updateSubscription } = await import("@/app/feature/subscriptions/service/subscriptionService")
       const subs = await getSubscriptions(req.companyId)
       const matched = subs.find(s => String(s.id) === String(req.documentId))
       if (matched) {
@@ -321,7 +321,7 @@ export async function rejectApprovalRequest(
         }).catch(() => {})
       }
     } else if (req.type === "subscription") {
-      const { getSubscriptions, updateSubscription } = await import("@/app/feature/subscriptions/services/subscriptionService")
+      const { getSubscriptions, updateSubscription } = await import("@/app/feature/subscriptions/service/subscriptionService")
       const subs = await getSubscriptions(req.companyId)
       const matched = subs.find(s => String(s.id) === String(req.documentId))
       if (matched) {

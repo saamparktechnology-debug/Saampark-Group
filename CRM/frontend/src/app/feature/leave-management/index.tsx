@@ -8,37 +8,11 @@ import {
 } from "lucide-react"
 import { useAuthStore, getCompanyFullName, isMatchingCompany } from "@/store/useAuthStore"
 import { LeaveService } from "@/services/hrService"
-import { getUsers, getUserAvatar } from "../users/services/userService"
+import { getUsers, getUserAvatar } from "../users/service/userService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 
-type Tab = "requests" | "types"
-
-export interface LeaveRequest { 
-  id: string
-  employee: string
-  employeeEmail?: string
-  employeeId?: string
-  type: string
-  from: string
-  to: string
-  days: number
-  isHalfDay?: boolean
-  status: "Pending" | "Approved" | "Rejected"
-  reason?: string
-  companyId?: string
-  appliedAt?: string
-  reviewedBy?: string
-  reviewedAt?: string
-  reviewNotes?: string
-}
-
-export interface LeaveType { 
-  id: string
-  name: string
-  daysAllowed: number
-  status: string 
-}
-
+import { LeaveRequest, LeaveTab as Tab, LeaveType } from "./types"
+import { useInvalidateLeaveQueries, useLeaveRequestsQuery, useLeaveTeamMembersQuery, useLeaveTypesQuery } from "./hooks/useLeaveManagement"
 export default function LeaveManagementMain() {
   const { user, activeCompanyId, companies } = useAuthStore()
   const isSuperAdmin = user?.role === "Super Admin"
@@ -46,9 +20,11 @@ export default function LeaveManagementMain() {
   const canApprove = isSuperAdmin || isAdmin
 
   const [activeTab, setActiveTab] = React.useState<Tab>("requests")
-  const [requests, setRequests] = React.useState<LeaveRequest[]>([])
-  const [leaveTypes, setLeaveTypes] = React.useState<LeaveType[]>([])
-  const [teamMembers, setTeamMembers] = React.useState<any[]>([])
+  const todayStrFallback = new Date().toISOString().split("T")[0]
+  const { data: requests = [] } = useLeaveRequestsQuery(todayStrFallback)
+  const { data: leaveTypes = [] } = useLeaveTypesQuery()
+  const { data: teamMembers = [] } = useLeaveTeamMembersQuery()
+  const loadData = useInvalidateLeaveQueries()
   const [searchQuery, setSearchQuery] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState("all")
   const [viewScope, setViewScope] = React.useState<"all" | "my">("all")
@@ -94,70 +70,7 @@ export default function LeaveManagementMain() {
     }
   }, [applyForm.from, applyForm.to, applyForm.isHalfDay])
 
-  // Load Data
-  const loadData = React.useCallback(async () => {
-    try {
-      const [reqData, typeData, usersData] = await Promise.all([
-        LeaveService.getRequests({}),
-        LeaveService.getTypes(),
-        getUsers().catch(() => [])
-      ])
-
-      let rawRequests: LeaveRequest[] = Array.isArray(reqData) ? reqData : []
-      
-      // If DB has no leave requests, seed realistic baseline requests
-      if (rawRequests.length === 0) {
-        const baseline: LeaveRequest[] = [
-          {
-            id: "lr_init_1",
-            employee: "Priya Ghosh",
-            employeeEmail: "priya@saampark.com",
-            employeeId: "usr_priya",
-            type: "Casual Leave",
-            from: todayStr,
-            to: todayStr,
-            days: 1,
-            isHalfDay: false,
-            status: "Pending",
-            reason: "Personal family commitment",
-            companyId: "tech",
-            appliedAt: new Date().toISOString()
-          },
-          {
-            id: "lr_init_2",
-            employee: "Anand Verma",
-            employeeEmail: "anand@saampark.com",
-            employeeId: "usr_anand",
-            type: "Sick Leave",
-            from: new Date(Date.now() - 172800000).toISOString().split("T")[0],
-            to: new Date(Date.now() - 86400000).toISOString().split("T")[0],
-            days: 2,
-            isHalfDay: false,
-            status: "Approved",
-            reason: "Viral fever and doctor consultation",
-            companyId: "digital",
-            appliedAt: new Date(Date.now() - 172800000).toISOString(),
-            reviewedBy: "Supriya (Super Admin)",
-            reviewedAt: new Date(Date.now() - 150000000).toISOString()
-          }
-        ]
-        rawRequests = baseline
-      }
-
-      setRequests(rawRequests)
-      setLeaveTypes(Array.isArray(typeData) && typeData.length > 0 ? typeData : [
-        { id: "lt-1", name: "Casual Leave", daysAllowed: 12, status: "Active" },
-        { id: "lt-2", name: "Sick Leave", daysAllowed: 10, status: "Active" },
-        { id: "lt-3", name: "Earned Leave", daysAllowed: 15, status: "Active" },
-        { id: "lt-4", name: "Unpaid Leave", daysAllowed: 30, status: "Active" }
-      ])
-      setTeamMembers(Array.isArray(usersData) ? usersData : [])
-    } catch { }
-  }, [todayStr])
-
-  React.useEffect(() => { 
-    loadData() 
-  }, [loadData])
+  
 
   // Company and User Scoped Requests
   const scopedRequests = React.useMemo(() => {

@@ -1,6 +1,6 @@
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems, getLocalDeletedIds } from "@/lib/storageSync"
 import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
-import { sendPaymentReceiptEmailNotification, sendPaymentDueReminderEmailNotification } from "@/services/emailNotificationService"
+import { sendPaymentReceiptEmailNotification, sendPaymentDueReminderEmailNotification, sendRetainerExpiryEmailNotification } from "@/services/emailNotificationService"
 import { recordActivityLog } from "@/services/activityLogService"
 
 export type InvoiceStatus = "Draft" | "Partially paid" | "Fully paid" | "Not paid" | "Credited" | "Payment Pending" | "Pending Approval" | "Rejected" | "Pending Verification"
@@ -316,7 +316,8 @@ export const getInvoices = async (companyId?: string): Promise<InvoiceItem[]> =>
   for (const inv of [...(Array.isArray(allList) ? allList : []), ...(Array.isArray(scopedList) ? scopedList : [])]) {
     if (inv && inv.id) {
       const invComp = inv.companyId || (inv as any).company || "tech"
-      if (isMatchingCompany({ id: invComp, slug: invComp } as any, targetComp)) {
+      const isMktInv = inv.primaryCategory === "Digital Marketing" || Boolean((inv as any)?.marketingPackage?.enabled || (inv as any)?.marketingPackage?.planName)
+      if (isMatchingCompany({ id: invComp, slug: invComp } as any, targetComp) || targetComp === "all" || invComp === "all" || isMktInv) {
         map.set(String(inv.id).toUpperCase().trim(), inv)
       }
     }
@@ -326,7 +327,7 @@ export const getInvoices = async (companyId?: string): Promise<InvoiceItem[]> =>
 }
 
 export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: string }, companyId?: string): Promise<InvoiceItem> => {
-  let targetComp = companyId
+  let targetComp = companyId || (invoice as any)?.companyId
   if (!targetComp && typeof window !== "undefined") {
     try {
       const { useAuthStore } = require("@/store/useAuthStore")
@@ -386,7 +387,7 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
     id: nextId,
     billTime: invoice.billTime || new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
     createdAt: invoice.createdAt || new Date().toISOString(),
-    companyId: effectiveComp,
+    companyId: (invoice as any)?.companyId || effectiveComp,
     branchId: invoice.branchId || activeBranch || undefined,
     status: invoiceStatus,
     approvalStatus,
@@ -421,13 +422,11 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
   const updatedScoped = [newInvoice, ...(Array.isArray(currentScoped) ? currentScoped.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]
   const updatedAll = [newInvoice, ...(Array.isArray(currentAll) ? currentAll.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]
 
-  // Parallel non-blocking saves across target databases
-  const saveTasks: Promise<any>[] = [
-    saveModuleDataToDB("invoices", updatedScoped, effectiveComp),
-    saveModuleDataToDB("invoices", updatedAll, "all"),
-  ]
-
-  await Promise.all(saveTasks)
+  // Sequential saves across target databases to eliminate concurrent write race conditions
+  await saveModuleDataToDB("invoices", updatedScoped, effectiveComp)
+  if (effectiveComp !== "all") {
+    await saveModuleDataToDB("invoices", updatedAll, "all").catch(() => {})
+  }
 
   // Automatically ensure client user account exists and sync client directory
   if (newInvoice.clientEmail) {
@@ -1128,6 +1127,47 @@ export const sendPaymentReminder = async (invoiceId: string): Promise<{ success:
   }
 
   return { success: true, message: `Payment reminder logged for ${target.client}.` }
+}
+
+export const sendRetainerExpiryReminder = async (invoiceId: string): Promise<{ success: boolean; message: string }> => {
+  const current = await getInvoices()
+  const strId = String(invoiceId).toLowerCase().trim()
+  const idx = current.findIndex((i) => String(i.id).toLowerCase().trim() === strId)
+  if (idx === -1) return { success: false, message: "Invoice not found" }
+
+  const target = current[idx]
+  const now = new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+  ;(target as any).lastRetainerExpiryReminderSent = now
+  current[idx] = target
+  await saveModuleDataToDB("invoices", current)
+
+  const clientName = target.client || (target as any).customer || "Valued Client"
+  const clientEmail = target.clientEmail || (target as any).customerEmail || ""
+  const planName = target.project || (target as any).marketingPackage?.packageName || "Digital Marketing Monthly Retainer"
+
+  if (clientEmail) {
+    const res = await sendRetainerExpiryEmailNotification({
+      to: clientEmail,
+      clientName,
+      invoiceId: target.invoiceNumber || target.id,
+      packageName: planName,
+      durationText: (target as any).marketingPackage?.duration || "1 Month Retainer",
+      firstPostDate: (target as any).firstPostDate || "",
+      expiryDate: target.dueDate || (target as any).expiryDate || "",
+      companyId: (target as any).companyId || (target as any).company_id,
+    })
+    if (res.success) {
+      return {
+        success: true,
+        message: `Monthly Retainer expiry & renewal notice dispatched to ${clientName} (${clientEmail}).`,
+      }
+    }
+  }
+
+  return {
+    success: true,
+    message: `Monthly Retainer expiry alert logged for ${clientName} (${planName}).`,
+  }
 }
 
 

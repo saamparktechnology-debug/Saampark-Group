@@ -1,6 +1,7 @@
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
 import { MarketingCampaign, MarketingPost, MarketingLead } from "../types"
 import { sendMarketingFirstPostEmailNotification, sendMarketingCompletedEmailNotification } from "@/services/emailNotificationService"
+import { isMatchingCompany } from "@/store/useAuthStore"
 
 export const MarketingService = {
   // Get all campaigns
@@ -26,7 +27,10 @@ export const MarketingService = {
 
       let clean = filterGlobalDeletedItems(Array.from(map.values()))
       if (companyId && companyId !== "all") {
-        clean = clean.filter(c => !c.companyId || c.companyId === companyId || c.companyId === "all")
+        clean = clean.filter(c => {
+          if (!c.companyId || c.companyId === "all") return true
+          return c.companyId === companyId || isMatchingCompany({ id: c.companyId, slug: c.companyId } as any, companyId)
+        })
       }
       return clean
     } catch {

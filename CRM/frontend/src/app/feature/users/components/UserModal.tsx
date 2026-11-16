@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { UserItem as UserType, UserRole, UserStatus } from "../types"
-import { generateCompanyEmployeeId, getStoredUserAccountsAsync } from "../services/userService"
+import { generateCompanyEmployeeId, getStoredUserAccountsAsync } from "../service/userService"
 import { useAuthStore, isMatchingCompany, getCompanyFullName } from "@/store/useAuthStore"
 import { 
   usePermissionStore, 
@@ -48,7 +48,7 @@ const MODULE_CATEGORIES: { name: string; icon: string; modules: ModuleName[] }[]
     name: "CRM & Client Engagement",
     icon: "🤝",
     modules: [
-      "Leads", "Clients", "Proposals", "Messages", "Tickets", "Events", "Notes"
+      "Leads", "Clients", "Messages", "Tickets", "Events", "Notes"
     ] as ModuleName[],
   },
   {
@@ -430,7 +430,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       } else if (presetType === "revoke") {
         nextMatrix[m] = { view: false, add: false, edit: false, delete: false }
       } else if (presetType === "clientPortal") {
-        const clientMods: ModuleName[] = ["Projects", "Invoices", "Subscriptions", "EMI", "Tickets", "Files", "Messages", "Proposals", "Quotations"] as ModuleName[]
+        const clientMods: ModuleName[] = ["Projects", "Invoices", "Subscriptions", "EMI", "Tickets", "Files", "Messages", "Quotations"] as ModuleName[]
         const isClientMod = clientMods.includes(m as ModuleName)
         nextMatrix[m] = isClientMod ? { view: true, add: m === "Tickets" || m === "Messages", edit: false, delete: false } : { view: false, add: false, edit: false, delete: false }
       } else if (presetType === "salesCRM") {
@@ -574,12 +574,15 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     }
 
     if (!editingUser && autoSendOfferLetter && email.trim()) {
+      const isClient = role === "Clients"
       createNotification({
-        title: `Welcome to ${companyNameToSave} - Account Credentials`,
-        message: `Welcome to ${companyNameToSave}! Your team login credentials have been issued. Email: ${email.trim()}, Temporary Password: ${password.trim() || 'Password123'}. Please log in, configure your 4-digit security PIN, and submit your KYC documents for approval.`,
+        title: isClient ? `Welcome to ${companyNameToSave} - Client Portal Access` : `Welcome to ${companyNameToSave} - Account Credentials`,
+        message: isClient
+          ? `Welcome to ${companyNameToSave}! Your client portal access has been created. Email: ${email.trim()}, Temporary Password: ${password.trim() || 'Password123'}. You can now view your projects, invoices, and estimates.`
+          : `Welcome to ${companyNameToSave}! Your team login credentials have been issued. Email: ${email.trim()}, Temporary Password: ${password.trim() || 'Password123'}. Please log in, configure your 4-digit security PIN, and submit your KYC documents for approval.`,
         type: "system",
         targetEmail: email.trim().toLowerCase(),
-        sendEmailNotification: true,
+        sendEmailNotification: false, // Official credentials email is dispatched directly by backend /users service
       }).catch(console.warn)
     }
 

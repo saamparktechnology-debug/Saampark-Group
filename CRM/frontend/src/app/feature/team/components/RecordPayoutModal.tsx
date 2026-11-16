@@ -17,7 +17,7 @@ import {
   FileText
 } from "lucide-react"
 import { TeamMemberPayoutProfile, PaymentMethod, PayoutType, TeamPayoutRecord } from "../types"
-import { recordTeamPayout, sendTeamPaymentReceiptEmail } from "../services/teamPaymentService"
+import { recordTeamPayout, sendTeamPaymentReceiptEmail } from "../service/teamPaymentService"
 import { Button } from "@/components/ui/Button"
 
 interface RecordPayoutModalProps {

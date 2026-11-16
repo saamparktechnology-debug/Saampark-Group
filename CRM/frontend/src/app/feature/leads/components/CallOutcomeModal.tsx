@@ -3,7 +3,7 @@
 import * as React from "react"
 import { X, Phone, Calendar, Clock, CheckCircle2, AlertCircle, User, FileText, Check } from "lucide-react"
 import { Lead } from "../types"
-import { updateLead } from "../services/leadService"
+import { updateLead } from "../service/leadService"
 
 interface CallOutcomeModalProps {
   isOpen: boolean

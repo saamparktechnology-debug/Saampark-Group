@@ -16,8 +16,8 @@ import {
   AlertTriangle
 } from "lucide-react"
 import { Subscription, InstallmentItem, SubscriptionStatus, calculateOverdueDetails } from "../types"
-import { getInvoices, InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
-import { getInstallments } from "../services/subscriptionService"
+import { getInvoices, InvoiceItem } from "@/app/feature/sales/invoices/service/invoiceService"
+import { getInstallments } from "../service/subscriptionService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { formatDisplayDate } from "@/lib/utils"
 

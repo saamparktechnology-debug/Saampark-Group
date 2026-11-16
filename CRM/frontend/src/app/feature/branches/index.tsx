@@ -13,7 +13,7 @@ import { useAuthStore, Branch, SubBranch, Company, isMatchingCompany, getSelecta
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
-import { BranchApiService, SubBranchApiService } from "@/app/feature/companies/services/companyService"
+import { BranchApiService, SubBranchApiService } from "@/app/feature/companies/service/companyService"
 
 type Tab = "branches" | "sub-branches"
 type BranchModalTab = "basic" | "address" | "tax" | "bank" | "signatory"

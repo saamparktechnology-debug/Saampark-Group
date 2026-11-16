@@ -14,6 +14,8 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
     } catch {}
   }
   
+  const { isMatchingCompany } = await import("@/store/useAuthStore")
+
   if (!targetComp || targetComp === "all") {
     const knownCompanies = ["all", "tech", "infotech", "fashion", "digital", "consultancy", "jewellers", "saampark-ai-solutions"]
     const results = await Promise.all(
@@ -28,21 +30,87 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
     return filterGlobalDeletedItems(Array.from(map.values())).map(normalizeProject)
   }
 
-  const { isMatchingCompany } = await import("@/store/useAuthStore")
-  const scopedData = await fetchModuleDataFromDB<Project[]>("projects", [], targetComp)
-  const allMaster = await fetchModuleDataFromDB<Project[]>("projects", [], "all").catch(() => [])
+  const isTech = isMatchingCompany({ id: "tech", slug: "tech" } as any, targetComp)
+  const isConsult = isMatchingCompany({ id: "consultancy", slug: "consultancy" } as any, targetComp)
+
+  const [scopedData, allMaster, extraData] = await Promise.all([
+    fetchModuleDataFromDB<Project[]>("projects", [], targetComp).catch(() => []),
+    fetchModuleDataFromDB<Project[]>("projects", [], "all").catch(() => []),
+    isTech 
+      ? fetchModuleDataFromDB<Project[]>("projects", [], "tech").catch(() => []) 
+      : isConsult 
+      ? fetchModuleDataFromDB<Project[]>("projects", [], "consultancy").catch(() => [])
+      : Promise.resolve([])
+  ])
   
   const map = new Map<string, Project>()
-  for (const p of (Array.isArray(allMaster) ? allMaster : [])) {
+  for (const p of [...(Array.isArray(allMaster) ? allMaster : []), ...(Array.isArray(extraData) ? extraData : []), ...(Array.isArray(scopedData) ? scopedData : [])]) {
     if (p && p.id) {
       const pComp = p.companyId || (p as any).company || "tech"
       if (isMatchingCompany({ id: pComp, slug: pComp } as any, targetComp)) {
-        map.set(String(p.id).toLowerCase().trim(), p)
+        map.set(String(p.id).toLowerCase().trim(), { ...p, companyId: p.companyId || targetComp })
       }
     }
   }
-  for (const p of (Array.isArray(scopedData) ? scopedData : [])) {
-    if (p && p.id) map.set(String(p.id).toLowerCase().trim(), { ...p, companyId: p.companyId || targetComp })
+
+  // Auto-sync project records from invoices if not present
+  try {
+    const { getInvoices } = await import("@/app/feature/sales/invoices/services/invoiceService")
+    const companyInvoices = await getInvoices(targetComp)
+    for (const inv of (Array.isArray(companyInvoices) ? companyInvoices : [])) {
+      const projTitle = inv.project || inv.primaryCategory || inv.category
+      if (!projTitle) continue
+      const invIdNorm = String(inv.id || (inv as any).invoiceNumber || "").toUpperCase().trim()
+      
+      const existingProjectForInvoice = Array.from(map.values()).find(p => 
+        p.invoiceId && String(p.invoiceId).toUpperCase().trim() === invIdNorm
+      )
+
+      if (!existingProjectForInvoice) {
+        const synId = `prj_inv_${String(inv.id).toLowerCase().replace(/[^a-z0-9]/g, '_')}`
+        map.set(synId, {
+          id: synId,
+          title: projTitle,
+          client: inv.client || "Client",
+          companyId: inv.companyId || targetComp,
+          branchId: inv.branchId,
+          branchName: (inv as any).branchName,
+          price: inv.totalInvoiced || `₹${(inv as any).total || 0}`,
+          paidAmount: (inv as any).paymentReceived || (inv as any).paidAmount || "₹0",
+          dueAmount: inv.due || "₹0",
+          status: (inv as any).projectStatus || "Open",
+          progress: 0,
+          paymentStatus: inv.status === "Fully paid" ? "Paid" : (inv.status === "Partially paid" ? "Partially Paid" : "Payment Pending"),
+          invoiceId: inv.id,
+          invoiceNumber: (inv as any).invoiceNumber || inv.id,
+          category: inv.primaryCategory || inv.category || "Development",
+          labels: [inv.status || "Active"],
+          milestones: [],
+          members: [],
+          activityLogs: [],
+          taskBreakdown: { todo: 0, inProgress: 1, review: 0, done: 0 },
+          startDate: inv.billDate || new Date().toLocaleDateString("en-GB"),
+          deadline: inv.dueDate || "-",
+        } as any)
+      } else {
+        existingProjectForInvoice.price = inv.totalInvoiced || `₹${(inv as any).total || 0}`
+        if ((inv as any).paymentReceived !== undefined) {
+          existingProjectForInvoice.paidAmount = (inv as any).paymentReceived
+        }
+        if (inv.due !== undefined) {
+          existingProjectForInvoice.dueAmount = inv.due
+        }
+        if (inv.status === "Fully paid") {
+          existingProjectForInvoice.paymentStatus = "Paid"
+        } else if (inv.status === "Partially paid") {
+          existingProjectForInvoice.paymentStatus = "Partially Paid"
+        }
+        // STRICT RULE: Do NOT overwrite project operational status or progress!
+        // Payment status (Fully paid) is strictly financial and does NOT complete the project deliverables.
+      }
+    }
+  } catch (err) {
+    console.warn("Invoice project sync note:", err)
   }
 
   return filterGlobalDeletedItems(Array.from(map.values())).map(normalizeProject)
@@ -199,7 +267,16 @@ export const syncLinkedOrdersWithProject = async (
 export const updateProject = async (id: string, updates: Partial<Project>, companyId?: string): Promise<Project> => {
   const strId = String(id).toLowerCase().trim()
   const allProjects = await fetchModuleDataFromDB<Project[]>("projects", [], "all").catch(() => [])
-  const foundInAll = allProjects.find(p => String(p.id).toLowerCase().trim() === strId)
+  let foundInAll = allProjects.find(p => String(p.id).toLowerCase().trim() === strId)
+
+  if (!foundInAll && companyId) {
+    const compProjects = await fetchModuleDataFromDB<Project[]>("projects", [], companyId).catch(() => [])
+    foundInAll = compProjects.find(p => String(p.id).toLowerCase().trim() === strId)
+  }
+  if (!foundInAll) {
+    const techProjects = await fetchModuleDataFromDB<Project[]>("projects", [], "tech").catch(() => [])
+    foundInAll = techProjects.find(p => String(p.id).toLowerCase().trim() === strId)
+  }
 
   const oldCompanyId = (foundInAll?.companyId || companyId || "tech").toLowerCase().trim()
   const newCompanyId = (updates.companyId || companyId || oldCompanyId).toLowerCase().trim()

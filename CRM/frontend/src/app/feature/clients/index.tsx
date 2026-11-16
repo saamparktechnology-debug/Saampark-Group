@@ -25,14 +25,14 @@ import {
   saveStoredClientLabel,
   deleteStoredClientLabel,
   getClientTimestamp,
-} from "./services/clientService"
+} from "./service/clientService"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
-import { getProjects } from "@/app/feature/projects/services/projectService"
-import { getInvoices } from "@/app/feature/sales/invoices/services/invoiceService"
-import { getPayments } from "@/app/feature/sales/payments/services/paymentService"
+import { getProjects } from "@/app/feature/projects/service/projectService"
+import { getInvoices } from "@/app/feature/sales/invoices/service/invoiceService"
+import { getPayments } from "@/app/feature/sales/payments/service/paymentService"
 
-import { getUsers } from "@/app/feature/users/services/userService"
-import { normalizeCompanyId } from "../leads/services/leadService"
+import { getUsers } from "@/app/feature/users/service/userService"
+import { normalizeCompanyId } from "../leads/service/leadService"
 
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
@@ -93,12 +93,13 @@ export default function ClientsMain() {
       const targetBranchName = String(targetBranchObj?.name || (targetBranchObj as any)?.branch_name || "").toLowerCase().trim()
 
       const checkBranch = (c: any) => {
-        if (!targetBranch || targetBranch === "all") return true
+        if (!targetBranch || targetBranch === "all" || targetBranch === "hq" || targetBranch === "main" || targetBranchId === "main" || targetBranchId === "hq") return true
         const cBranch = String(c.branchId || c.branch_id || "").toLowerCase().trim()
         const cBranchName = String(c.branchName || c.branch_name || "").toLowerCase().trim()
         const uBranchIds = (c.branchIds && c.branchIds.length > 0)
           ? c.branchIds.map((id: any) => String(id).toLowerCase().trim())
           : []
+        if (!cBranch && !cBranchName && uBranchIds.length === 0) return false
         return (cBranch && (cBranch === targetBranchId || (targetBranchName && cBranch === targetBranchName))) ||
                (cBranchName && (cBranchName === targetBranchName || cBranchName === targetBranchId)) ||
                uBranchIds.includes(targetBranchId)
@@ -115,12 +116,13 @@ export default function ClientsMain() {
       const targetSubBranchName = String(targetSubBranchObj?.name || (targetSubBranchObj as any)?.sub_branch_name || "").toLowerCase().trim()
 
       const checkSubBranch = (c: any) => {
-        if (!targetSubBranch || targetSubBranch === "all") return true
+        if (!targetSubBranch || targetSubBranch === "all" || targetSubBranch === "hq" || targetSubBranch === "main" || targetSubBranchId === "main" || targetSubBranchId === "hq") return true
         const cSubBranch = String(c.subBranchId || c.sub_branch_id || "").toLowerCase().trim()
         const cSubBranchName = String(c.subBranchName || c.sub_branch_name || "").toLowerCase().trim()
         const uSubBranchIds = (c.subBranchIds && c.subBranchIds.length > 0)
           ? c.subBranchIds.map((id: any) => String(id).toLowerCase().trim())
           : []
+        if (!cSubBranch && !cSubBranchName && uSubBranchIds.length === 0) return false
         return (cSubBranch && (cSubBranch === targetSubBranchId || (targetSubBranchName && cSubBranch === targetSubBranchName))) ||
                (cSubBranchName && (cSubBranchName === targetSubBranchName || cSubBranchName === targetSubBranchId)) ||
                uSubBranchIds.includes(targetSubBranchId)

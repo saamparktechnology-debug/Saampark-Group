@@ -34,7 +34,7 @@ import {
   DEFAULT_ROLE_ACTION_PERMISSIONS
 } from "@/store/usePermissionStore"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
-import { getUsers } from "@/app/feature/users/services/userService"
+import { getUsers } from "@/app/feature/users/service/userService"
 import { UserItem } from "@/app/feature/users/types"
 
 type Tab = "permissions" | "user-permissions" | "roles" | "custom-roles"
@@ -510,7 +510,7 @@ export default function PermissionsMain() {
 
         // Sync with userService so users table & UserModal see the update
         try {
-          const { updateUser } = await import("@/app/feature/users/services/userService")
+          const { updateUser } = await import("@/app/feature/users/service/userService")
           await updateUser(selectedUserId, {
             allowedModules,
             permissions: {
@@ -538,6 +538,7 @@ export default function PermissionsMain() {
         } catch {}
 
         if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("saampark_user_permissions_updated"))
           window.dispatchEvent(new Event("saampark_users_updated"))
           window.dispatchEvent(new Event("saampark_data_synced"))
           window.dispatchEvent(new Event("storage"))

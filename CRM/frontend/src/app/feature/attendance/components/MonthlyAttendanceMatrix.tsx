@@ -11,7 +11,7 @@ import {
 import { useAuthStore, isMatchingCompany, getCanonicalCompanyId } from "@/store/useAuthStore"
 import { fetchModuleDataFromDB, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { LeaveService } from "@/services/hrService"
-import { getUsers, getUserAvatar } from "../../users/services/userService"
+import { getUsers, getUserAvatar } from "../../users/service/userService"
 import { TimeCardRecord } from "../team/timecards/page"
 import { EmployeeMonthlyAttendance, DayPunchDetail, AttendanceDayStatus } from "../types"
 import AttendanceTypeLegend from "./AttendanceTypeLegend"

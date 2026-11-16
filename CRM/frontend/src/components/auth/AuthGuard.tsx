@@ -212,7 +212,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const { getStoredUserAccountsAsync } = await import("@/app/feature/users/services/userService")
+        const { getStoredUserAccountsAsync } = await import("@/app/feature/users/service/userService")
         const accounts = await getStoredUserAccountsAsync()
         const myAcc = accounts.find((a) => a.email.toLowerCase().trim() === currentEmail)
         if (myAcc && myAcc.status === "Inactive") {
@@ -233,16 +233,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Check on mount and periodically every 30 seconds
+    // Check once on mount (no polling interval)
     checkActiveUserStatus()
-    const interval = setInterval(checkActiveUserStatus, 30000)
 
     window.addEventListener("storage", handleStorageChange)
     window.addEventListener("saampark_session_revoked", handleCustomRevoke)
     window.addEventListener("saampark_user_status_changed", handleCustomRevoke)
 
     return () => {
-      clearInterval(interval)
       window.removeEventListener("storage", handleStorageChange)
       window.removeEventListener("saampark_session_revoked", handleCustomRevoke)
       window.removeEventListener("saampark_user_status_changed", handleCustomRevoke)
@@ -305,6 +303,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       "/feature/clients": "Clients",
       "/feature/projects": "Projects",
       "/feature/tasks": "Tasks",
+      "/feature/marketing": "Digital Marketing",
+      "/feature/marketing/campaigns": "Digital Marketing",
+      "/feature/marketing/posts": "Digital Marketing",
+      "/feature/marketing/retainers": "Digital Marketing",
+      "/feature/marketing/leads": "Digital Marketing",
+      "/feature/marketing/analytics": "Digital Marketing",
       "/feature/leads": "Leads",
       "/feature/enquiries": "Leads",
       "/feature/follow-ups": "Leads",

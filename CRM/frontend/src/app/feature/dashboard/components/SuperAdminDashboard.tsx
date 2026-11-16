@@ -40,11 +40,11 @@ import { fetchModuleDataFromDB, filterGlobalDeletedItems } from "@/lib/storageSy
 import { Widget } from "./Widget"
 import { KPICard } from "./KPICard"
 import { DonutChart } from "./DonutChart"
-import { getUserAvatar } from "../../users/services/userService"
-import { taskService } from "../../tasks/services/taskService"
-import { getProjects } from "../../projects/services/projectService"
-import { getInvoices, InvoiceItem } from "../../sales/invoices/services/invoiceService"
-import { getOrders, OrderItem } from "../../sales/orders/services/orderService"
+import { getUserAvatar } from "../../users/service/userService"
+import { taskService } from "../../tasks/service/taskService"
+import { getProjects } from "../../projects/service/projectService"
+import { getInvoices, InvoiceItem } from "../../sales/invoices/service/invoiceService"
+import { getOrders, OrderItem } from "../../sales/orders/service/orderService"
 import { Task } from "../../tasks/types"
 import { Project } from "../../projects/types"
 
@@ -1531,7 +1531,7 @@ export function SuperAdminDashboard() {
              </div>
              
              <div className="mt-auto pt-3 border-t border-border/40 text-center">
-               <Link href="/feature/sales/orders" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline text-xs font-bold">
+               <Link href="/feature/sales/invoices" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline text-xs font-bold">
                  View All Sales Orders →
                </Link>
              </div>

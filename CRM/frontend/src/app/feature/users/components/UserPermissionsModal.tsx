@@ -222,7 +222,7 @@ export function UserPermissionsModal({ isOpen, onClose, user: targetUser, onSave
 
         // Sync with user service and persist to DB users table
         try {
-          const { updateUser } = await import("../services/userService")
+          const { updateUser } = await import("../service/userService")
           await updateUser(targetUser.id, {
             allowedModules,
             permissions: {
@@ -267,6 +267,7 @@ export function UserPermissionsModal({ isOpen, onClose, user: targetUser, onSave
         }).catch(() => {})
 
         if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("saampark_user_permissions_updated"))
           window.dispatchEvent(new Event("saampark_users_updated"))
           window.dispatchEvent(new Event("saampark_data_synced"))
           window.dispatchEvent(new Event("storage"))

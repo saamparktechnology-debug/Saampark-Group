@@ -16,7 +16,7 @@ import {
   CustomAdjustmentCategory, 
   CustomPaymentAdjustment 
 } from "../types"
-import { addCustomAdjustment } from "../services/teamPaymentService"
+import { addCustomAdjustment } from "../service/teamPaymentService"
 import { Button } from "@/components/ui/Button"
 
 interface AddCustomAdjustmentModalProps {

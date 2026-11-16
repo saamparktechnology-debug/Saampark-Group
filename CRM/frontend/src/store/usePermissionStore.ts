@@ -7,15 +7,10 @@ export const ALL_APP_MODULES = [
   // CRM & Sales
   'Leads',
   'Clients',
-  'Proposals',
   'Quotations',
   'Estimates',
-  'Sales Orders',
   'Invoices',
   'Payments',
-  'Credit Notes',
-  'Debit Notes',
-  'Services & Store',
 
   // Digital Marketing
   'Digital Marketing',
@@ -99,22 +94,17 @@ export const CLEAN_MODULE_CATEGORIES: Record<string, { label: string; icon: stri
     modules: [
       { key: "Leads", name: "Leads", description: "Telecalling pipeline, cold leads & status progression" },
       { key: "Clients", name: "Clients", description: "Client accounts, contact directories & profiles" },
-      { key: "Proposals", name: "Proposals", description: "Digital commercial proposals & e-signatures" },
       { key: "Quotations", name: "Quotations", description: "Itemized formal customer price quotes" },
       { key: "Estimates", name: "Estimates", description: "Dynamic cost estimations with tax calculations" },
-      { key: "Sales Orders", name: "Sales Orders", description: "Confirmed customer purchase & sales orders" },
       { key: "Invoices", name: "Invoices", description: "Tax invoices, billing releases & payment tracking" },
       { key: "Payments", name: "Payments", description: "Payment collections, bank receipts & ledger" },
-      { key: "Credit Notes", name: "Credit Notes", description: "Credit adjustments and bill reversals" },
-      { key: "Debit Notes", name: "Debit Notes", description: "Supplementary debit claims and debits" },
-      { key: "Services & Store", name: "Services & Store", description: "Standardized service catalog and pricing" },
     ]
   },
   marketing: {
     label: "Digital Marketing & Campaigns",
     icon: "Megaphone",
     modules: [
-      { key: "Digital Marketing", name: "Digital Marketing", description: "Form No. 9 retainers, social media ads, deliverables & campaign analytics" },
+      { key: "Digital Marketing", name: "Digital Marketing", description: "Monthly retainers, social media ads, deliverables & campaign analytics" },
     ]
   },
   projects: {
@@ -218,15 +208,16 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, ModuleName[]> = {
   'Super Admin': [...ALL_APP_MODULES],
   'Admin': [...ALL_APP_MODULES],
   'Teams': [
-    'Dashboard', 'Leads', 'Clients', 'Proposals', 'Quotations', 'Estimates',
-    'Sales Orders', 'Invoices', 'Payments', 'Services & Store', 'Digital Marketing', 'Projects',
+    'Dashboard', 'Leads', 'Clients', 'Quotations', 'Estimates',
+    'Invoices', 'Payments', 'Digital Marketing', 'Projects',
     'Tasks', 'Teams', 'Attendance', 'Leave', 'Tickets', 'Knowledge base',
     'Messages', 'Events', 'Notes', 'Files', 'Expenses', 'Reports', 'Settings'
   ],
   'Clients': [
     'Dashboard', 'Projects', 'Tasks', 'Subscriptions', 'EMI', 'Invoices',
+    'Quotations', 'Digital Marketing',
     'Payments', 'Tickets', 'Knowledge base', 'Messages', 'Files', 'Settings',
-    'Leads', 'Proposals', 'Estimates'
+    'Leads', 'Estimates'
   ]
 }
 
@@ -262,7 +253,11 @@ export const DEFAULT_ROLE_ACTION_PERMISSIONS: Record<Role, Record<string, Module
   })(),
   'Clients': (() => {
     const init: Record<string, ModuleActionFlags> = {}
-    const clientAllowed = ['Dashboard', 'Projects', 'Tasks', 'Subscriptions', 'EMI', 'Invoices', 'Tickets', 'Knowledge base', 'Messages', 'Files', 'Leads', 'Proposals', 'Estimates']
+    const clientAllowed = [
+      'Dashboard', 'Projects', 'Tasks', 'Subscriptions', 'EMI', 'Invoices',
+      'Quotations', 'Digital Marketing',
+      'Tickets', 'Knowledge base', 'Messages', 'Files', 'Leads', 'Estimates', 'Payments'
+    ]
     CONFIGURABLE_MODULES.forEach((m) => {
       const allowed = clientAllowed.includes(m)
       init[m] = {
@@ -730,7 +725,9 @@ export const usePermissionStore = create<PermissionState>()(
         }
 
         // 4. Fallback to role permissions list
-        const roleMods = state.rolePermissions[normRole] || DEFAULT_ROLE_PERMISSIONS[normRole] || []
+        const roleMods = (state.rolePermissions && state.rolePermissions[normRole] !== undefined)
+          ? state.rolePermissions[normRole]
+          : (DEFAULT_ROLE_PERMISSIONS[normRole] || [])
         return roleMods.some(m => {
           const mNorm = m.toLowerCase().trim()
           return mNorm === mKey || mNorm === resolvedName || (ALIAS_MAP[mNorm] && ALIAS_MAP[mNorm].toLowerCase().trim() === mKey)

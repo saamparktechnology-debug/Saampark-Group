@@ -7,9 +7,9 @@ import {
   Building2, Calendar, FileText, CheckSquare, Search, AlertCircle, Shield
 } from "lucide-react"
 import { useAuthStore, getCompanyFullName, getCompanyLogoUrl } from "@/store/useAuthStore"
-import { getUsers } from "@/app/feature/users/services/userService"
-import { getClients } from "@/app/feature/clients/services/clientService"
-import { createAndSendLetter } from "../services/letterService"
+import { getUsers } from "@/app/feature/users/service/userService"
+import { getClients } from "@/app/feature/clients/service/clientService"
+import { createAndSendLetter } from "../service/letterService"
 import { LetterRecord, LetterType, LetterRecipient, LetterCustomFields } from "../types"
 
 interface LetterComposerModalProps {

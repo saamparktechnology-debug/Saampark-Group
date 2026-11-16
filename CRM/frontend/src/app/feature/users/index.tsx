@@ -8,7 +8,9 @@ import { Users as UsersIcon, UserPlus, ShieldCheck, UserCheck, Briefcase, Downlo
 import { Button } from "@/components/ui/Button"
 import { useAuthStore, isMatchingCompany, isMatchingBranch } from "@/store/useAuthStore"
 import { UserItem, UserStatus } from "./types"
-import { getUsers, recordUserAccount, deleteUser } from "./services/userService"
+import { recordUserAccount } from "./service/userService"
+import { useDeleteUserMutation, useUsersQuery, USERS_QUERY_KEY } from "./hooks/useUsers"
+import { useQueryClient } from "@tanstack/react-query"
 import { saveModuleDataToDB } from "@/lib/storageSync"
 import { UserList } from "./components/UserList"
 import { UserModal } from "./components/UserModal"
@@ -24,12 +26,15 @@ export default function UsersMain() {
 
   const canAddUser = user?.role === "Super Admin" || canPerformAction(user, "Users", "add")
 
-  const [users, setUsers] = React.useState<UserItem[]>([])
+  const queryClient = useQueryClient()
+  const { data: users = [], isLoading, refetch: refetchUsers } = useUsersQuery()
+  const deleteUserMutation = useDeleteUserMutation()
+  const loadUsers = React.useCallback(async () => { await refetchUsers() }, [refetchUsers])
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [editingUser, setEditingUser] = React.useState<UserItem | null>(null)
   const [selectedUserForOverview, setSelectedUserForOverview] = React.useState<UserItem | null>(null)
   const [isOverviewModalOpen, setIsOverviewModalOpen] = React.useState(false)
-  const [isLoading, setIsLoading] = React.useState(true)
+  
 
   // Success / Failure Feedback Popup Modal State
   const [statusModalState, setStatusModalState] = React.useState<{
@@ -47,50 +52,7 @@ export default function UsersMain() {
 
   const isSuperAdminLoggedIn = user?.role === "Super Admin"
 
-  const reqIdRef = React.useRef(0)
-
-  const loadUsers = React.useCallback(async (showLoading = false) => {
-    const currentReq = ++reqIdRef.current
-    if (showLoading) setIsLoading(true)
-    try {
-      const list = await getUsers("all")
-      // Discard stale out-of-order responses to eliminate UI jumping
-      if (currentReq === reqIdRef.current) {
-        setUsers(list || [])
-      }
-    } finally {
-      if (currentReq === reqIdRef.current) {
-        setIsLoading(false)
-      }
-    }
-  }, [])
-
-  React.useEffect(() => {
-    loadUsers(true)
-
-    let debounceTimer: any = null
-    const handleStorageChange = () => {
-      if (debounceTimer) clearTimeout(debounceTimer)
-      debounceTimer = setTimeout(() => {
-        loadUsers(false)
-      }, 300)
-    }
-
-    window.addEventListener("storage", handleStorageChange)
-    window.addEventListener("saampark_company_switched", handleStorageChange)
-    window.addEventListener("saampark_branch_switched", handleStorageChange)
-    window.addEventListener("saampark_subbranch_switched", handleStorageChange)
-    window.addEventListener("saampark_data_synced", handleStorageChange)
-
-    return () => {
-      if (debounceTimer) clearTimeout(debounceTimer)
-      window.removeEventListener("storage", handleStorageChange)
-      window.removeEventListener("saampark_company_switched", handleStorageChange)
-      window.removeEventListener("saampark_branch_switched", handleStorageChange)
-      window.removeEventListener("saampark_subbranch_switched", handleStorageChange)
-      window.removeEventListener("saampark_data_synced", handleStorageChange)
-    }
-  }, [loadUsers])
+  
 
   // Strictly isolate visible users based on active company, branch, and sub-branch
   const isClientRole = user?.role === "Clients" || (user?.role as string) === "Client"
@@ -135,24 +97,26 @@ export default function UsersMain() {
       })
     }
 
-    // 2. Strict Branch Filter (Show ONLY users assigned to this branch)
+    // 2. Strict Branch Filter (Show ONLY users assigned to this branch, but keep Admins/Super Admins visible)
     if (targetBranch && targetBranch !== "all") {
       const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
       const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
       const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
       filtered = filtered.filter((u) => {
+        if (u.role === "Super Admin" || u.role === "Admin") return true
+
         const uBranchIds = (u.branchIds && u.branchIds.length > 0)
           ? u.branchIds.map(id => String(id).toLowerCase().trim())
           : (u.branchId ? [String(u.branchId).toLowerCase().trim()] : [])
         const uBranchName = String(u.branchName || "").toLowerCase().trim()
 
+        if (uBranchIds.includes("all") || uBranchIds.includes("head-office")) return true
+
         // Strict separation: users with no branch assigned do not belong to a specific branch filter
         if (uBranchIds.length === 0 && !uBranchName) {
           return false
         }
-
-        if (uBranchIds.includes("all")) return true
 
         return (
           uBranchIds.includes(targetBranchId) ||
@@ -163,24 +127,26 @@ export default function UsersMain() {
       })
     }
 
-    // 3. Strict Sub-Branch Filter (Show ONLY users assigned to this sub-branch)
+    // 3. Strict Sub-Branch Filter (Show ONLY users assigned to this sub-branch, but keep Admins/Super Admins visible)
     if (targetSubBranch && targetSubBranch !== "all") {
       const targetSubBranchObj = subBranches.find(sb => sb.id === targetSubBranch || sb.name.toLowerCase() === targetSubBranch.toLowerCase())
       const targetSubBranchId = String(targetSubBranchObj?.id || targetSubBranch).toLowerCase().trim()
       const targetSubBranchName = targetSubBranchObj?.name?.toLowerCase().trim() || ""
 
       filtered = filtered.filter((u) => {
+        if (u.role === "Super Admin" || u.role === "Admin") return true
+
         const uSubIds = (u.subBranchIds && u.subBranchIds.length > 0)
           ? u.subBranchIds.map(id => String(id).toLowerCase().trim())
           : (u.subBranchId ? [String(u.subBranchId).toLowerCase().trim()] : [])
         const uSubName = String(u.subBranchName || "").toLowerCase().trim()
 
+        if (uSubIds.includes("all") || uSubIds.includes("head-office")) return true
+
         // Strict separation: users with no sub-branch assigned do not belong to this sub-branch
         if (uSubIds.length === 0 && !uSubName) {
           return false
         }
-
-        if (uSubIds.includes("all")) return true
 
         return (
           uSubIds.includes(targetSubBranchId) ||
@@ -315,7 +281,7 @@ export default function UsersMain() {
       } catch {}
     }
 
-    const { recordUserAccountAsync, saveUserAccounts, invalidateUsersCache } = await import("./services/userService")
+    const { recordUserAccountAsync, saveUserAccounts, invalidateUsersCache } = await import("./service/userService")
     invalidateUsersCache()
     const saved = await recordUserAccountAsync(
       {
@@ -420,7 +386,7 @@ export default function UsersMain() {
       window.dispatchEvent(new CustomEvent("saampark_session_revoked", { detail: { email: inactiveEmail, reason: "inactive" } }))
     }
 
-    setUsers((prev) => {
+    queryClient.setQueryData<UserItem[]>(USERS_QUERY_KEY, (prev = []) => {
       if (editingUser) {
         const filtered = prev.filter((u) => 
           String(u.id) !== String(editingUser.id) &&
@@ -472,7 +438,7 @@ export default function UsersMain() {
       await UserService.toggleStatus(id).catch((err) => console.warn("Status toggle warning:", err))
     } catch {}
 
-    setUsers((prev) => {
+    queryClient.setQueryData<UserItem[]>(USERS_QUERY_KEY, (prev = []) => {
       const updatedList: UserItem[] = prev.map((u) => {
         if (u.id === id) {
           const nextStatus: UserStatus = u.status === "Active" ? "Inactive" : "Active"
@@ -506,12 +472,9 @@ export default function UsersMain() {
       return
     }
 
-    setUsers((prev) => prev.filter((u) => u.id !== id && (!targetEmail || u.email.toLowerCase().trim() !== targetEmail.toLowerCase().trim())))
+    queryClient.setQueryData<UserItem[]>(USERS_QUERY_KEY, (prev = []) => prev.filter((u) => u.id !== id && (!targetEmail || u.email.toLowerCase().trim() !== targetEmail.toLowerCase().trim())))
 
-    await deleteUser(id, targetEmail)
-    setTimeout(() => {
-      loadUsers()
-    }, 150)
+    await deleteUserMutation.mutateAsync(id)
   }
 
   return (
@@ -618,7 +581,7 @@ export default function UsersMain() {
           handleOpenEditModal(targetUser)
         }}
         onUserUpdated={(updatedUser) => {
-          setUsers((prev) =>
+          queryClient.setQueryData<UserItem[]>(USERS_QUERY_KEY, (prev = []) =>
             prev.map((u) => (u.id === updatedUser.id ? updatedUser : u))
           )
           setSelectedUserForOverview(updatedUser)

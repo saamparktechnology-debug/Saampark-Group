@@ -28,13 +28,13 @@ import {
 } from "lucide-react"
 import { Lead, LeadStatus } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
-import { updateLead, parseLeadDate, formatLeadReminderDate, isReminderDateOverdue, canUserUnlockLead, isLeadClientPrivate, isLeadAssignedToUser, isTeamMemberRole } from "../services/leadService"
+import { updateLead, parseLeadDate, formatLeadReminderDate, isReminderDateOverdue, canUserUnlockLead, isLeadClientPrivate, isLeadAssignedToUser, isTeamMemberRole } from "../service/leadService"
 import { LabelItem } from "./ManageLabelsModal"
 import { WhatsAppTemplateModal } from "./WhatsAppTemplateModal"
 import { CallOutcomeModal } from "./CallOutcomeModal"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
-import { getUsers } from "@/app/feature/users/services/userService"
+import { getUsers } from "@/app/feature/users/service/userService"
 
 interface LeadKanbanProps {
   leads: Lead[]
@@ -1638,7 +1638,7 @@ export function LeadKanban({
                                   onClick={async (e) => {
                                     e.stopPropagation()
                                     try {
-                                      const { lockLead } = await import("../services/leadService")
+                                      const { lockLead } = await import("../service/leadService")
                                       const locked = await lockLead(l.id, undefined, user, l.companyId)
                                       onLeadUpdated(locked)
                                     } catch (err: any) {
@@ -1673,7 +1673,7 @@ export function LeadKanban({
                                 onClick={async (e) => {
                                   e.stopPropagation()
                                   try {
-                                    const { unlockLead } = await import("../services/leadService")
+                                    const { unlockLead } = await import("../service/leadService")
                                     const unlocked = await unlockLead(l.id, user, l.companyId)
                                     onLeadUpdated(unlocked)
                                   } catch (err: any) {

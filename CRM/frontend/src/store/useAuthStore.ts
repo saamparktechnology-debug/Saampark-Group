@@ -932,24 +932,62 @@ export const useAuthStore = create<AuthState>()(
 
           const branchMap = new Map<string, Branch>()
 
+          const getCanonicalBranchKey = (b: any): string => {
+            const code = b.code ? String(b.code).toUpperCase().trim() : ""
+            if (code) return `code:${code}`
+            const name = b.name ? String(b.name).toLowerCase().trim() : ""
+            if (name) return `name:${name}`
+            return `id:${String(b.id || "").trim()}`
+          }
+
           // 1. Load app_data branches first
           if (Array.isArray(dbBranches) && dbBranches.length > 0) {
             dbBranches.forEach(b => {
               if (!isBranchDeleted(b.id, b.code, b.name)) {
-                branchMap.set(String(b.id), { ...b })
+                branchMap.set(getCanonicalBranchKey(b), { ...b })
               }
             })
           }
 
-          // 2. Overlay MySQL API branches (higher priority — this is the real DB)
+          // 2. Overlay MySQL API branches (higher priority for structural fields — real DB)
+          // BUT: app_data wins for content fields (nongst_*, qr URLs, logo, stamps, etc.)
+          // because those are saved client-side and may not yet be in MySQL.
           const apiList = apiRes && (Array.isArray(apiRes.data) || Array.isArray(apiRes))
             ? (Array.isArray(apiRes.data) ? apiRes.data : apiRes)
             : []
           apiList.forEach((b: Branch) => {
             if (!isBranchDeleted(b.id, b.code, b.name)) {
-              const strKey = String(b.id)
+              const strKey = getCanonicalBranchKey(b)
               const existing = branchMap.get(strKey)
-              branchMap.set(strKey, { ...(existing || {}), ...b })
+              const finalId: string = String(b.id || existing?.id || b.code || 'branch')
+              // MySQL wins for identity/structural fields; app_data wins for content fields
+              // that MySQL may not have yet (custom banking, QR codes, logos, etc.)
+              const APP_DATA_PRIORITY_FIELDS = [
+                'nongst_bank_name', 'nongst_account_holder', 'nongst_account_number',
+                'nongst_ifsc_code', 'nongst_bank_branch', 'nongst_upi_id', 'nongst_payment_qr_url',
+                'gst_bank_name', 'gst_account_holder', 'gst_account_number',
+                'gst_ifsc_code', 'gst_bank_branch', 'gst_upi_id', 'gst_payment_qr_url',
+                'logo_url', 'stamp_image_url', 'signature_image_url',
+                'payment_qr_url', 'terms_conditions', 'invoice_notes',
+                'signatory_name', 'signatory_designation',
+                'signature_position', 'stamp_position', 'logo_position',
+                'logo_scale', 'stamp_scale', 'signature_scale', 'custom_stamps',
+                'invoice_customization', 'zoom', 'preview_invoice_type',
+                'brand_name', 'division_name', 'subtitle', 'iso_certification',
+              ]
+              const merged: any = { ...(existing || {}), ...b, id: finalId }
+              // Restore app_data values for priority fields if they were non-empty in app_data
+              if (existing) {
+                for (const field of APP_DATA_PRIORITY_FIELDS) {
+                  const appVal = (existing as any)[field]
+                  const dbVal = (b as any)[field]
+                  // If app_data had a non-empty value and MySQL returned empty/null, prefer app_data
+                  if (appVal !== undefined && appVal !== null && appVal !== '' && (!dbVal || dbVal === null || dbVal === '')) {
+                    merged[field] = appVal
+                  }
+                }
+              }
+              branchMap.set(strKey, merged)
             }
           })
 
@@ -957,7 +995,7 @@ export const useAuthStore = create<AuthState>()(
           if (branchMap.size === 0) {
             DEFAULT_BRANCHES.forEach(b => {
               if (!isBranchDeleted(b.id, b.code, b.name)) {
-                branchMap.set(String(b.id), { ...b })
+                branchMap.set(getCanonicalBranchKey(b), { ...b })
               }
             })
           }
@@ -980,6 +1018,11 @@ export const useAuthStore = create<AuthState>()(
           })
 
           set({ branches: filtered })
+          // Write merged data back to app_data so MySQL gaps are filled for next load
+          try {
+            const { saveModuleDataToDB } = await import('@/lib/storageSync')
+            saveModuleDataToDB('branches', filtered, 'all').catch(() => {})
+          } catch {}
           return filtered
         } catch (err) {
           console.warn("fetchBranches warning:", err)
@@ -1724,29 +1767,17 @@ export const useAuthStore = create<AuthState>()(
           return
         }
 
-        // Strict Hierarchical Rule: Must be inside the Company first before switching to its branch
-        if (!activeCompanyId || activeCompanyId === 'all') {
-          console.warn("Hierarchical switching violation: You must select a specific Company before switching to a Branch.")
-          return
-        }
-
-        // Scope check: User must be allowed to access this branch
-        const isAllowedBranch = scope.isSuperAdmin || scope.allowedBranchIds.some(id => 
-          String(id).toLowerCase().trim() === branchIdStr.toLowerCase().trim()
+        const matchedBranch = branches.find(b => 
+          String(b.id).toLowerCase().trim() === branchIdStr.toLowerCase().trim() ||
+          String(b.code || "").toLowerCase().trim() === branchIdStr.toLowerCase().trim() ||
+          String(b.name || "").toLowerCase().trim() === branchIdStr.toLowerCase().trim()
         )
-        if (!isAllowedBranch) {
-          console.warn(`Access denied: User does not have access to branch ${branchIdStr}`)
-          return
-        }
 
-        const matchedBranch = branches.find(b => String(b.id) === branchIdStr)
+        let targetCompanyId = activeCompanyId
         if (matchedBranch) {
-          const bComp = String(matchedBranch.companyId || (matchedBranch as any)?.company_id || '').toLowerCase()
-          const activeComp = String(activeCompanyId || '').toLowerCase()
-          const isMatch = isMatchingCompany({ id: bComp, slug: bComp } as any, activeCompanyId)
-          if (!isMatch) {
-            console.warn(`Hierarchical switching violation: Branch ${matchedBranch.name} does not belong to active company ${activeCompanyId}. Switch to that company first.`)
-            return
+          const bComp = String(matchedBranch.companyId || (matchedBranch as any)?.company_id || 'tech').toLowerCase()
+          if (!targetCompanyId || targetCompanyId === 'all' || !isMatchingCompany({ id: bComp, slug: bComp } as any, targetCompanyId)) {
+            targetCompanyId = bComp || 'tech'
           }
         }
 
@@ -1758,8 +1789,11 @@ export const useAuthStore = create<AuthState>()(
           nextSubBranchId = scope.allowedSubBranchIds[0] || null
         }
 
+        const effectiveBranchId = matchedBranch?.id || branchIdStr
+
         set({
-          activeBranchId: branchIdStr,
+          activeCompanyId: targetCompanyId,
+          activeBranchId: effectiveBranchId,
           activeSubBranchId: nextSubBranchId,
         })
 

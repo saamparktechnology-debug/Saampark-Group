@@ -11,13 +11,21 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useAuthStore, getCompanyFullName } from "@/store/useAuthStore"
-import { getActivityLogs, clearAllActivityLogs, ActivityLog, ActivityType } from "@/services/activityLogService"
+import { ActivityLog, ActivityType } from "./types"
+import { useActivityLogsQuery, useClearActivityLogsMutation } from "./hooks/useActivityLogs"
 import { Button } from "@/components/ui/Button"
 
 export default function ActivityLogsMain() {
   const { user, companies, activeCompanyId } = useAuthStore()
-  const [logs, setLogs] = React.useState<ActivityLog[]>([])
-  const [loading, setLoading] = React.useState(true)
+  const targetCompany = React.useMemo(() => {
+    if (!isSuperAdmin && selectedCompany === "all") {
+      return allowedCompanies[0]?.id || user?.companyId || "tech"
+    }
+    return selectedCompany
+  }, [isSuperAdmin, selectedCompany, allowedCompanies, user?.companyId])
+
+  const { data: logs = [], isLoading: loading } = useActivityLogsQuery(targetCompany)
+  const clearLogsMutation = useClearActivityLogsMutation(targetCompany)
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedCompany, setSelectedCompany] = React.useState<string>(activeCompanyId || "all")
   const [selectedActor, setSelectedActor] = React.useState<string>("all")
@@ -36,40 +44,12 @@ export default function ActivityLogsMain() {
     return companies.filter(c => compIds.includes(String(c.id).toLowerCase().trim()) || (c.slug && compIds.includes(String(c.slug).toLowerCase().trim())))
   }, [user, companies, isSuperAdmin])
 
-  const loadLogs = React.useCallback(async () => {
-    setLoading(true)
-    try {
-      // If Admin or Team, strictly constrain company scope to their allowed companies
-      let targetComp = selectedCompany
-      if (!isSuperAdmin && targetComp === "all") {
-        targetComp = allowedCompanies[0]?.id || user?.companyId || "tech"
-      }
-      const data = await getActivityLogs(targetComp)
-      setLogs(data)
-    } finally {
-      setLoading(false)
-    }
-  }, [selectedCompany, isSuperAdmin, allowedCompanies, user])
-
-  React.useEffect(() => {
-    loadLogs()
-  }, [loadLogs])
-
-  React.useEffect(() => {
-    const handleSync = () => loadLogs()
-    window.addEventListener("saampark_activity_logged", handleSync)
-    window.addEventListener("storage", handleSync)
-    return () => {
-      window.removeEventListener("saampark_activity_logged", handleSync)
-      window.removeEventListener("storage", handleSync)
-    }
-  }, [loadLogs])
+  
 
   const handleClearLogs = async () => {
     if (!isSuperAdmin) return
     if (confirm("Are you sure you want to clear the activity log history? This action cannot be undone.")) {
-      await clearAllActivityLogs()
-      setLogs([])
+      await clearLogsMutation.mutateAsync()
     }
   }
 

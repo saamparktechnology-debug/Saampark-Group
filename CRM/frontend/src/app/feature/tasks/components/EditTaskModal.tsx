@@ -3,11 +3,11 @@
 import * as React from "react"
 import { X, Check, Paperclip, Mic, HelpCircle, Trash2, Plus, Tag } from "lucide-react"
 import { Task, TaskStatus, TaskPriority } from "../types"
-import { taskService } from "../services/taskService"
+import { taskService } from "../service/taskService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 
-import { getUsers, getUserAvatar } from "@/app/feature/users/services/userService"
+import { getUsers, getUserAvatar } from "@/app/feature/users/service/userService"
 import { UserItem } from "@/app/feature/users/types"
 
 interface EditTaskModalProps {
@@ -51,8 +51,8 @@ export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated, onDeleteTa
     if (isOpen) {
       // 1. Fetch available projects and leads for Related To multi-select
       Promise.all([
-        import("@/app/feature/projects/services/projectService").then(m => m.getProjects()).catch(() => []),
-        import("@/app/feature/leads/services/leadService").then(m => m.getLeads()).catch(() => []),
+        import("@/app/feature/projects/service/projectService").then(m => m.getProjects()).catch(() => []),
+        import("@/app/feature/leads/service/leadService").then(m => m.getLeads()).catch(() => []),
       ]).then(([projs, lds]) => {
         const extraOptions: string[] = []
         if (Array.isArray(projs)) {

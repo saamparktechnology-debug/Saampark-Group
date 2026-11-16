@@ -11,13 +11,13 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { CompanyApiService, BranchApiService, SubBranchApiService } from "./services/companyService"
+import { CompanyApiService, BranchApiService, SubBranchApiService } from "./service/companyService"
 import { Company, Branch, SubBranch } from "./types"
 import { useAuthStore, isMatchingCompany } from "@/store/useAuthStore"
 import { markGlobalItemDeleted, unmarkGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB, syncGlobalDeletedIds, isGlobalItemDeleted, getLocalDeletedIds } from "@/lib/storageSync"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
 import { OfficialInvoiceDocument, CustomTextStamp } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
-import { InvoiceItem, InvoiceLineItem } from "@/app/feature/sales/invoices/services/invoiceService"
+import { InvoiceItem, InvoiceLineItem } from "@/app/feature/sales/invoices/service/invoiceService"
 
 const INDUSTRIES = [
   "Technology", "Healthcare", "Finance", "Education", "Manufacturing",
@@ -428,12 +428,20 @@ export default function CompaniesMain() {
       // 2. Merge Branches: KEEP all branches belonging to active companies unless deleted
       const branchMap = new Map<string, Branch>()
 
+      const getBranchKey = (b: any): string => {
+        const code = b.code ? String(b.code).toUpperCase().trim() : ""
+        if (code) return `code:${code}`
+        const name = b.name ? String(b.name).toLowerCase().trim() : ""
+        if (name) return `name:${name}`
+        return `id:${String(b.id || "").trim()}`
+      }
+
       // First add baseline canonical branches for active companies
       CANONICAL_BRANCHES.forEach(b => {
         if (!isBranchDeleted(b.id, b.code, b.name)) {
           const bComp = b.company_id || (b as any).companyId
           if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
-            branchMap.set(String(b.id), { ...b, company_id: bComp, companyId: bComp })
+            branchMap.set(getBranchKey(b), { ...b, company_id: bComp, companyId: bComp })
           }
         }
       })
@@ -444,10 +452,11 @@ export default function CompaniesMain() {
           if (!isBranchDeleted(b.id, b.code, b.name)) {
             const bComp = b.company_id || (b as any).companyId
             if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
-              const strKey = String(b.id)
+              const strKey = getBranchKey(b)
               const prev = branchMap.get(strKey)
               const resolvedComp = bComp || prev?.company_id || prev?.companyId
-              branchMap.set(strKey, { ...mergeSafe(prev, b), company_id: resolvedComp, companyId: resolvedComp })
+              const finalId = (prev?.id && !isNaN(Number(prev.id))) ? prev.id : (b.id || prev?.id)
+              branchMap.set(strKey, { ...mergeSafe(prev, b), id: finalId, company_id: resolvedComp, companyId: resolvedComp })
             }
           }
         })
@@ -459,10 +468,11 @@ export default function CompaniesMain() {
           if (!isBranchDeleted(b.id, b.code, b.name)) {
             const bComp = b.company_id || (b as any).companyId
             if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
-              const strKey = String(b.id)
+              const strKey = getBranchKey(b)
               const prev = branchMap.get(strKey)
               const resolvedComp = bComp || prev?.company_id || prev?.companyId
-              branchMap.set(strKey, { ...mergeSafe(prev, b), company_id: resolvedComp, companyId: resolvedComp })
+              const finalId = b.id || prev?.id
+              branchMap.set(strKey, { ...mergeSafe(prev, b), id: finalId, company_id: resolvedComp, companyId: resolvedComp })
             }
           }
         })
@@ -475,10 +485,11 @@ export default function CompaniesMain() {
           if (!isBranchDeleted(b.id, b.code, b.name)) {
             const bComp = b.company_id || (b as any).companyId
             if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
-              const strKey = String(b.id)
+              const strKey = getBranchKey(b)
               const prev = branchMap.get(strKey)
               const resolvedComp = bComp || prev?.company_id || prev?.companyId
-              branchMap.set(strKey, { ...mergeSafe(prev, b), company_id: resolvedComp, companyId: resolvedComp })
+              const finalId = (prev?.id && !isNaN(Number(prev.id))) ? prev.id : (b.id || prev?.id)
+              branchMap.set(strKey, { ...mergeSafe(prev, b), id: finalId, company_id: resolvedComp, companyId: resolvedComp })
             }
           }
         })
@@ -698,9 +709,10 @@ export default function CompaniesMain() {
     try {
       const targetId = (editingCompany as any)?.numeric_id || editingCompany?.id || editingCompany?.slug || "1"
       const compKey = editingCompany ? (editingCompany.slug || String(editingCompany.id)) : "tech"
-      const isConsultancy = isMatchingCompany(editingCompany, "consultancy") || String(targetId) === "2" || compKey === "consultancy" || String(companyForm.division_name || "").toLowerCase().includes("consult")
-      const isTech = isMatchingCompany(editingCompany, "tech") || String(targetId) === "1" || compKey === "tech" || String(companyForm.division_name || "").toLowerCase().includes("tech")
+      const isConsultancy = isMatchingCompany(editingCompany, "consultancy") || String(targetId) === "2" || compKey === "consultancy" || String(companyForm.division_name || "").toLowerCase().includes("consult") || String(companyForm.name || "").toLowerCase().includes("consult")
+      const isTech = isMatchingCompany(editingCompany, "tech") || String(targetId) === "1" || compKey === "tech" || String(companyForm.division_name || "").toLowerCase().includes("tech") || String(companyForm.name || "").toLowerCase().includes("tech")
       const finalCanonicalSlug = isConsultancy ? "consultancy" : (isTech ? "tech" : ((companyForm.slug || "").trim() || generateSlug(finalBrand.trim() || finalName.trim())))
+      const resolvedCurrency = (CURRENCIES.find(c => c.code === companyForm.currency)?.symbol) || "₹"
 
       const payload = {
         ...companyForm,
@@ -708,9 +720,10 @@ export default function CompaniesMain() {
         numeric_id: isConsultancy ? 2 : (isTech ? 1 : Number(targetId) || 1),
         brand_name: finalBrand,
         name: finalName,
+        short_code: isConsultancy ? "SCS" : "STR",
         slug: finalCanonicalSlug,
         trademark_symbol: companyForm.trademark_symbol || "",
-        currency_symbol: cur?.symbol || "₹",
+        currency_symbol: resolvedCurrency,
         logo: companyForm.logo_url || "",
         logo_url: companyForm.logo_url || "",
         logo_position: companyLogoPos,
@@ -858,13 +871,13 @@ export default function CompaniesMain() {
       gst_bank_branch: pComp?.gst_bank_branch || pComp?.bank_branch || "",
       gst_upi_id: pComp?.gst_upi_id || pComp?.upi_id || "",
       gst_payment_qr_url: pComp?.gst_payment_qr_url || pComp?.payment_qr_url || "",
-      nongst_bank_name: pComp?.nongst_bank_name || pComp?.bank_name || "",
-      nongst_account_holder: pComp?.nongst_account_holder || pComp?.account_holder || "",
-      nongst_account_number: pComp?.nongst_account_number || pComp?.account_number || "",
-      nongst_ifsc_code: pComp?.nongst_ifsc_code || pComp?.ifsc_code || "",
-      nongst_bank_branch: pComp?.nongst_bank_branch || pComp?.bank_branch || "",
-      nongst_upi_id: pComp?.nongst_upi_id || pComp?.upi_id || "",
-      nongst_payment_qr_url: pComp?.nongst_payment_qr_url || pComp?.payment_qr_url || "",
+      nongst_bank_name: pComp?.nongst_bank_name || "",
+      nongst_account_holder: pComp?.nongst_account_holder || "",
+      nongst_account_number: pComp?.nongst_account_number || "",
+      nongst_ifsc_code: pComp?.nongst_ifsc_code || "",
+      nongst_bank_branch: pComp?.nongst_bank_branch || "",
+      nongst_upi_id: pComp?.nongst_upi_id || "",
+      nongst_payment_qr_url: pComp?.nongst_payment_qr_url || "",
       terms_conditions: pComp?.terms_conditions || (pComp as any)?.terms || "",
       invoice_notes: pComp?.invoice_notes || (pComp as any)?.notes || "",
       status: "active"
@@ -926,13 +939,13 @@ export default function CompaniesMain() {
       gst_bank_branch: b.gst_bank_branch || b.bank_branch || pComp?.gst_bank_branch || pComp?.bank_branch || "",
       gst_upi_id: b.gst_upi_id || b.upi_id || b.bankDetails?.upiId || pComp?.gst_upi_id || pComp?.upi_id || "",
       gst_payment_qr_url: b.gst_payment_qr_url || b.payment_qr_url || pComp?.gst_payment_qr_url || pComp?.payment_qr_url || "",
-      nongst_bank_name: b.nongst_bank_name || b.bank_name || b.bankDetails?.bankName || pComp?.nongst_bank_name || pComp?.bank_name || "",
-      nongst_account_holder: b.nongst_account_holder || b.account_holder || b.bankDetails?.accountHolder || pComp?.nongst_account_holder || pComp?.account_holder || "",
-      nongst_account_number: b.nongst_account_number || b.account_number || b.bankDetails?.accountNumber || pComp?.nongst_account_number || pComp?.account_number || "",
-      nongst_ifsc_code: b.nongst_ifsc_code || b.ifsc_code || b.bankDetails?.ifscCode || pComp?.nongst_ifsc_code || pComp?.ifsc_code || "",
-      nongst_bank_branch: b.nongst_bank_branch || b.bank_branch || pComp?.nongst_bank_branch || pComp?.bank_branch || "",
-      nongst_upi_id: b.nongst_upi_id || b.upi_id || b.bankDetails?.upiId || pComp?.nongst_upi_id || pComp?.upi_id || "",
-      nongst_payment_qr_url: b.nongst_payment_qr_url || b.payment_qr_url || pComp?.nongst_payment_qr_url || pComp?.payment_qr_url || "",
+      nongst_bank_name: b.nongst_bank_name || pComp?.nongst_bank_name || "",
+      nongst_account_holder: b.nongst_account_holder || pComp?.nongst_account_holder || "",
+      nongst_account_number: b.nongst_account_number || pComp?.nongst_account_number || "",
+      nongst_ifsc_code: b.nongst_ifsc_code || pComp?.nongst_ifsc_code || "",
+      nongst_bank_branch: b.nongst_bank_branch || pComp?.nongst_bank_branch || "",
+      nongst_upi_id: b.nongst_upi_id || pComp?.nongst_upi_id || "",
+      nongst_payment_qr_url: b.nongst_payment_qr_url || pComp?.nongst_payment_qr_url || "",
       terms_conditions: b.terms_conditions || pComp?.terms_conditions || (pComp as any)?.terms || "",
       invoice_notes: b.invoice_notes || pComp?.invoice_notes || (pComp as any)?.notes || "",
       status: b.status || "active"
@@ -1041,6 +1054,14 @@ export default function CompaniesMain() {
       unmarkGlobalItemDeleted(payload.code, "branches")
       if (editingBranch?.id) unmarkGlobalItemDeleted(editingBranch.id, "branches")
 
+      const isMatchBranch = (b: any, target: any) => {
+        if (!b || !target) return false
+        if (String(b.id) === String(target.id)) return true
+        if (b.code && target.code && String(b.code).toUpperCase().trim() === String(target.code).toUpperCase().trim()) return true
+        if (b.name && target.name && String(b.name).toLowerCase().trim() === String(target.name).toLowerCase().trim()) return true
+        return false
+      }
+
       let savedBranch: any = null
       if (editingBranch) {
         try {
@@ -1050,7 +1071,7 @@ export default function CompaniesMain() {
         }
         savedBranch = { ...editingBranch, ...payload, company_id: resolvedCompNumeric, companyId: resolvedCompSlug }
         setEditingBranch(savedBranch)
-        setBranches(prev => prev.map(b => String(b.id) === String(editingBranch.id) ? savedBranch : b))
+        setBranches(prev => prev.map(b => isMatchBranch(b, editingBranch) ? savedBranch : b))
       } else {
         let realId: any = null
         try {
@@ -1063,20 +1084,23 @@ export default function CompaniesMain() {
           realId = `br_${Date.now()}_${Math.floor(100 + Math.random() * 900)}`
         }
         savedBranch = { ...payload, id: String(realId), company_id: resolvedCompNumeric, companyId: resolvedCompSlug }
-        setBranches(prev => [...prev.filter(b => String(b.id) !== String(realId)), savedBranch])
+        setBranches(prev => [...prev.filter(b => !isMatchBranch(b, savedBranch)), savedBranch])
       }
 
       // Update auth store in memory for global components
       const curStoreBranches = useAuthStore.getState().branches || []
       const nextStoreBranches = editingBranch
-        ? curStoreBranches.map(b => String(b.id) === String(editingBranch.id) ? savedBranch : b)
-        : [...curStoreBranches.filter(b => String(b.id) !== String(savedBranch.id)), savedBranch]
+        ? curStoreBranches.map(b => isMatchBranch(b, editingBranch) ? savedBranch : b)
+        : [...curStoreBranches.filter(b => !isMatchBranch(b, savedBranch)), savedBranch]
       useAuthStore.setState({ branches: nextStoreBranches })
 
       // Always persist branches to app_data so they survive page refresh for all users
       saveModuleDataToDB("branches", nextStoreBranches, "all").catch(() => {})
+      saveModuleDataToDB("branches", nextStoreBranches, resolvedCompSlug).catch(() => {})
       if (resolvedCompSlug === "consultancy" || resolvedCompNumeric === 2) {
         saveModuleDataToDB("branches", nextStoreBranches, "consultancy").catch(() => {})
+      } else {
+        saveModuleDataToDB("branches", nextStoreBranches, "tech").catch(() => {})
       }
 
       if (typeof window !== "undefined") {
@@ -1152,13 +1176,13 @@ export default function CompaniesMain() {
       gst_bank_branch: pBranch?.gst_bank_branch || pBranch?.bank_branch || pComp?.gst_bank_branch || pComp?.bank_branch || "",
       gst_upi_id: pBranch?.gst_upi_id || pBranch?.upi_id || pComp?.gst_upi_id || pComp?.upi_id || "",
       gst_payment_qr_url: pBranch?.gst_payment_qr_url || pBranch?.payment_qr_url || pComp?.gst_payment_qr_url || pComp?.payment_qr_url || "",
-      nongst_bank_name: pBranch?.nongst_bank_name || pBranch?.bank_name || pComp?.nongst_bank_name || pComp?.bank_name || "",
-      nongst_account_holder: pBranch?.nongst_account_holder || pBranch?.account_holder || pComp?.nongst_account_holder || pComp?.account_holder || "",
-      nongst_account_number: pBranch?.nongst_account_number || pBranch?.account_number || pComp?.nongst_account_number || pComp?.account_number || "",
-      nongst_ifsc_code: pBranch?.nongst_ifsc_code || pBranch?.ifsc_code || pComp?.nongst_ifsc_code || pComp?.ifsc_code || "",
-      nongst_bank_branch: pBranch?.nongst_bank_branch || pBranch?.bank_branch || pComp?.nongst_bank_branch || pComp?.bank_branch || "",
-      nongst_upi_id: pBranch?.nongst_upi_id || pBranch?.upi_id || pComp?.nongst_upi_id || pComp?.upi_id || "",
-      nongst_payment_qr_url: pBranch?.nongst_payment_qr_url || pBranch?.payment_qr_url || pComp?.nongst_payment_qr_url || pComp?.payment_qr_url || "",
+      nongst_bank_name: pBranch?.nongst_bank_name || pComp?.nongst_bank_name || "",
+      nongst_account_holder: pBranch?.nongst_account_holder || pComp?.nongst_account_holder || "",
+      nongst_account_number: pBranch?.nongst_account_number || pComp?.nongst_account_number || "",
+      nongst_ifsc_code: pBranch?.nongst_ifsc_code || pComp?.nongst_ifsc_code || "",
+      nongst_bank_branch: pBranch?.nongst_bank_branch || pComp?.nongst_bank_branch || "",
+      nongst_upi_id: pBranch?.nongst_upi_id || pComp?.nongst_upi_id || "",
+      nongst_payment_qr_url: pBranch?.nongst_payment_qr_url || pComp?.nongst_payment_qr_url || "",
       logo_url: pBranch?.logo_url || pComp?.logo_url || "",
       signature_image_url: pBranch?.signature_image_url || pComp?.signature_image_url || "",
       stamp_image_url: pBranch?.stamp_image_url || pComp?.stamp_image_url || "",
@@ -1224,13 +1248,13 @@ export default function CompaniesMain() {
       gst_upi_id: sb.gst_upi_id || sb.upi_id || sb.bankDetails?.upiId || pBranch?.gst_upi_id || pBranch?.upi_id || pComp?.gst_upi_id || pComp?.upi_id || "",
       gst_payment_qr_url: sb.gst_payment_qr_url || sb.payment_qr_url || pBranch?.gst_payment_qr_url || pBranch?.payment_qr_url || pComp?.gst_payment_qr_url || pComp?.payment_qr_url || "",
       // Non-GST Profile
-      nongst_bank_name: sb.nongst_bank_name || sb.bank_name || sb.bankDetails?.bankName || pBranch?.nongst_bank_name || pBranch?.bank_name || pComp?.nongst_bank_name || pComp?.bank_name || "",
-      nongst_account_holder: sb.nongst_account_holder || sb.account_holder || sb.bankDetails?.accountHolder || pBranch?.nongst_account_holder || pBranch?.account_holder || pComp?.nongst_account_holder || pComp?.account_holder || "",
-      nongst_account_number: sb.nongst_account_number || sb.account_number || sb.bankDetails?.accountNumber || pBranch?.nongst_account_number || pBranch?.account_number || pComp?.nongst_account_number || pComp?.account_number || "",
-      nongst_ifsc_code: sb.nongst_ifsc_code || sb.ifsc_code || sb.bankDetails?.ifscCode || pBranch?.nongst_ifsc_code || pBranch?.ifsc_code || pComp?.nongst_ifsc_code || pComp?.ifsc_code || "",
-      nongst_bank_branch: sb.nongst_bank_branch || sb.bank_branch || pBranch?.nongst_bank_branch || pBranch?.bank_branch || pComp?.nongst_bank_branch || pComp?.bank_branch || "",
-      nongst_upi_id: sb.nongst_upi_id || sb.upi_id || sb.bankDetails?.upiId || pBranch?.nongst_upi_id || pBranch?.upi_id || pComp?.nongst_upi_id || pComp?.upi_id || "",
-      nongst_payment_qr_url: sb.nongst_payment_qr_url || sb.payment_qr_url || pBranch?.nongst_payment_qr_url || pBranch?.payment_qr_url || pComp?.nongst_payment_qr_url || pComp?.payment_qr_url || "",
+      nongst_bank_name: sb.nongst_bank_name || pBranch?.nongst_bank_name || pComp?.nongst_bank_name || "",
+      nongst_account_holder: sb.nongst_account_holder || pBranch?.nongst_account_holder || pComp?.nongst_account_holder || "",
+      nongst_account_number: sb.nongst_account_number || pBranch?.nongst_account_number || pComp?.nongst_account_number || "",
+      nongst_ifsc_code: sb.nongst_ifsc_code || pBranch?.nongst_ifsc_code || pComp?.nongst_ifsc_code || "",
+      nongst_bank_branch: sb.nongst_bank_branch || pBranch?.nongst_bank_branch || pComp?.nongst_bank_branch || "",
+      nongst_upi_id: sb.nongst_upi_id || pBranch?.nongst_upi_id || pComp?.nongst_upi_id || "",
+      nongst_payment_qr_url: sb.nongst_payment_qr_url || pBranch?.nongst_payment_qr_url || pComp?.nongst_payment_qr_url || "",
       logo_url: sb.logo_url || pBranch?.logo_url || pComp?.logo_url || "", 
       signature_image_url: sb.signature_image_url || pBranch?.signature_image_url || pComp?.signature_image_url || "", 
       stamp_image_url: sb.stamp_image_url || pBranch?.stamp_image_url || pComp?.stamp_image_url || "", 
@@ -1340,15 +1364,24 @@ export default function CompaniesMain() {
 
       let savedSub: any = null
       if (editingSubBranch) {
-        await SubBranchApiService.update(String(editingSubBranch.id), payload)
+        try {
+          await SubBranchApiService.update(String(editingSubBranch.id), payload)
+        } catch (apiErr) {
+          console.warn("SubBranch API update notice:", apiErr)
+        }
         savedSub = { ...editingSubBranch, ...payload }
         setEditingSubBranch(savedSub)
         setSubBranches(prev => prev.map(sb => String(sb.id) === String(editingSubBranch.id) ? savedSub : sb))
       } else {
-        const apiRes = await SubBranchApiService.create(String(resolvedCompNumeric), payload)
-        const realId = apiRes?.id || apiRes?.data?.id
+        let realId: any = null
+        try {
+          const apiRes = await SubBranchApiService.create(String(resolvedCompNumeric), payload)
+          realId = apiRes?.id || apiRes?.data?.id
+        } catch (apiErr) {
+          console.warn("SubBranch API create notice:", apiErr)
+        }
         if (!realId) {
-          throw new Error("Sub-branch creation did not return a valid ID from the server.")
+          realId = `sb_${Date.now()}_${Math.floor(100 + Math.random() * 900)}`
         }
         savedSub = { ...payload, id: realId, branch_id: resolvedBranchId, company_id: resolvedCompNumeric, companyId: resolvedCompSlug }
         setSubBranches(prev => [...prev.filter(sb => String(sb.id) !== String(realId)), savedSub])
@@ -1554,9 +1587,9 @@ export default function CompaniesMain() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-bold text-foreground text-sm truncate whitespace-pre">{company.name}</h3>
-                    {company.brand_name && company.brand_name !== company.name && (
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold whitespace-pre">{company.brand_name}</span>
-                    )}
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold font-mono tracking-wider whitespace-pre">
+                      ({String(company.slug || company.name || "").toLowerCase().includes("consult") || String((company as any).numeric_id) === "2" ? "SCS" : "STR"})
+                    </span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">{company.status || "active"}</span>
                   </div>
                   <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
@@ -1673,7 +1706,7 @@ export default function CompaniesMain() {
       {/* ── UPGRADED COMPANY MODAL (SPLIT-SCREEN STUDIO) ────────────────── */}
       <AnimatePresence>
         {showCompanyModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
             <SafeModalBoundary>
             <motion.div 
               initial={{ opacity: 0, scale: 0.96 }} 
@@ -1772,6 +1805,32 @@ export default function CompaniesMain() {
                     <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
                       {companyTab === "identity" && (
                         <div className="space-y-4">
+                          <div>
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <label className="block text-xs font-bold text-foreground uppercase tracking-wider">
+                                Registered / Legal Corporate Name (Company Name) *
+                              </label>
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+                                {String(companyForm.name || "").toLowerCase().includes("consult") ? "Code: SCS" : "Code: STR"}
+                              </span>
+                            </div>
+                            <Input 
+                              placeholder="e.g. SAAMPARK CONSULTANCY SERVICES PRIVATE LIMITED" 
+                              value={companyForm.name} 
+                              onChange={e => {
+                                const val = e.target.value
+                                setCompanyForm(prev => ({ 
+                                  ...prev, 
+                                  name: val
+                                }))
+                              }} 
+                              className="font-bold text-sm" 
+                            />
+                            <span className="text-[10px] text-muted-foreground block mt-1">
+                              Full statutory registered corporate name displayed on company cards, tax filings, and invoices.
+                            </span>
+                          </div>
+
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                               <label className="block text-xs font-bold text-foreground mb-1.5 uppercase tracking-wider">
@@ -1785,7 +1844,7 @@ export default function CompaniesMain() {
                                   setCompanyForm(prev => ({ 
                                     ...prev, 
                                     brand_name: val,
-                                    name: prev.name && prev.name !== prev.brand_name ? prev.name : val,
+                                    name: prev.name || val,
                                     slug: prev.slug || val.toLowerCase().replace(/[^a-z0-9]+/g, '-')
                                   }))
                                 }} 

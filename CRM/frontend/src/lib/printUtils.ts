@@ -30,12 +30,13 @@ export function printDocument(elementId: string, title?: string) {
     iframe = document.createElement("iframe")
     iframe.id = "saampark-universal-print-frame"
     iframe.style.position = "fixed"
-    iframe.style.right = "0"
-    iframe.style.bottom = "0"
-    iframe.style.width = "0"
-    iframe.style.height = "0"
+    iframe.style.left = "-9999px"
+    iframe.style.top = "-9999px"
+    iframe.style.width = "794px"
+    iframe.style.height = "1123px"
     iframe.style.border = "none"
     iframe.style.visibility = "hidden"
+    iframe.style.zIndex = "-9999"
     document.body.appendChild(iframe)
   }
 
@@ -95,6 +96,39 @@ export function printDocument(elementId: string, title?: string) {
           overflow: visible !important;
           display: block !important;
         }
+        .print-doc-header-row {
+          display: flex !important;
+          flex-direction: row !important;
+          justify-content: space-between !important;
+          align-items: flex-start !important;
+          width: 100% !important;
+          flex-wrap: nowrap !important;
+          gap: 12px !important;
+        }
+        .print-doc-header-logo {
+          width: 115px !important;
+          min-width: 115px !important;
+          max-width: 115px !important;
+          height: 115px !important;
+          flex-shrink: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+        .print-doc-header-center {
+          flex: 1 1 auto !important;
+          min-width: 280px !important;
+          text-align: center !important;
+        }
+        .print-doc-header-card {
+          width: 200px !important;
+          min-width: 200px !important;
+          max-width: 200px !important;
+          flex-shrink: 0 !important;
+        }
+        .relative {
+          position: relative !important;
+        }
         .avoid-break, .break-inside-avoid, tr, table {
           page-break-inside: avoid !important;
           break-inside: avoid !important;
@@ -102,10 +136,17 @@ export function printDocument(elementId: string, title?: string) {
         .quotation-page-1, .break-after-page, .page-break-after {
           page-break-after: always !important;
           break-after: page !important;
+          display: block !important;
+        }
+        .quotation-middle-pages {
+          page-break-after: always !important;
+          break-after: page !important;
+          display: block !important;
         }
         .quotation-final-page, .break-before-page, .page-break-before {
           page-break-before: always !important;
           break-before: page !important;
+          display: block !important;
         }
       </style>
     </head>
@@ -118,30 +159,49 @@ export function printDocument(elementId: string, title?: string) {
   `)
   doc.close()
 
-  // Wait for resources in the iframe to finish loading before triggering print
+  // Wait for all resources (images, SVGs, stylesheets) in the iframe to finish loading before triggering print
   const triggerIframePrint = () => {
     try {
+      const images = Array.from(doc.images || [])
+      const imagePromises = images.map((img) => {
+        if (img.complete) return Promise.resolve()
+        return new Promise<void>((resolve) => {
+          img.onload = () => resolve()
+          img.onerror = () => resolve()
+          setTimeout(resolve, 800) // Fallback timeout so print never hangs
+        })
+      })
+
+      Promise.all(imagePromises).then(() => {
+        setTimeout(() => {
+          try {
+            iframe?.contentWindow?.focus()
+            iframe?.contentWindow?.print()
+            if (title) document.title = prevTitle
+          } catch (err) {
+            console.warn("Universal iframe print notice, running window.print():", err)
+            window.print()
+            if (title) document.title = prevTitle
+          }
+        }, 150)
+      })
+    } catch {
       iframe?.contentWindow?.focus()
       iframe?.contentWindow?.print()
-      if (title) document.title = prevTitle
-    } catch (err) {
-      console.warn("Universal iframe print notice, running window.print():", err)
-      window.print()
       if (title) document.title = prevTitle
     }
   }
 
-  // If iframe has images or stylesheets, give adequate buffer for full CSS parsing
   if (iframe.contentWindow) {
     if (doc.readyState === "complete") {
-      setTimeout(triggerIframePrint, 500)
+      setTimeout(triggerIframePrint, 200)
     } else {
       iframe.contentWindow.onload = () => {
-        setTimeout(triggerIframePrint, 300)
+        setTimeout(triggerIframePrint, 150)
       }
       setTimeout(triggerIframePrint, 1000)
     }
   } else {
-    setTimeout(triggerIframePrint, 500)
+    setTimeout(triggerIframePrint, 400)
   }
 }

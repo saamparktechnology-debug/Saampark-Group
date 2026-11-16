@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Search, FileSpreadsheet, Printer, LayoutGrid, ChevronDown, X, User, ChevronLeft, ChevronRight } from "lucide-react"
 import { ContactItem } from "../types"
-import { formatDisplayEmail } from "../services/clientService"
+import { formatDisplayEmail } from "../service/clientService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 interface ContactsTableViewProps {

@@ -53,7 +53,7 @@ import {
   updateCustomAdjustmentStatus,
   deleteCustomAdjustment,
   recordTeamPayout
-} from "../services/teamPaymentService"
+} from "../service/teamPaymentService"
 import { RecordPayoutModal } from "../components/RecordPayoutModal"
 import { EditMemberBankingModal } from "../components/EditMemberBankingModal"
 import { TeamPaymentReceiptModal } from "../components/TeamPaymentReceiptModal"

@@ -1,7 +1,7 @@
 import { UserItem, UserRole } from "../types";
 import { api } from "@/lib/api";
 import { usePermissionStore } from "@/store/usePermissionStore";
-import { useAuthStore } from "@/store/useAuthStore";
+import { useAuthStore, isMatchingCompany } from "@/store/useAuthStore";
 import { 
   filterGlobalDeletedItems, 
   markGlobalItemDeleted, 
@@ -1190,27 +1190,28 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   const cleanUsers = Array.from(uniqueUsersMap.values());
   // Do NOT silently overwrite app_data on a GET read operation to prevent losing accounts
 
-  // Store result in cache
-  _usersCacheData = cleanUsers;
+  const targetComp = companyId ? String(companyId).toLowerCase().trim() : "all";
+  const result = (targetComp === "all")
+    ? cleanUsers
+    : cleanUsers.filter((u) => {
+        const uCompIds = (u.companyIds && u.companyIds.length > 0)
+          ? u.companyIds.map(id => String(id).toLowerCase().trim())
+          : [String(u.companyId || "tech").toLowerCase().trim()];
+        if (u.companyName) {
+          uCompIds.push(String(u.companyName).toLowerCase().trim());
+        }
+
+        return uCompIds.includes(targetComp) || 
+               uCompIds.some(id => isMatchingCompany({ id, slug: id } as any, targetComp)) ||
+               isMatchingCompany({ id: u.companyId, slug: u.companyId } as any, targetComp);
+      });
+
+  // Store filtered result in cache for this exact cacheKey
+  _usersCacheData = result;
   _usersCacheTime = Date.now();
   _usersCacheKey = cacheKey;
 
-  if (!companyId || companyId === "all") {
-    return cleanUsers;
-  }
-
-  const targetComp = String(companyId).toLowerCase().trim();
-
-  return cleanUsers.filter((u) => {
-    const uCompIds = (u.companyIds && u.companyIds.length > 0)
-      ? u.companyIds.map(id => String(id).toLowerCase().trim())
-      : [String(u.companyId || "tech").toLowerCase().trim()];
-    if (u.companyName) {
-      uCompIds.push(String(u.companyName).toLowerCase().trim());
-    }
-
-    return uCompIds.includes(targetComp);
-  });
+  return result;
 }
 
 export async function checkUsernameAvailabilityAsync(

@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 
 import { useAuthStore, Company, Branch, SubBranch, getCompanyLogoUrl, getCanonicalCompanyId, getSelectableCompanies, getUserEntityScope, isMatchingCompany } from "@/store/useAuthStore"
-import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
+import { getClients, saveStoredClient } from "@/app/feature/clients/service/clientService"
 import { ClientItem } from "@/app/feature/clients/types"
 import { 
   InvoiceItem, 
@@ -21,12 +21,12 @@ import {
   updateInvoice, 
   generateInvoiceNumber, 
   getInvoices 
-} from "@/app/feature/sales/invoices/services/invoiceService"
+} from "@/app/feature/sales/invoices/service/invoiceService"
 import { UserService } from "@/services/apiServices"
 import { QuotationService, EstimateService } from "@/services/salesService"
 import { numberToIndianWords } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
 import { lookupPincode } from "@/lib/pincodeService"
-import { addSubscription, saveInstallmentRecord } from "@/app/feature/subscriptions/services/subscriptionService"
+import { addSubscription, saveInstallmentRecord } from "@/app/feature/subscriptions/service/subscriptionService"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
@@ -88,15 +88,38 @@ export function DocumentStudioModal({
     return getSelectableCompanies(companies, activeCompanyId, user, branches, subBranches)
   }, [companies, activeCompanyId, user, branches, subBranches])
 
-    const [availableProjects, setAvailableProjects] = React.useState<any[]>([])
+  const [availableProjects, setAvailableProjects] = React.useState<any[]>([])
   const [availableInvoices, setAvailableInvoices] = React.useState<any[]>([])
   const [selectedLinkedProject, setSelectedLinkedProject] = React.useState<string>(initialData?.projectId || initialData?.project || "")
   const [selectedLinkedInvoice, setSelectedLinkedInvoice] = React.useState<string>(initialData?.invoiceId || initialData?.invoiceNumber || "")
+  const [projectFilterQuery, setProjectFilterQuery] = React.useState("")
+  const [invoiceFilterQuery, setInvoiceFilterQuery] = React.useState("")
+
+  const filteredProjects = React.useMemo(() => {
+    if (!projectFilterQuery.trim()) return availableProjects
+    const q = projectFilterQuery.toLowerCase().trim()
+    return availableProjects.filter(p => 
+      (p.name && p.name.toLowerCase().includes(q)) ||
+      (p.clientName && p.clientName.toLowerCase().includes(q)) ||
+      (p.category && p.category.toLowerCase().includes(q))
+    )
+  }, [availableProjects, projectFilterQuery])
+
+  const filteredInvoices = React.useMemo(() => {
+    if (!invoiceFilterQuery.trim()) return availableInvoices
+    const q = invoiceFilterQuery.toLowerCase().trim()
+    return availableInvoices.filter(inv => 
+      (inv.invoiceNumber && inv.invoiceNumber.toLowerCase().includes(q)) ||
+      (inv.client && inv.client.toLowerCase().includes(q)) ||
+      (inv.clientName && inv.clientName.toLowerCase().includes(q)) ||
+      (inv.project && inv.project.toLowerCase().includes(q))
+    )
+  }, [availableInvoices, invoiceFilterQuery])
 
   React.useEffect(() => {
     if (!isOpen) return
     try {
-      import("@/app/feature/projects/services/projectService").then(mod => {
+      import("@/app/feature/projects/service/projectService").then(mod => {
         if (mod && mod.getProjects) {
           mod.getProjects().then((res: any) => setAvailableProjects(res || [])).catch(() => {})
         }
@@ -107,7 +130,6 @@ export function DocumentStudioModal({
 
   const [companyId, setCompanyId] = React.useState<string>(() => {
     if (initialData?.companyId) return initialData.companyId
-    if (isMarketing) return "consultancy"
     if (activeCompanyId && activeCompanyId !== "all") return activeCompanyId
     return "tech"
   })
@@ -267,7 +289,7 @@ export function DocumentStudioModal({
       return
     }
 
-    import("@/app/feature/sales/credit-notes/services/creditNoteService").then(({ getAvailableCreditForClient }) => {
+    import("@/app/feature/sales/credit-notes/service/creditNoteService").then(({ getAvailableCreditForClient }) => {
       getAvailableCreditForClient(targetName, companyId).then(res => {
         setAvailableCredit(res.totalAvailableCredit)
         if (res.totalAvailableCredit > 0 && !initialData?.creditDeduction) {
@@ -347,9 +369,7 @@ export function DocumentStudioModal({
       const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/)
       if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`
     }
-    const d = new Date()
-    d.setDate(d.getDate() + (mode === "quotation" ? 30 : 15))
-    return d.toISOString().split("T")[0]
+    return "" // Always default to unset (0000-00-00) until picked!
   })
 
   // Quotation Specific Fields
@@ -498,7 +518,7 @@ export function DocumentStudioModal({
         const initGst = initialData.clientGstin || initialData.clientGst || ""
 
         const match = initClient 
-          ? cl.find(c => c.name.toLowerCase().trim() === initClient.toLowerCase().trim())
+          ? cl.find(c => String(c.name || "").toLowerCase().trim() === initClient.toLowerCase().trim())
           : null
 
         if (match) {
@@ -762,12 +782,31 @@ export function DocumentStudioModal({
     return items.reduce((sum, it) => sum + ((it.rate || 0) * (it.qty || 1)), 0)
   }, [items])
 
-  const calculatedDiscount = React.useMemo(() => {
-    if (!discountValue || Number(discountValue) <= 0) return 0
-    if (discountType === "percentage") {
-      return Math.round(calculatedSubtotal * (Number(discountValue) / 100))
+  const handleDiscountTypeChange = (newType: "percentage" | "fixed") => {
+    if (newType === discountType) return
+    const curVal = Number(discountValue) || 0
+    if (curVal <= 0 || calculatedSubtotal <= 0) {
+      setDiscountType(newType)
+      return
     }
-    return Number(discountValue)
+    if (newType === "percentage") {
+      const pct = Math.min(100, Math.round((curVal / calculatedSubtotal) * 100))
+      setDiscountValue(pct)
+    } else {
+      const amt = Math.min(calculatedSubtotal, Math.round(calculatedSubtotal * (Math.min(100, curVal) / 100)))
+      setDiscountValue(amt)
+    }
+    setDiscountType(newType)
+  }
+
+  const calculatedDiscount = React.useMemo(() => {
+    const rawVal = Number(discountValue)
+    if (!rawVal || isNaN(rawVal) || rawVal <= 0) return 0
+    if (discountType === "percentage") {
+      const clampedPct = Math.min(100, Math.max(0, rawVal))
+      return Math.round(calculatedSubtotal * (clampedPct / 100))
+    }
+    return Math.min(calculatedSubtotal, Math.max(0, rawVal))
   }, [calculatedSubtotal, discountType, discountValue])
 
   const numSetupCharge = Number(setupCharge) || 0
@@ -920,6 +959,9 @@ export function DocumentStudioModal({
         }
       }
 
+      const selectedBranch = branches.find(b => String(b.id) === String(branchId) || b.name.toLowerCase() === String(branchId).toLowerCase())
+      const selectedSubBranch = subBranches.find(sb => String(sb.id) === String(subBranchId) || sb.name.toLowerCase() === String(subBranchId).toLowerCase())
+
       const finalDocPayload: any = {
         id: docNumber,
         invoiceNumber: docNumber,
@@ -936,7 +978,7 @@ export function DocumentStudioModal({
         clientDistrict: clientDistrict || (selectedClient as any)?.district,
         clientCity: clientCity || selectedClient?.city,
         clientState: clientState || selectedClient?.state,
-        clientGstin: clientGst || selectedClient?.gstNumber,
+        clientGstin: docScheme === "nongst" ? "" : (clientGst || selectedClient?.gstNumber),
         category: effectiveCategory,
         primaryCategory: effectiveCategory,
         project: effectiveProjectName,
@@ -960,8 +1002,10 @@ export function DocumentStudioModal({
         date: issueDate,
         dueDate: dueDate,
         validTill: dueDate,
-        baseAmount: taxableBase,
-        subtotal: taxableBase,
+        baseAmount: calculatedSubtotal,
+        subtotal: calculatedSubtotal,
+        taxableBase: taxableBase,
+        taxableAmount: taxableBase,
         discount: calculatedDiscount,
         creditDeduction: effectiveCreditDeduction,
         setupCharge: numSetupCharge,
@@ -975,7 +1019,11 @@ export function DocumentStudioModal({
         status: effectiveDue === 0 ? "Fully paid" : advancePaidNum > 0 ? "Partially paid" : "Not paid",
         companyId: companyId,
         branchId: branchId || undefined,
+        branchName: selectedBranch?.name || undefined,
+        branchCode: (selectedBranch as any)?.code || undefined,
         subBranchId: subBranchId || undefined,
+        subBranchName: selectedSubBranch?.name || undefined,
+        subBranchCode: (selectedSubBranch as any)?.code || undefined,
         companyDetails: activeCompany,
         items: finalItemsToSave,
         notes: notes,
@@ -1009,8 +1057,26 @@ export function DocumentStudioModal({
       }
 
       if (mode === "invoice") {
-        // Auto-save client ONLY when creating an official invoice (quotations and estimates do not create client accounts)
-        if (clientMode === "custom" || (!selectedClient && clientName.trim())) {
+        // Check if client already exists before creating accounts
+        const targetClientEmail = (clientEmail || selectedClient?.email || "").toLowerCase().trim()
+        const targetClientPhone = (clientPhone || selectedClient?.phone || "").trim()
+        let isExistingClient = Boolean(selectedClient)
+
+        if (!isExistingClient && (targetClientEmail || targetClientPhone || clientName.trim())) {
+          try {
+            const { getClients } = await import("@/app/feature/clients/service/clientService")
+            const clientList = await getClients(companyId)
+            const matched = (Array.isArray(clientList) ? clientList : []).find(c => 
+              (targetClientEmail && c.email && c.email.toLowerCase().trim() === targetClientEmail) ||
+              (targetClientPhone && c.phone && c.phone.trim() === targetClientPhone) ||
+              (clientName && c.name && c.name.toLowerCase().trim() === clientName.toLowerCase().trim())
+            )
+            if (matched) isExistingClient = true
+          } catch {}
+        }
+
+        // Auto-save client ONLY when creating an official invoice and client is new
+        if (!isExistingClient && (clientMode === "custom" || (!selectedClient && clientName.trim()))) {
           try {
             await saveStoredClient({
               id: `cli_${Date.now()}`,
@@ -1024,8 +1090,12 @@ export function DocumentStudioModal({
               district: clientDistrict,
               state: clientState,
               zip: clientPincode,
-              gstNumber: clientGst,
+              gstNumber: docScheme === "nongst" ? "" : clientGst,
               companyId: companyId,
+              branchId: branchId || undefined,
+              branchName: selectedBranch?.name || undefined,
+              subBranchId: subBranchId || undefined,
+              subBranchName: selectedSubBranch?.name || undefined,
               group: "Standard",
               label: "Active",
               labelColor: "#3B82F6",
@@ -1043,29 +1113,60 @@ export function DocumentStudioModal({
         if (initialData?.id) {
           saved = await updateInvoice(finalDocPayload)
         } else {
-          saved = await addInvoice(finalDocPayload)
+          saved = await addInvoice(finalDocPayload, companyId)
         }
 
-        // Automatically create a user account with role "Clients" for this invoice recipient
-        const targetClientEmail = clientEmail || selectedClient?.email
+        // Only send client portal login credentials if this is a NEW client account!
+        // If client already existed, do NOT send login credentials again!
         if (targetClientEmail) {
+          if (!isExistingClient) {
+            try {
+              const { ensureClientUserAccount } = await import("@/app/feature/users/service/userService")
+              await ensureClientUserAccount({
+                email: targetClientEmail,
+                name: contactPersonName.trim() || clientName.trim(),
+                phone: clientPhone || selectedClient?.phone,
+                companyId: companyId,
+              })
+              const { sendClientWelcomeEmailNotification } = await import("@/services/emailNotificationService")
+              sendClientWelcomeEmailNotification({
+                id: selectedClient?.id || `cli_${Date.now()}`,
+                name: clientName.trim(),
+                email: targetClientEmail,
+                primaryContact: contactPersonName.trim() || clientName.trim(),
+                companyId: companyId,
+              } as any).catch(wErr => console.warn("Welcome email notice:", wErr))
+            } catch (uErr) {
+              console.warn("Auto-create client user error:", uErr)
+            }
+          }
+
+          // Always send Invoice Details & Receipt Email to client for every invoice!
           try {
-            const { ensureClientUserAccount } = await import("@/app/feature/users/services/userService")
-            await ensureClientUserAccount({
-              email: targetClientEmail,
-              name: contactPersonName.trim() || clientName.trim(),
-              phone: clientPhone || selectedClient?.phone,
-              companyId: companyId,
+            const { sendInvoiceDetailsEmailNotification, sendPaymentReceiptEmailNotification } = await import("@/services/emailNotificationService")
+            sendInvoiceDetailsEmailNotification(saved || finalDocPayload, targetClientEmail).catch(invErr => {
+              console.warn("Invoice email dispatch notice:", invErr)
             })
-          } catch (uErr) {
-            console.warn("Auto-create client user error:", uErr)
+
+            if (advancePaidNum > 0) {
+              sendPaymentReceiptEmailNotification({
+                invoice: saved || finalDocPayload,
+                paidAmount: `₹${advancePaidNum.toLocaleString("en-IN")}`,
+                remainingDue: `₹${effectiveDue.toLocaleString("en-IN")}`,
+                nextDueDate: dueDate,
+                paymentMethod: "Advance / Bank Transfer",
+                recipientEmail: targetClientEmail,
+              }).catch(rcptErr => console.warn("Receipt email dispatch notice:", rcptErr))
+            }
+          } catch (mailErr) {
+            console.warn("Email service trigger error:", mailErr)
           }
         }
 
         // If credit note balance was deducted against this invoice, update customer's credit note(s)
         if (effectiveCreditDeduction > 0) {
           try {
-            const { applyCreditNoteDeduction } = await import("@/app/feature/sales/credit-notes/services/creditNoteService")
+            const { applyCreditNoteDeduction } = await import("@/app/feature/sales/credit-notes/service/creditNoteService")
             await applyCreditNoteDeduction(
               String(clientName || selectedClient?.name),
               effectiveCreditDeduction,
@@ -1161,46 +1262,164 @@ export function DocumentStudioModal({
         // Auto-link/create project in Projects module
         if (effectiveProjectName && effectiveProjectName.trim()) {
           try {
-            const { getProjects, addProject } = await import("@/app/feature/projects/services/projectService")
+            const { getProjects, addProject } = await import("@/app/feature/projects/service/projectService")
             const existingProjects = await getProjects(companyId)
+            const projectList = Array.isArray(existingProjects) ? existingProjects : []
             const cleanTitle = effectiveProjectName.trim()
-            const found = existingProjects.find(p => p.title.toLowerCase().trim() === cleanTitle.toLowerCase())
-            const isDigitalMarketing = effectiveCategory.toLowerCase().includes("marketing") || Boolean(marketingPackage?.enabled)
-            const mappedMembers = assignedMembers.map(m => ({
-              id: m.memberId,
-              name: m.memberName,
-              role: m.memberRole || (isDigitalMarketing ? "Marketing Specialist" : "Developer"),
-              avatar: m.memberAvatar,
-              avatarUrl: m.memberAvatar,
-            }))
+            const found = projectList.find(p => p.invoiceId && String(p.invoiceId).toUpperCase().trim() === String(docNumber).toUpperCase().trim())
+            const isDigitalMarketing = effectiveCategory === "Digital Marketing" || (
+              effectiveCategory.toLowerCase().includes("marketing") &&
+              !effectiveCategory.toLowerCase().includes("website") &&
+              !effectiveCategory.toLowerCase().includes("software") &&
+              !effectiveCategory.toLowerCase().includes("app") &&
+              !effectiveCategory.toLowerCase().includes("android") &&
+              !effectiveCategory.toLowerCase().includes("ios")
+            )
+            const mappedMembers = assignedMembers.map(m => {
+              const sharePct = 10 // default 10% commission
+              const totalPayout = Math.round((effectiveDocTotal * sharePct) / 100)
+              const earnedPayout = effectiveDocTotal > 0 ? Math.round((advancePaidNum * sharePct) / 100) : 0
+              return {
+                id: m.memberId,
+                name: m.memberName,
+                role: m.memberRole || (isDigitalMarketing ? "Marketing Specialist" : "Developer"),
+                avatar: m.memberAvatar,
+                avatarUrl: m.memberAvatar,
+                sharePercentage: sharePct,
+                payoutType: "percentage" as const,
+                payoutValue: sharePct,
+                payoutAmount: totalPayout,
+                earnedAmount: earnedPayout,
+                pendingAmount: totalPayout - earnedPayout,
+              }
+            })
             if (!found) {
               await addProject({
                 title: cleanTitle,
                 client: String(clientName || selectedClient?.name || "Client"),
-                clientId: selectedClient?.id ? String(selectedClient.id) : undefined,
+                clientName: String(clientName || selectedClient?.name || "Client"),
+                clientEmail: targetClientEmail || clientEmail || selectedClient?.email,
+                clientPhone: targetClientPhone || clientPhone || selectedClient?.phone,
+                clientId: selectedClient?.id ? String(selectedClient.id) : (targetClientEmail || undefined),
+                customer: String(clientName || selectedClient?.name || "Client"),
+                customerEmail: targetClientEmail || clientEmail || selectedClient?.email,
                 projectType: isDigitalMarketing ? "Digital Marketing Campaign" : "Client Project",
                 price: `₹${effectiveDocTotal.toLocaleString("en-IN")}`,
                 startDate: issueDate || new Date().toISOString().split("T")[0],
                 deadline: dueDate || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-                progress: advancePaidNum > 0 ? 15 : 0,
-                status: effectiveDue === 0 ? "Completed" : "In Progress",
+                progress: 0,
+                status: "Open", // Default to Open when invoice created
                 paymentStatus: effectiveDue === 0 ? "Paid" : advancePaidNum > 0 ? "Partially Paid" : "Payment Pending",
                 baseAmount: taxableBase,
                 totalAmount: effectiveDocTotal,
+                paidAmount: advancePaidNum,
+                dueAmount: effectiveDue,
+                invoiceId: docNumber,
+                invoiceNumber: docNumber,
                 companyId: companyId,
                 branchId: branchId || undefined,
                 subBranchId: subBranchId || undefined,
                 members: mappedMembers,
                 marketingPackage: isDigitalMarketing ? marketingPackage : undefined,
-                labels: [isDigitalMarketing ? "Digital Marketing" : "Client Project", effectiveCategory, paymentPlan.toUpperCase()],
+                category: effectiveCategory,
+                labels: [isDigitalMarketing ? "Digital Marketing" : "Client Project", effectiveCategory, paymentPlan.toUpperCase()].filter(Boolean),
                 description: isDigitalMarketing
-                  ? `Digital Marketing Campaign for ${clientName || "Client"} (${marketingPackage.planName || "Grow Plan"}, ${marketingPackage.packageDuration || "1 month"}). Posters: ${marketingPackage.postersCount || 12}, Reels: ${marketingPackage.videosCount || 2}. Target: ${marketingPackage.targetLocations || "Regional"}`
+                  ? `Digital Marketing Campaign for ${clientName || "Client"} (${marketingPackage?.planName || "Grow Plan"}, ${marketingPackage?.packageDuration || "1 month"}). Posters: ${marketingPackage?.postersCount || 12}, Reels: ${marketingPackage?.videosCount || 2}. Target: ${marketingPackage?.targetLocations || "Regional"}`
                   : `Project for ${clientName || "Client"} - Invoice #${docNumber}. Category: ${effectiveCategory}`,
               }, companyId)
+            } else {
+              // Direct sync: Update existing project amount and payment balance to match this invoice
+              try {
+                const { updateProject } = await import("@/app/feature/projects/service/projectService")
+                await updateProject(found.id, {
+                  clientEmail: targetClientEmail || clientEmail || selectedClient?.email,
+                  clientPhone: targetClientPhone || clientPhone || selectedClient?.phone,
+                  price: `₹${effectiveDocTotal.toLocaleString("en-IN")}`,
+                  totalAmount: effectiveDocTotal,
+                  paidAmount: advancePaidNum,
+                  dueAmount: effectiveDue,
+                  invoiceId: docNumber,
+                  invoiceNumber: docNumber,
+                  paymentStatus: effectiveDue === 0 ? "Paid" : advancePaidNum > 0 ? "Partially Paid" : "Payment Pending",
+                  category: effectiveCategory,
+                })
+              } catch {}
             }
           } catch (projErr) {
             console.warn("Auto-create project error:", projErr)
           }
+        }
+
+        // Auto-create campaign in Digital Marketing Hub (/feature/marketing) if digital marketing package
+        const isDigitalMarketingEntity = effectiveCategory === "Digital Marketing" || (
+          effectiveCategory.toLowerCase().includes("marketing") &&
+          !effectiveCategory.toLowerCase().includes("website") &&
+          !effectiveCategory.toLowerCase().includes("software") &&
+          !effectiveCategory.toLowerCase().includes("app") &&
+          !effectiveCategory.toLowerCase().includes("android") &&
+          !effectiveCategory.toLowerCase().includes("ios")
+        )
+
+        if (isDigitalMarketingEntity) {
+          try {
+            const { MarketingService } = await import("@/app/feature/marketing/service/marketingService")
+            const totalCommitment = (marketingPackage?.postersCount || 12) + (marketingPackage?.videosCount || 2)
+            const durMonths = marketingPackage?.packageDuration ? parseInt(marketingPackage.packageDuration) || 1 : 1
+
+            await MarketingService.saveCampaign({
+              id: `camp_${docNumber}`,
+              clientId: selectedClient?.id ? String(selectedClient.id) : (targetClientEmail || `cli_${Date.now()}`),
+              clientName: String(clientName || selectedClient?.name || "Client"),
+              clientEmail: targetClientEmail || clientEmail || selectedClient?.email,
+              clientPhone: targetClientPhone || clientPhone || selectedClient?.phone,
+              companyId: companyId,
+              branchId: branchId || undefined,
+              branchName: selectedBranch?.name || undefined,
+              subBranchId: subBranchId || undefined,
+              subBranchName: selectedSubBranch?.name || undefined,
+              assignedMemberId: assignedMembers.length > 0 ? assignedMembers[0].memberId : undefined,
+              assignedMemberName: assignedMembers.length > 0 ? assignedMembers[0].memberName : undefined,
+              invoiceId: docNumber,
+              packageName: marketingPackage?.planName || effectiveProjectName || "Digital Marketing Retainer",
+              packageDurationMonths: durMonths,
+              startDate: issueDate || new Date().toISOString().split("T")[0],
+              endDate: dueDate || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+              stage: "Pending",
+              status: "Active",
+              totalCommitment: totalCommitment,
+              totalPosted: 0,
+              totalLeads: 0,
+              services: {
+                poster: {
+                  serviceKey: "poster",
+                  serviceName: "Poster",
+                  commitment: marketingPackage?.postersCount || 12,
+                  posted: 0,
+                  views: 0,
+                  reach: 0,
+                  leads: 0,
+                },
+                video: {
+                  serviceKey: "video",
+                  serviceName: "Video",
+                  commitment: marketingPackage?.videosCount || 2,
+                  posted: 0,
+                  views: 0,
+                  reach: 0,
+                  leads: 0,
+                }
+              } as any,
+            })
+          } catch (mktErr) {
+            console.warn("Auto-create digital marketing campaign error:", mktErr)
+          }
+        }
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("storage"))
+          window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+          window.dispatchEvent(new CustomEvent("saampark_invoices_updated"))
+          window.dispatchEvent(new CustomEvent("invoiceCreated", { detail: saved || finalDocPayload }))
         }
 
         onSaveSuccess?.(saved || finalDocPayload)
@@ -1449,7 +1668,7 @@ export function DocumentStudioModal({
     ? (mode === "invoice" 
         ? "Create Digital Marketing Retainer Invoice" 
         : mode === "quotation" 
-        ? "Create Digital Marketing Retainer Proposal (Form No - 9)" 
+        ? "Create Digital Marketing Retainer Proposal" 
         : "Create Digital Marketing Retainer Estimate")
     : (mode === "invoice" 
         ? (docScheme === "gst" ? "Create Official GST Tax Invoice" : "Create Commercial Non-GST Invoice")
@@ -1482,7 +1701,7 @@ export function DocumentStudioModal({
                   mode === "estimate" ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" :
                   docScheme === "gst" ? "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300" : "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300"
                 }`}>
-                  {isMarketing ? "Marketing Retainer" : mode === "quotation" ? "Proposal" : mode === "estimate" ? "Estimate" : docScheme === "gst" ? "GST Invoice" : "Non-GST"}
+                  {isMarketing ? "Marketing Retainer" : mode === "quotation" ? "Quotation" : mode === "estimate" ? "Estimate" : docScheme === "gst" ? "GST Invoice" : "Non-GST"}
                 </span>
               </div>
               <p className="text-[10px] sm:text-[11px] text-zinc-500 font-mono font-bold mt-0.5 truncate">
@@ -1542,7 +1761,7 @@ export function DocumentStudioModal({
                   currentStep === 2 ? "border-purple-600 text-purple-600 bg-white dark:bg-zinc-900 font-bold" : "border-transparent text-zinc-500 hover:text-zinc-800"
                 }`}
               >
-                2. 📱 Retainer Deliverables Quota (Form No - 9)
+                2. 📱 Retainer Deliverables Quota
               </button>
               <button
                 type="button"
@@ -1793,7 +2012,7 @@ export function DocumentStudioModal({
                             />
                             <div className="max-h-52 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800">
                               {allClients
-                                .filter(c => !clientSearchQuery || c.name.toLowerCase().includes(clientSearchQuery.toLowerCase()))
+                                .filter(c => !clientSearchQuery || String(c.name || "").toLowerCase().includes(clientSearchQuery.toLowerCase()))
                                 .map(c => (
                                   <div
                                     key={c.id}
@@ -1846,10 +2065,12 @@ export function DocumentStudioModal({
                         <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Official Email</label>
                         <Input type="email" value={clientEmail} onChange={e => setClientEmail(e.target.value)} placeholder="marketing@apexhealth.in" />
                       </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Client GSTIN (Optional)</label>
-                        <Input value={clientGst} onChange={e => setClientGst(e.target.value.toUpperCase())} placeholder="19AAAAA0000A1Z5" className="font-mono uppercase" />
-                      </div>
+                      {docScheme !== "nongst" && (
+                        <div>
+                          <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Client GSTIN (Optional)</label>
+                          <Input value={clientGst} onChange={e => setClientGst(e.target.value.toUpperCase())} placeholder="19AAAAA0000A1Z5" className="font-mono uppercase" />
+                        </div>
+                      )}
                       <div className="sm:col-span-2">
                         <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Office / Brand Address</label>
                         <Input value={clientAddress} onChange={e => setClientAddress(e.target.value)} placeholder="Suite 401, Park Street, Kolkata" />
@@ -1980,7 +2201,7 @@ export function DocumentStudioModal({
                 </div>
               )}
 
-              {/* Marketing Step 2: 📱 Retainer Deliverables Quota (Form No - 9) */}
+              {/* Marketing Step 2: 📱 Retainer Deliverables Quota */}
               {currentStep === 2 && (
                 <div className="space-y-4">
                   <DigitalMarketingPackageBuilder
@@ -2050,13 +2271,49 @@ export function DocumentStudioModal({
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Commercial Discount (₹)</label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400">
+                            Commercial Discount {discountType === "percentage" ? "(%)" : "(₹)"}
+                          </label>
+                          <div className="flex items-center p-0.5 rounded-lg bg-zinc-200/70 dark:bg-zinc-800 text-[10px] font-bold">
+                            <button
+                              type="button"
+                              onClick={() => handleDiscountTypeChange("fixed")}
+                              className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                                discountType === "fixed"
+                                  ? "bg-white dark:bg-zinc-900 text-purple-600 dark:text-purple-400 shadow-xs"
+                                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                              }`}
+                            >
+                              ₹ Amount
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDiscountTypeChange("percentage")}
+                              className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                                discountType === "percentage"
+                                  ? "bg-white dark:bg-zinc-900 text-purple-600 dark:text-purple-400 shadow-xs"
+                                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                              }`}
+                            >
+                              % Percent
+                            </button>
+                          </div>
+                        </div>
                         <Input
                           type="number"
                           min="0"
+                          max={discountType === "percentage" ? 100 : undefined}
                           value={discountValue === 0 ? "" : discountValue}
-                          onChange={e => setDiscountValue(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
-                          placeholder="e.g. 1000"
+                          onChange={e => {
+                            const val = e.target.value === "" ? "" : Math.max(0, Number(e.target.value))
+                            if (typeof val === "number" && discountType === "percentage" && val > 100) {
+                              setDiscountValue(100)
+                            } else {
+                              setDiscountValue(val)
+                            }
+                          }}
+                          placeholder={discountType === "percentage" ? "e.g. 10 (%)" : "e.g. 1000 (₹)"}
                           className="font-mono font-bold text-rose-600"
                         />
                       </div>
@@ -2449,58 +2706,206 @@ export function DocumentStudioModal({
                 <div className="space-y-5">
                   {/* Link Against Existing Project or Invoice */}
                   <div className="p-3.5 rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-950/20 space-y-2.5">
-                    <span className="text-xs font-extrabold text-indigo-950 dark:text-indigo-200 block">
-                      Proposal Association (Link Against Project or Invoice)
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-extrabold text-indigo-950 dark:text-indigo-200 block">
+                        Proposal Association (Search &amp; Auto-Fill from Project or Invoice)
+                      </span>
+                      <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">
+                        Selecting auto-populates client, services, and technical deliverables
+                      </span>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                          Link Against Existing Project
-                        </label>
-                        <select
-                          value={selectedLinkedProject}
-                          onChange={e => {
-                            const val = e.target.value
-                            setSelectedLinkedProject(val)
-                            const p = availableProjects.find(pr => String(pr.id) === val || pr.name === val)
-                            if (p) {
-                              setProjectTitle(p.name || "")
-                              if (p.clientName && !clientName) setClientName(p.clientName)
-                            }
-                          }}
-                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold"
-                        >
-                          <option value="">-- No Project (New Commercial Opportunity) --</option>
-                          {availableProjects.map(p => (
-                            <option key={p.id} value={p.id}>{p.name} {p.clientName ? `(${p.clientName})` : ""}</option>
-                          ))}
-                        </select>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400">
+                            Search &amp; Link Existing Project
+                          </label>
+                          {selectedLinkedProject && (
+                            <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400">✓ Auto-filled</span>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          <input
+                            type="text"
+                            placeholder="🔍 Search projects by title or client..."
+                            value={projectFilterQuery}
+                            onChange={e => setProjectFilterQuery(e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs"
+                          />
+                          <select
+                            value={selectedLinkedProject}
+                            onChange={e => {
+                              const val = e.target.value
+                              setSelectedLinkedProject(val)
+                              if (!val) return
+                              const p = availableProjects.find(pr => String(pr.id) === val || pr.name === val)
+                              if (p) {
+                                if (p.name) setProjectTitle(p.name)
+                                if (p.category) setPrimaryCategory(p.category)
+                                if (p.overview || p.description) setProjectOverview(p.overview || p.description)
+                                if (p.timeline) setProjectTimeline(p.timeline)
+                                if (p.turnaroundTime) setTurnaroundTime(p.turnaroundTime)
+
+                                const matchedClient = (allClients || []).find((c: any) => 
+                                  (p.clientId && String(c.id) === String(p.clientId)) ||
+                                  (p.clientName && String(c.name || "").toLowerCase().trim() === String(p.clientName).toLowerCase().trim())
+                                )
+                                if (matchedClient) {
+                                  setSelectedClient(matchedClient)
+                                  setClientName(matchedClient.name || "")
+                                  setClientEmail(matchedClient.email || "")
+                                  setClientPhone(matchedClient.phone || "")
+                                  setClientAddress(matchedClient.address || "")
+                                  setClientCity(matchedClient.city || "")
+                                  setClientState(matchedClient.state || "")
+                                  setClientDistrict(matchedClient.district || "")
+                                  setClientPincode(matchedClient.zip || "")
+                                  setClientGst(matchedClient.gstNumber || "")
+                                  setContactPersonName(matchedClient.primaryContact || matchedClient.contactPerson || "")
+                                  setClientDesignation(matchedClient.designation || "Proprietor")
+                                } else if (p.clientName) {
+                                  setClientName(p.clientName)
+                                  if (p.clientEmail) setClientEmail(p.clientEmail)
+                                  if (p.clientPhone) setClientPhone(p.clientPhone)
+                                  if (p.clientAddress) setClientAddress(p.clientAddress)
+                                  if (p.clientCity) setClientCity(p.clientCity)
+                                  if (p.clientState) setClientState(p.clientState)
+                                  if (p.clientGst) setClientGst(p.clientGst)
+                                }
+
+                                if (Array.isArray(p.deliverables) && p.deliverables.length > 0) {
+                                  setDeliverables(p.deliverables)
+                                }
+                                if (Array.isArray(p.services) && p.services.length > 0) {
+                                  setItems(p.services.map((s: any, idx: number) => ({
+                                    id: s.id || `item_${idx + 1}`,
+                                    serviceName: s.name || s.serviceName || `Service ${idx + 1}`,
+                                    description: s.description || "",
+                                    sacCode: s.sac || s.sacCode || "998311",
+                                    qty: Number(s.quantity || s.qty || 1),
+                                    rate: Number(s.unitPrice || s.rate || 0),
+                                    gstRate: docScheme === "gst" ? 18 : 0,
+                                    totalAmount: Number(s.total || ((s.unitPrice || s.rate || 0) * (s.quantity || s.qty || 1)))
+                                  })))
+                                } else if (Array.isArray(p.items) && p.items.length > 0) {
+                                  setItems(p.items.map((it: any, idx: number) => ({
+                                    id: it.id || `item_${idx + 1}`,
+                                    serviceName: it.serviceName || it.name || `Service ${idx + 1}`,
+                                    description: it.description || "",
+                                    sacCode: it.sacCode || it.sac || "998311",
+                                    qty: Number(it.qty || it.quantity || 1),
+                                    rate: Number(it.rate || it.unitPrice || 0),
+                                    gstRate: docScheme === "gst" ? 18 : 0,
+                                    totalAmount: Number(it.totalAmount || it.total || ((it.rate || it.unitPrice || 0) * (it.qty || it.quantity || 1)))
+                                  })))
+                                }
+                              }
+                            }}
+                            className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold"
+                          >
+                            <option value="">-- No Project (New Commercial Opportunity) --</option>
+                            {filteredProjects.map(p => (
+                              <option key={p.id} value={p.id}>{p.name} {p.clientName ? `(${p.clientName})` : ""}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                          Link Against Existing Invoice
-                        </label>
-                        <select
-                          value={selectedLinkedInvoice}
-                          onChange={e => {
-                            const val = e.target.value
-                            setSelectedLinkedInvoice(val)
-                            const inv = availableInvoices.find(i => String(i.id) === val || i.invoiceNumber === val)
-                            if (inv) {
-                              if (inv.client && !clientName) setClientName(inv.client)
-                              if (inv.project && !projectTitle) setProjectTitle(inv.project)
-                            }
-                          }}
-                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold"
-                        >
-                          <option value="">-- No Linked Invoice --</option>
-                          {availableInvoices.map(inv => (
-                            <option key={inv.id || inv.invoiceNumber} value={inv.id || inv.invoiceNumber}>
-                              {inv.invoiceNumber || inv.id} — {inv.client || "Client"} (₹{Number(inv.total || 0).toLocaleString("en-IN")})
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400">
+                            Search &amp; Link Existing Invoice
+                          </label>
+                          {selectedLinkedInvoice && (
+                            <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400">✓ Auto-filled</span>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          <input
+                            type="text"
+                            placeholder="🔍 Search invoices by number or client..."
+                            value={invoiceFilterQuery}
+                            onChange={e => setInvoiceFilterQuery(e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs"
+                          />
+                          <select
+                            value={selectedLinkedInvoice}
+                            onChange={e => {
+                              const val = e.target.value
+                              setSelectedLinkedInvoice(val)
+                              if (!val) return
+                              const inv = availableInvoices.find(i => String(i.id) === val || i.invoiceNumber === val)
+                              if (inv) {
+                                if (inv.project) setProjectTitle(inv.project)
+                                else if (inv.projectName) setProjectTitle(inv.projectName)
+                                if (inv.category) setPrimaryCategory(inv.category)
+                                if (inv.isNonGst || inv.taxType === "nongst") handleSchemeChange("nongst")
+                                else if (inv.taxType === "gst") handleSchemeChange("gst")
+
+                                const matchedClient = (allClients || []).find((c: any) => 
+                                  (inv.clientId && String(c.id) === String(inv.clientId)) ||
+                                  (inv.client && String(c.name || "").toLowerCase().trim() === String(inv.client).toLowerCase().trim()) ||
+                                  (inv.clientName && String(c.name || "").toLowerCase().trim() === String(inv.clientName).toLowerCase().trim())
+                                )
+                                if (matchedClient) {
+                                  setSelectedClient(matchedClient)
+                                  setClientName(matchedClient.name || "")
+                                  setClientEmail(matchedClient.email || "")
+                                  setClientPhone(matchedClient.phone || "")
+                                  setClientAddress(matchedClient.address || "")
+                                  setClientCity(matchedClient.city || "")
+                                  setClientState(matchedClient.state || "")
+                                  setClientDistrict(matchedClient.district || "")
+                                  setClientPincode(matchedClient.zip || "")
+                                  setClientGst(matchedClient.gstNumber || "")
+                                  setContactPersonName(matchedClient.primaryContact || matchedClient.contactPerson || "")
+                                  setClientDesignation(matchedClient.designation || "Proprietor")
+                                } else {
+                                  if (inv.client || inv.clientName) setClientName(inv.client || inv.clientName)
+                                  if (inv.clientEmail || inv.customerEmail) setClientEmail(inv.clientEmail || inv.customerEmail)
+                                  if (inv.clientPhone || inv.customerPhone) setClientPhone(inv.clientPhone || inv.customerPhone)
+                                  if (inv.clientAddress || inv.customerAddress) setClientAddress(inv.clientAddress || inv.customerAddress)
+                                  if (inv.clientCity) setClientCity(inv.clientCity)
+                                  if (inv.clientState) setClientState(inv.clientState)
+                                  if (inv.clientGst || inv.clientGstin) setClientGst(inv.clientGst || inv.clientGstin)
+                                  if (inv.contactPersonName || inv.primaryContact) setContactPersonName(inv.contactPersonName || inv.primaryContact)
+                                }
+
+                                if (Array.isArray(inv.items) && inv.items.length > 0) {
+                                  setItems(inv.items.map((it: any, idx: number) => ({
+                                    id: it.id || `item_${idx + 1}`,
+                                    serviceName: it.serviceName || it.name || it.item_name || `Service ${idx + 1}`,
+                                    description: it.description || "",
+                                    sacCode: it.sacCode || it.sac || it.hsnCode || "998311",
+                                    qty: Number(it.qty || it.quantity || 1),
+                                    rate: Number(it.rate || it.unitPrice || 0),
+                                    gstRate: it.gstRate ?? (docScheme === "gst" ? 18 : 0),
+                                    totalAmount: Number(it.totalAmount || it.total || ((it.rate || it.unitPrice || 0) * (it.qty || it.quantity || 1)))
+                                  })))
+                                } else if (Array.isArray(inv.services) && inv.services.length > 0) {
+                                  setItems(inv.services.map((s: any, idx: number) => ({
+                                    id: s.id || `item_${idx + 1}`,
+                                    serviceName: s.serviceName || s.name || `Service ${idx + 1}`,
+                                    description: s.description || "",
+                                    sacCode: s.sacCode || s.sac || "998311",
+                                    qty: Number(s.qty || s.quantity || 1),
+                                    rate: Number(s.rate || s.unitPrice || 0),
+                                    gstRate: s.gstRate ?? (docScheme === "gst" ? 18 : 0),
+                                    totalAmount: Number(s.totalAmount || s.total || ((s.rate || s.unitPrice || 0) * (s.qty || s.quantity || 1)))
+                                  })))
+                                }
+                              }
+                            }}
+                            className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold"
+                          >
+                            <option value="">-- No Linked Invoice --</option>
+                            {filteredInvoices.map(inv => (
+                              <option key={inv.id || inv.invoiceNumber} value={inv.id || inv.invoiceNumber}>
+                                {inv.invoiceNumber || inv.id} — {inv.client || "Client"} (₹{Number(inv.total || 0).toLocaleString("en-IN")})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2602,6 +3007,70 @@ export function DocumentStudioModal({
                           {branchSubBranches.map(sb => (
                             <option key={sb.id} value={sb.id}>🤝 {sb.name}</option>
                           ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                          Primary Service Category *
+                        </label>
+                        <select
+                          value={primaryCategory}
+                          onChange={e => {
+                            const cat = e.target.value
+                            setPrimaryCategory(cat)
+                            if (cat === "Digital Marketing") {
+                              const defaultPkg = createDefaultMarketingPackage("Package 02 - Grow")
+                              setMarketingPackage(defaultPkg)
+                              if (!projectTitle || projectTitle === "Commercial Project Proposal" || projectTitle === "Enterprise Cloud ERP Implementation") {
+                                setProjectTitle(`${defaultPkg.planName} - Digital Marketing Retainer`)
+                              }
+                              if (!projectOverview) {
+                                setProjectOverview("Comprehensive 360° Digital Marketing Retainer including Social Media Management, Creative Designing, Performance Ads Campaign Management, and Monthly Brand Growth.")
+                              }
+                              setProjectTimeline("1 Month (Renewable Retainer)")
+                              setTurnaroundTime("Ongoing Weekly Deliverables")
+                              setDeliverables([
+                                { id: "del-1", title: "Social Media Posts & Creatives", description: `${defaultPkg.postersCount || 12} High-Impact Brand Creatives designed & scheduled across Meta & Google`, duration: "1 Month" },
+                                { id: "del-2", title: "Video Reels & Motion Creatives", description: `${defaultPkg.videosCount || 2} Dynamic AI / Motion Video Reels with trending audio & hooks`, duration: "1 Month" },
+                                { id: "del-3", title: "Ad Campaign & Lead Generation Setup", description: "Meta Ads & Google Ads budget planning, target audience research, A/B testing & optimization", duration: "Ongoing" },
+                                { id: "del-4", title: "Monthly Performance & ROI Reporting", description: "Monthly analytics report covering reach, impressions, leads, conversion metrics & next steps", duration: "End of Month" },
+                              ])
+                              setItems([{
+                                id: "mktg-pkg-1",
+                                serviceName: defaultPkg.planName,
+                                sacCode: "998311",
+                                qty: 1,
+                                rate: defaultPkg.packagePrice,
+                                unit: "Month",
+                                gstRate: docScheme === "gst" ? 18 : 0,
+                                gstAmount: docScheme === "gst" ? Math.round(defaultPkg.packagePrice * 0.18) : 0,
+                                charges: [],
+                                totalAmount: docScheme === "gst" ? Math.round(defaultPkg.packagePrice * 1.18) : defaultPkg.packagePrice,
+                              }])
+                            } else if (items.length === 1 && (items[0].id === "mktg-pkg-1" || (items[0].serviceName && items[0].serviceName.includes("Package ")))) {
+                              setItems([{
+                                id: "item-1",
+                                serviceName: cat === "Website" ? "Website Development" : cat === "Custom Software" ? "Custom Software Application" : cat,
+                                sacCode: "998313",
+                                qty: 1,
+                                rate: 25000,
+                                unit: "Project",
+                                gstRate: docScheme === "gst" ? 18 : 0,
+                                gstAmount: docScheme === "gst" ? 4500 : 0,
+                                charges: [],
+                                totalAmount: docScheme === "gst" ? 29500 : 25000,
+                              }])
+                            }
+                          }}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500"
+                        >
+                          <option value="Website">Website Development</option>
+                          <option value="Custom Software">Custom Software Application</option>
+                          <option value="Android / iOS Mobile App">Android / iOS Mobile App</option>
+                          <option value="Cloud Infrastructure">Cloud Infrastructure &amp; Domain</option>
+                          <option value="Digital Marketing">Digital Marketing &amp; Social Media Retainer</option>
+                          <option value="Custom">Custom / Other Services</option>
                         </select>
                       </div>
 
@@ -2709,7 +3178,7 @@ export function DocumentStudioModal({
                             />
                             <div className="max-h-52 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800">
                               {allClients
-                                .filter(c => !clientSearchQuery || c.name.toLowerCase().includes(clientSearchQuery.toLowerCase()))
+                                .filter(c => !clientSearchQuery || String(c.name || "").toLowerCase().includes(clientSearchQuery.toLowerCase()))
                                 .map(c => (
                                   <div
                                     key={c.id}
@@ -2794,6 +3263,46 @@ export function DocumentStudioModal({
               {/* Step 2: Scope of Work & Deliverables */}
               {currentStep === 2 && (
                 <div className="space-y-5">
+                  {primaryCategory === "Digital Marketing" && (
+                    <div className="p-4 rounded-2xl border border-purple-200 dark:border-purple-800 bg-purple-50/40 dark:bg-purple-950/20 space-y-3">
+                      <div className="flex items-center justify-between border-b border-purple-200 dark:border-purple-800 pb-2">
+                        <span className="font-extrabold text-purple-950 dark:text-purple-200 text-xs flex items-center gap-1.5">
+                          <Sparkles size={15} className="text-purple-600" />
+                          <span>Digital Marketing Retainer Package Configuration</span>
+                        </span>
+                        <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/60 px-2.5 py-0.5 rounded-full">
+                          Retainer Deliverables SLA
+                        </span>
+                      </div>
+                      <DigitalMarketingPackageBuilder
+                        value={marketingPackage}
+                        clientName={clientName}
+                        clientPhone={clientPhone}
+                        clientAddress={clientAddress}
+                        onChange={newPkg => {
+                          setMarketingPackage(newPkg)
+                          setDeliverables([
+                            { id: "del-1", title: "Social Media Posts & Creatives", description: `${newPkg.postersCount || 12} High-Impact Brand Creatives designed & scheduled across Meta & Google`, duration: `${newPkg.packageDuration || "1 month"}` },
+                            { id: "del-2", title: "Video Reels & Motion Creatives", description: `${newPkg.videosCount || 2} Dynamic AI / Motion Video Reels with trending audio & hooks`, duration: `${newPkg.packageDuration || "1 month"}` },
+                            { id: "del-3", title: "Ad Campaign & Lead Generation Setup", description: "Meta Ads & Google Ads budget planning, target audience research, A/B testing & optimization", duration: "Ongoing" },
+                            { id: "del-4", title: "Monthly Performance & ROI Reporting", description: "Monthly analytics report covering reach, impressions, leads, conversion metrics & next steps", duration: "End of Month" },
+                          ])
+                          setItems([{
+                            id: "mktg-pkg-1",
+                            serviceName: newPkg.planName,
+                            sacCode: "998311",
+                            qty: 1,
+                            rate: newPkg.packagePrice,
+                            unit: "Month",
+                            gstRate: docScheme === "gst" ? 18 : 0,
+                            gstAmount: docScheme === "gst" ? Math.round(newPkg.packagePrice * 0.18) : 0,
+                            charges: [],
+                            totalAmount: docScheme === "gst" ? Math.round(newPkg.packagePrice * 1.18) : newPkg.packagePrice,
+                          }])
+                        }}
+                      />
+                    </div>
+                  )}
                   {/* Modules / Deliverables */}
                   <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
                     <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700/60 pb-2">
@@ -2891,6 +3400,105 @@ export function DocumentStudioModal({
               {/* Step 3: Commercial Pricing & Payment Terms */}
               {currentStep === 3 && (
                 <div className="space-y-5">
+                  {/* Primary Service Category Selector & Marketing Package Configurator */}
+                  <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-700/60 pb-2.5">
+                      <div>
+                        <span className="font-extrabold text-xs text-zinc-800 dark:text-zinc-200 block">
+                          Primary Service Category *
+                        </span>
+                        <span className="text-[11px] text-zinc-500">
+                          Select category to configure quotation line items or digital marketing retainer packages
+                        </span>
+                      </div>
+                      <select
+                        value={primaryCategory}
+                        onChange={e => {
+                          const cat = e.target.value
+                          setPrimaryCategory(cat)
+                          if (cat === "Digital Marketing") {
+                            const defaultPkg = createDefaultMarketingPackage("Package 02 - Grow")
+                            setMarketingPackage(defaultPkg)
+                            setItems([{
+                              id: "mktg-pkg-1",
+                              serviceName: `Digital Marketing Retainer - ${defaultPkg.planName}`,
+                              sacCode: "998311",
+                              qty: 1,
+                              rate: defaultPkg.packagePrice,
+                              unit: defaultPkg.packageDuration || "1 Month",
+                              gstRate: docScheme === "gst" ? 18 : 0,
+                              gstAmount: docScheme === "gst" ? Math.round(defaultPkg.packagePrice * 0.18) : 0,
+                              charges: [],
+                              totalAmount: docScheme === "gst" ? Math.round(defaultPkg.packagePrice * 1.18) : defaultPkg.packagePrice,
+                            }])
+                            setProjectTitle(`${defaultPkg.planName} - Digital Marketing Retainer`)
+                            setProjectOverview("Comprehensive 360° Digital Marketing Retainer including Social Media Management, Creative Designing, Performance Ads Campaign Management, and Monthly Brand Growth.")
+                            setDeliverables([
+                              { id: "del-1", title: "Social Media Posts & Creatives", description: `${defaultPkg.postersCount || 12} High-Impact Brand Creatives designed & scheduled across Meta & Google`, duration: `${defaultPkg.packageDuration || "1 month"}` },
+                              { id: "del-2", title: "Video Reels & Motion Creatives", description: `${defaultPkg.videosCount || 2} Dynamic AI / Motion Video Reels with trending audio & hooks`, duration: `${defaultPkg.packageDuration || "1 month"}` },
+                              { id: "del-3", title: "Ad Campaign & Lead Generation Setup", description: "Meta Ads & Google Ads budget planning, target audience research, A/B testing & optimization", duration: "Ongoing" },
+                              { id: "del-4", title: "Monthly Performance & ROI Reporting", description: "Monthly analytics report covering reach, impressions, leads, conversion metrics & next steps", duration: "End of Month" },
+                            ])
+                          } else if (items.length === 1 && (items[0].id === "mktg-pkg-1" || (items[0].serviceName && items[0].serviceName.includes("Package ")))) {
+                            setItems([{
+                              id: "item-1",
+                              serviceName: cat === "Website" ? "Website Development" : cat === "Custom Software" ? "Custom Software Application" : cat,
+                              sacCode: "998313",
+                              qty: 1,
+                              rate: 25000,
+                              unit: "Project",
+                              gstRate: docScheme === "gst" ? 18 : 0,
+                              gstAmount: docScheme === "gst" ? 4500 : 0,
+                              charges: [],
+                              totalAmount: docScheme === "gst" ? 29500 : 25000,
+                            }])
+                          }
+                        }}
+                        className="px-3.5 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="Website">Website Development</option>
+                        <option value="Custom Software">Custom Software Application</option>
+                        <option value="Android / iOS Mobile App">Android / iOS Mobile App</option>
+                        <option value="Cloud Infrastructure">Cloud Infrastructure & Domain</option>
+                        <option value="Digital Marketing">Digital Marketing & Social Media Retainer</option>
+                        <option value="Custom">Custom / Other Services</option>
+                      </select>
+                    </div>
+
+                    {primaryCategory === "Digital Marketing" && (
+                      <DigitalMarketingPackageBuilder
+                        value={marketingPackage}
+                        clientName={clientName}
+                        clientPhone={clientPhone}
+                        clientAddress={clientAddress}
+                        onChange={newPkg => {
+                          setMarketingPackage(newPkg)
+                          setItems([{
+                            id: "mktg-pkg-1",
+                            serviceName: `Digital Marketing Retainer - ${newPkg.planName}`,
+                            sacCode: "998311",
+                            qty: 1,
+                            rate: newPkg.packagePrice,
+                            unit: newPkg.packageDuration || "1 Month",
+                            gstRate: docScheme === "gst" ? 18 : 0,
+                            gstAmount: docScheme === "gst" ? Math.round(newPkg.packagePrice * 0.18) : 0,
+                            charges: [],
+                            totalAmount: docScheme === "gst" ? Math.round(newPkg.packagePrice * 1.18) : newPkg.packagePrice,
+                          }])
+                          setDeliverables([
+                            { id: "del-1", title: "Social Media Posts & Creatives", description: `${newPkg.postersCount || 12} High-Impact Brand Creatives designed & scheduled across Meta & Google`, duration: `${newPkg.packageDuration || "1 month"}` },
+                            { id: "del-2", title: "Video Reels & Motion Creatives", description: `${newPkg.videosCount || 2} Dynamic AI / Motion Video Reels with trending audio & hooks`, duration: `${newPkg.packageDuration || "1 month"}` },
+                            { id: "del-3", title: "Ad Campaign & Lead Generation Setup", description: "Meta Ads & Google Ads budget planning, target audience research, A/B testing & optimization", duration: "Ongoing" },
+                            { id: "del-4", title: "Monthly Performance & ROI Reporting", description: "Monthly analytics report covering reach, impressions, leads, conversion metrics & next steps", duration: "End of Month" },
+                          ])
+                          if (!projectTitle || projectTitle.includes("Digital Marketing")) {
+                            setProjectTitle(`${newPkg.planName} - Digital Marketing Retainer`)
+                          }
+                        }}
+                      />
+                    )}
+                  </div>
+
                   {/* Commercial Line Items */}
                   <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
                     <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700/60 pb-2">
@@ -2911,20 +3519,67 @@ export function DocumentStudioModal({
                       {items.map((item, index) => (
                         <div key={item.id} className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
                           <div className="sm:col-span-6">
-                            <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Service / Component Description *</label>
-                            <Input
-                              value={item.serviceName}
-                              onChange={e => handleUpdateItem(item.id, "serviceName", e.target.value)}
-                              placeholder="e.g. Platform Architecture & Backend API"
-                              className="font-bold"
-                            />
+                            <div className="flex items-center justify-between mb-0.5">
+                              <label className="block text-[10px] font-bold text-zinc-500">Service / Component Description *</label>
+                              {primaryCategory !== "Digital Marketing" && (
+                                <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400">Preset / Custom</span>
+                              )}
+                            </div>
+                            {primaryCategory !== "Digital Marketing" ? (
+                              <div className="space-y-1">
+                                <select
+                                  value={
+                                    SERVICE_PRESETS.some(p => p.name.toLowerCase() === (item.serviceName || "").toLowerCase())
+                                      ? SERVICE_PRESETS.find(p => p.name.toLowerCase() === (item.serviceName || "").toLowerCase())?.name
+                                      : (item.serviceName ? "custom" : "")
+                                  }
+                                  onChange={(e) => {
+                                    const val = e.target.value
+                                    if (val === "custom") {
+                                      if (SERVICE_PRESETS.some(p => p.name === item.serviceName)) {
+                                        handleUpdateItem(item.id, "serviceName", "")
+                                      }
+                                    } else if (val) {
+                                      const preset = SERVICE_PRESETS.find(p => p.name === val)
+                                      if (preset) {
+                                        handleUpdateItem(item.id, "serviceName", preset.name)
+                                        if (preset.unit) handleUpdateItem(item.id, "unit", preset.unit)
+                                        if (preset.rate && (!item.rate || item.rate === 0)) handleUpdateItem(item.id, "rate", preset.rate)
+                                      }
+                                    }
+                                  }}
+                                  className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-semibold text-zinc-800 dark:text-zinc-200 outline-none focus:border-indigo-500 cursor-pointer mb-1"
+                                >
+                                  <option value="" disabled>Select Preset or Custom...</option>
+                                  {SERVICE_PRESETS.map((preset) => (
+                                    <option key={preset.name} value={preset.name}>
+                                      {preset.name}
+                                    </option>
+                                  ))}
+                                  <option value="custom">✏️ Custom Service / Item</option>
+                                </select>
+                                <Input
+                                  value={item.serviceName}
+                                  onChange={e => handleUpdateItem(item.id, "serviceName", e.target.value)}
+                                  placeholder="e.g. Platform Architecture & Backend API"
+                                  className="font-bold text-xs"
+                                />
+                              </div>
+                            ) : (
+                              <Input
+                                value={item.serviceName}
+                                onChange={e => handleUpdateItem(item.id, "serviceName", e.target.value)}
+                                placeholder="e.g. Digital Marketing Retainer"
+                                className="font-bold text-xs"
+                              />
+                            )}
                           </div>
                           <div className="sm:col-span-2">
                             <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Unit</label>
                             <Input
-                              value={item.unit || "Project"}
+                              value={item.unit || (primaryCategory === "Digital Marketing" ? "Month" : "Project")}
                               onChange={e => handleUpdateItem(item.id, "unit", e.target.value)}
-                              placeholder="Project / Sprint"
+                              placeholder="Project / Month"
                             />
                           </div>
                           <div className="sm:col-span-3">
@@ -3469,7 +4124,7 @@ export function DocumentStudioModal({
                             />
                             <div className="max-h-52 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800">
                               {allClients
-                                .filter(c => !clientSearchQuery || c.name.toLowerCase().includes(clientSearchQuery.toLowerCase()))
+                                .filter(c => !clientSearchQuery || String(c.name || "").toLowerCase().includes(clientSearchQuery.toLowerCase()))
                                 .map(c => (
                                   <div
                                     key={c.id}
@@ -3554,10 +4209,12 @@ export function DocumentStudioModal({
                         <Input value={clientEmail} onChange={e => setClientEmail(e.target.value)} placeholder="client@company.com" />
                       </div>
 
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Client GSTIN (if applicable)</label>
-                        <Input value={clientGst} onChange={e => setClientGst(e.target.value.toUpperCase())} className="font-mono uppercase" placeholder="19AAAAA0000A1Z5" />
-                      </div>
+                      {docScheme !== "nongst" && (
+                        <div>
+                          <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Client GSTIN (if applicable)</label>
+                          <Input value={clientGst} onChange={e => setClientGst(e.target.value.toUpperCase())} className="font-mono uppercase" placeholder="19AAAAA0000A1Z5" />
+                        </div>
+                      )}
 
                       <div>
                         <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5 flex items-center justify-between">
@@ -3742,25 +4399,7 @@ export function DocumentStudioModal({
                           }])
                         }}
                       />
-                    ) : (
-                      <div>
-                        <span className="text-[10.5px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">
-                          Quick Service Presets:
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {SERVICE_PRESETS.map((preset, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => handleAddItem(preset)}
-                              className="px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-800 hover:bg-teal-50 hover:text-teal-700 border border-zinc-200 dark:border-zinc-700 text-[11px] font-semibold transition-colors cursor-pointer"
-                            >
-                              + {preset.name} (₹{preset.rate.toLocaleString("en-IN")})
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    ) : null}
                   </div>
 
                   {/* Line Items List */}
@@ -3804,10 +4443,52 @@ export function DocumentStudioModal({
 
                             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
                               <div className="sm:col-span-4">
-                                <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">
-                                  {(mode as any) === "quotation" ? "Module / Feature Name *" : "Service / Project Item *"}
-                                </label>
-                                <Input value={item.serviceName} onChange={e => handleUpdateItem(item.id, "serviceName", e.target.value)} className="font-bold" />
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="block text-[10px] font-bold text-zinc-500">
+                                    {(mode as any) === "quotation" ? "Module / Feature Name *" : "Service / Project Item *"}
+                                  </label>
+                                  <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400">Preset / Custom</span>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <select
+                                    value={
+                                      SERVICE_PRESETS.some(p => p.name.toLowerCase() === (item.serviceName || "").toLowerCase())
+                                        ? SERVICE_PRESETS.find(p => p.name.toLowerCase() === (item.serviceName || "").toLowerCase())?.name
+                                        : (item.serviceName ? "custom" : "")
+                                    }
+                                    onChange={(e) => {
+                                      const val = e.target.value
+                                      if (val === "custom") {
+                                        if (SERVICE_PRESETS.some(p => p.name === item.serviceName)) {
+                                          handleUpdateItem(item.id, "serviceName", "")
+                                        }
+                                      } else if (val) {
+                                        const preset = SERVICE_PRESETS.find(p => p.name === val)
+                                        if (preset) {
+                                          handleUpdateItem(item.id, "serviceName", preset.name)
+                                          if (preset.sac) handleUpdateItem(item.id, "sacCode", preset.sac)
+                                          if (preset.rate && (!item.rate || item.rate === 0)) handleUpdateItem(item.id, "rate", preset.rate)
+                                          if (preset.unit) handleUpdateItem(item.id, "unit", preset.unit)
+                                        }
+                                      }
+                                    }}
+                                    className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-semibold text-zinc-800 dark:text-zinc-200 outline-none focus:border-teal-500 cursor-pointer"
+                                  >
+                                    <option value="" disabled>Select Preset or Custom...</option>
+                                    {SERVICE_PRESETS.map((preset) => (
+                                      <option key={preset.name} value={preset.name}>
+                                        {preset.name}
+                                      </option>
+                                    ))}
+                                    <option value="custom">✏️ Custom Service / Item</option>
+                                  </select>
+                                  <Input
+                                    value={item.serviceName}
+                                    onChange={e => handleUpdateItem(item.id, "serviceName", e.target.value)}
+                                    placeholder="Service name (or type custom item)..."
+                                    className="font-bold text-xs"
+                                  />
+                                </div>
                               </div>
                               {docScheme === "gst" && (
                                 <div className="sm:col-span-2">
@@ -3936,13 +4617,49 @@ export function DocumentStudioModal({
                   <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Discount Amount (₹)</label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400">
+                            Discount {discountType === "percentage" ? "(%)" : "(₹)"}
+                          </label>
+                          <div className="flex items-center p-0.5 rounded-lg bg-zinc-200/70 dark:bg-zinc-800 text-[10px] font-bold">
+                            <button
+                              type="button"
+                              onClick={() => handleDiscountTypeChange("percentage")}
+                              className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                                discountType === "percentage"
+                                  ? "bg-white dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                              }`}
+                            >
+                              % Percent
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDiscountTypeChange("fixed")}
+                              className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                                discountType === "fixed"
+                                  ? "bg-white dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                              }`}
+                            >
+                              ₹ Amount
+                            </button>
+                          </div>
+                        </div>
                         <Input
                           type="number"
                           min="0"
+                          max={discountType === "percentage" ? 100 : undefined}
                           value={discountValue === 0 ? "" : discountValue}
-                          onChange={e => setDiscountValue(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
-                          placeholder="e.g. 1000"
+                          onChange={e => {
+                            const val = e.target.value === "" ? "" : Math.max(0, Number(e.target.value))
+                            if (typeof val === "number" && discountType === "percentage" && val > 100) {
+                              setDiscountValue(100)
+                            } else {
+                              setDiscountValue(val)
+                            }
+                          }}
+                          placeholder={discountType === "percentage" ? "e.g. 10 (%)" : "e.g. 1000 (₹)"}
                         />
                       </div>
                       <div>
@@ -4369,18 +5086,33 @@ export function DocumentStudioModal({
                     )}
                   </div>
 
-                  {/* Notes & Terms */}
-                  <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
+                  {/* Settlement Due Date (Optional) */}
+                  <div className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Invoice Notes</label>
-                      <textarea
-                        rows={2}
-                        value={notes}
-                        onChange={e => setNotes(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs resize-none"
-                      />
+                      <label className="block text-[11px] font-extrabold text-zinc-800 dark:text-zinc-200">
+                        Invoice Due Date (Optional)
+                      </label>
+                      <p className="text-[10px] text-zinc-500">
+                        Defaults to unset (0000-00-00). Select an explicit date if this payment requires a firm statutory deadline.
+                      </p>
                     </div>
-                    {/* Terms & Conditions automatically inherited from issuing company/branch profile */}
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="date"
+                        value={dueDate}
+                        onChange={e => setDueDate(e.target.value)}
+                        className="text-xs font-mono font-bold bg-zinc-50 dark:bg-zinc-800 w-auto"
+                      />
+                      {dueDate && (
+                        <button
+                          type="button"
+                          onClick={() => setDueDate("")}
+                          className="px-2 py-1 text-[10px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Clear (Unset)
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

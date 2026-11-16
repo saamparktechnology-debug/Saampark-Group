@@ -4,7 +4,7 @@ import * as React from "react"
 import { motion } from "framer-motion"
 import { X, RefreshCw, Calendar, FileText, CheckCircle2, Sparkles } from "lucide-react"
 import { Subscription } from "../types"
-import { calculateNextCycleDate } from "../services/subscriptionService"
+import { calculateNextCycleDate } from "../service/subscriptionService"
 
 interface RenewSubscriptionModalProps {
   isOpen: boolean

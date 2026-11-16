@@ -51,7 +51,7 @@ export const PaymentService = {
 export const CreditNoteService = {
   getAll: async (companyId?: string) => {
     try {
-      const { getCreditNotes } = await import("@/app/feature/sales/credit-notes/services/creditNoteService")
+      const { getCreditNotes } = await import("@/app/feature/sales/credit-notes/service/creditNoteService")
       const localNotes = await getCreditNotes(companyId)
       if (localNotes && localNotes.length > 0) return localNotes
     } catch {}
@@ -60,7 +60,7 @@ export const CreditNoteService = {
   },
   create: async (data: any, companyId?: string) => {
     try {
-      const { createCreditNote } = await import("@/app/feature/sales/credit-notes/services/creditNoteService")
+      const { createCreditNote } = await import("@/app/feature/sales/credit-notes/service/creditNoteService")
       return await createCreditNote(data, companyId)
     } catch {
       return api.post('/sales/credit-notes', data)
@@ -68,7 +68,7 @@ export const CreditNoteService = {
   },
   update: async (id: string, data: any, companyId?: string) => {
     try {
-      const { updateCreditNote } = await import("@/app/feature/sales/credit-notes/services/creditNoteService")
+      const { updateCreditNote } = await import("@/app/feature/sales/credit-notes/service/creditNoteService")
       return await updateCreditNote(id, data, companyId)
     } catch {
       return api.put(`/sales/credit-notes/${id}`, data)

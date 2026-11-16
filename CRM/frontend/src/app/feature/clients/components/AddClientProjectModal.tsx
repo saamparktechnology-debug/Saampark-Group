@@ -11,14 +11,14 @@ import {
 import { useRouter } from "next/navigation"
 
 import { ClientItem } from "../types"
-import { getUsers } from "@/app/feature/users/services/userService"
-import { addProject } from "@/app/feature/projects/services/projectService"
-import { addInvoice, getInvoices, generateInvoiceNumber, InvoiceLineItem, AppliedDiscount } from "@/app/feature/sales/invoices/services/invoiceService"
-import { addOrder } from "@/app/feature/sales/orders/services/orderService"
-import { addPayment } from "@/app/feature/sales/payments/services/paymentService"
-import { addSubscription, saveInstallmentRecord } from "@/app/feature/subscriptions/services/subscriptionService"
-import { taskService } from "@/app/feature/tasks/services/taskService"
-import { saveStoredClient, getClients, formatDisplayEmail } from "../services/clientService"
+import { getUsers } from "@/app/feature/users/service/userService"
+import { addProject } from "@/app/feature/projects/service/projectService"
+import { addInvoice, getInvoices, generateInvoiceNumber, InvoiceLineItem, AppliedDiscount } from "@/app/feature/sales/invoices/service/invoiceService"
+import { addOrder } from "@/app/feature/sales/orders/service/orderService"
+import { addPayment } from "@/app/feature/sales/payments/service/paymentService"
+import { addSubscription, saveInstallmentRecord } from "@/app/feature/subscriptions/service/subscriptionService"
+import { taskService } from "@/app/feature/tasks/service/taskService"
+import { saveStoredClient, getClients, formatDisplayEmail } from "../service/clientService"
 import { useAuthStore, getSelectableCompanies } from "@/store/useAuthStore"
 import { sendInvoiceDetailsEmailNotification, sendPaymentReceiptEmailNotification } from "@/services/emailNotificationService"
 import { lookupPincode } from "@/lib/pincodeService"
@@ -927,7 +927,7 @@ export function AddClientProjectModal({
       // Auto-create client user account with role "Clients"
       const targetClientEmail = clientEmail.trim() || effectiveClient.email
       if (targetClientEmail) {
-        import("@/app/feature/users/services/userService").then(({ ensureClientUserAccount }) => {
+        import("@/app/feature/users/service/userService").then(({ ensureClientUserAccount }) => {
           ensureClientUserAccount({
             email: targetClientEmail,
             name: clientContactPersonName.trim() || effectiveClient.name,
@@ -1112,7 +1112,7 @@ export function AddClientProjectModal({
       const finalEmail = clientEmail.trim() || effectiveClient.email
       if (finalEmail) {
         try {
-          const { recordUserAccountAsync } = await import("@/app/feature/users/services/userService")
+          const { recordUserAccountAsync } = await import("@/app/feature/users/service/userService")
           recordUserAccountAsync({
             name: effectiveClient.name,
             email: finalEmail,

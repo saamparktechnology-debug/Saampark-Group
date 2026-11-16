@@ -18,7 +18,7 @@ import {
   getStoredEventLabels,
   saveStoredEventLabel,
   deleteStoredEventLabel,
-} from "./services/eventService"
+} from "./service/eventService"
 
 export default function EventsMain() {
   const { user, activeCompanyId } = useAuthStore()

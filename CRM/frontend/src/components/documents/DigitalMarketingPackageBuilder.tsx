@@ -84,9 +84,15 @@ export function DigitalMarketingPackageBuilder({
     })
   }
 
-  const handleDurationChange = (dur: string) => {
+  const handleDurationChange = (dur: string, customMonths?: number, customDisc?: number, customOffer?: string) => {
     const base = pkg.baseMonthlyPrice || pkg.packagePrice || 4999
-    const calc = calculatePackageTotal(base, dur)
+    const calc = calculatePackageTotal(
+      base, 
+      dur, 
+      customMonths !== undefined ? customMonths : (pkg.durationMonths || 1), 
+      customDisc !== undefined ? customDisc : (pkg.discountPercent || 0), 
+      customOffer !== undefined ? customOffer : (pkg.freeOfferText || "")
+    )
     onChange({
       ...pkg,
       packageDuration: dur,
@@ -191,6 +197,61 @@ export function DigitalMarketingPackageBuilder({
             </select>
           </div>
         </div>
+
+        {/* Custom Duration & Offer Configuration */}
+        {pkg.packageDuration === "custom" && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-purple-50/60 dark:bg-zinc-800/60 p-3 rounded-xl border border-purple-200 dark:border-purple-700">
+            <div>
+              <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-1">
+                Custom Duration (Months) *
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={pkg.durationMonths === 0 ? "" : (pkg.durationMonths || 1)}
+                onChange={e => {
+                  const m = e.target.value === "" ? 1 : Math.max(1, Number(e.target.value))
+                  handleDurationChange("custom", m, pkg.discountPercent, pkg.freeOfferText)
+                }}
+                className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg font-mono font-bold text-xs focus:ring-1 focus:ring-purple-500"
+                placeholder="Months (e.g. 2)"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-1">
+                Custom Duration Discount (%)
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={pkg.discountPercent === 0 ? "" : (pkg.discountPercent || "")}
+                onChange={e => {
+                  const disc = e.target.value === "" ? 0 : Math.max(0, Math.min(100, Number(e.target.value)))
+                  handleDurationChange("custom", pkg.durationMonths || 1, disc, pkg.freeOfferText)
+                }}
+                className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg font-mono font-bold text-xs focus:ring-1 focus:ring-purple-500"
+                placeholder="Discount % (e.g. 15)"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-1">
+                Custom Offer / Free Bonus Text
+              </label>
+              <input
+                type="text"
+                value={pkg.freeOfferText || ""}
+                onChange={e => {
+                  handleDurationChange("custom", pkg.durationMonths || 1, pkg.discountPercent || 0, e.target.value)
+                }}
+                className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg font-medium text-xs focus:ring-1 focus:ring-purple-500"
+                placeholder="e.g. Free 2 Extra AI Reels"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Highlighted Flyer Badges & Offers */}
         {pkg.freeOfferText && (

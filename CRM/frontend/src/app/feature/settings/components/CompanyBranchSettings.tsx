@@ -9,7 +9,7 @@ import {
   Image as ImageIcon, CheckCircle2
 } from "lucide-react"
 import { useAuthStore, Company, Branch, SubBranch, getCompanyFullName, getCompanyLogoUrl, isMatchingCompany } from "@/store/useAuthStore"
-import { getUsers } from "@/app/feature/users/services/userService"
+import { getUsers } from "@/app/feature/users/service/userService"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
 import { usePermissionStore, ALL_APP_MODULES, CLEAN_MODULE_CATEGORIES } from "@/store/usePermissionStore"
 

@@ -3,7 +3,9 @@
 import * as React from "react"
 import { motion } from "framer-motion"
 import { Lead } from "./types"
-import { getLeads, deleteLead, updateLead, normalizeCompanyId, isLeadAssignedToUser, isTeamMemberRole } from "./services/leadService"
+import {  normalizeCompanyId, isLeadAssignedToUser, isTeamMemberRole  } from "./service/leadService"
+import { useDeleteLeadMutation, useLeadsQuery, useUpdateLeadMutation, leadsQueryKey } from "./hooks/useLeads"
+import { useQueryClient } from "@tanstack/react-query"
 import { LeadList } from "./components/LeadList"
 import { LeadKanban } from "./components/LeadKanban"
 import { AddLeadModal } from "./components/AddLeadModal"
@@ -26,7 +28,11 @@ export const INITIAL_LABELS: LabelItem[] = [
 
 export default function LeadsMain() {
   const { user, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
-  const [leads, setLeads] = React.useState<Lead[]>([])
+  const queryClient = useQueryClient()
+  const targetComp = activeCompanyId || user?.companyId || "tech"
+  const { data: leads = [], isLoading } = useLeadsQuery(targetComp)
+  const updateLeadMutation = useUpdateLeadMutation(targetComp)
+  const deleteLeadMutation = useDeleteLeadMutation(targetComp)
   const [activeViewTab, setActiveViewTab] = React.useState<"list" | "kanban">("list")
   const [availableLabels, setAvailableLabels] = React.useState<LabelItem[]>(INITIAL_LABELS)
 
@@ -66,55 +72,19 @@ export default function LeadsMain() {
   const [isManageLabelsModalOpen, setIsManageLabelsModalOpen] = React.useState(false)
   const [editingLead, setEditingLead] = React.useState<Lead | null>(null)
 
-  const [isLoading, setIsLoading] = React.useState(true)
+  
 
   React.useEffect(() => {
-    // Ensure all fresh branches and companies are loaded in store
     useAuthStore.getState().fetchBranches?.().catch(() => {})
     useAuthStore.getState().fetchCompanies?.().catch(() => {})
-
-    const fetchFreshLeads = async (showLoading = false) => {
-      if (showLoading) setIsLoading(true)
-      try {
-        // Read fresh from store at call time — avoids stale closure on company switch
-        const { activeCompanyId: freshCompanyId, user: freshUser } = useAuthStore.getState()
-        const targetComp = freshCompanyId || freshUser?.companyId || "tech"
-        const data = await getLeads(targetComp)
-        if (Array.isArray(data)) {
-          setLeads(data)
-        }
-      } catch (err) {
-        console.warn("Error loading leads:", err)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchFreshLeads(true)
-    const storageHandler = () => fetchFreshLeads(false)
-    window.addEventListener("storage", storageHandler)
-    window.addEventListener("saampark_company_switched", storageHandler)
-    window.addEventListener("saampark_branch_switched", storageHandler)
-    window.addEventListener("saampark_sub_branch_switched", storageHandler)
-    window.addEventListener("saampark_subbranch_switched", storageHandler)
-    window.addEventListener("saampark_data_synced", storageHandler)
-    window.addEventListener("saampark_leads_updated", storageHandler)
-    return () => {
-      window.removeEventListener("storage", storageHandler)
-      window.removeEventListener("saampark_company_switched", storageHandler)
-      window.removeEventListener("saampark_branch_switched", storageHandler)
-      window.removeEventListener("saampark_sub_branch_switched", storageHandler)
-      window.removeEventListener("saampark_subbranch_switched", storageHandler)
-      window.removeEventListener("saampark_data_synced", storageHandler)
-      window.removeEventListener("saampark_leads_updated", storageHandler)
-    }
-  }, [activeCompanyId, activeBranchId, activeSubBranchId])
+  }, [])
 
   const handleLeadAdded = (newLead: Lead) => {
-    setLeads((prev) => [newLead, ...prev])
+    queryClient.setQueryData<Lead[]>(leadsQueryKey(targetComp), (prev = []) => [newLead, ...prev])
   }
 
   const handleLeadUpdated = (updated: Lead) => {
-    setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)))
+    queryClient.setQueryData<Lead[]>(leadsQueryKey(targetComp), (prev = []) => prev.map((l) => (l.id === updated.id ? updated : l)))
   }
 
   const handleDeleteLead = async (id: string) => {
@@ -131,8 +101,7 @@ export default function LeadsMain() {
     const label = lead?.name || "Lead"
     if (!await confirmTwoStepDelete(label, "lead")) return
 
-    await deleteLead(id)
-    setLeads((prev) => prev.filter((l) => l.id !== id))
+    await deleteLeadMutation.mutateAsync(id)
   }
 
   const handleOpenEditModal = (lead: Lead) => {
@@ -173,7 +142,7 @@ export default function LeadsMain() {
       updatedLabels = [...target.labels, labelName]
     }
 
-    const updated = await updateLead(leadId, { labels: updatedLabels })
+    const updated = await updateLeadMutation.mutateAsync({ id: leadId, updates: { labels: updatedLabels } })
     handleLeadUpdated(updated)
   }
 
@@ -201,10 +170,14 @@ export default function LeadsMain() {
     const targetBranch = freshBranchId || (isSuperAdmin ? null : freshUser?.branchId)
     const targetSubBranch = freshSubBranchId || (isSuperAdmin ? null : freshUser?.subBranchId)
 
+    const isAllBranch = (v: string | null) => !v || v === "all" || v === "main" || v === "hq" || v === "all_branches"
+    const isAllSubBranch = (v: string | null) => !v || v === "all" || v === "main" || v === "hq" || v === "all_branches" || v === "all_subbranches"
+
     const matchLeadBranch = (l: Lead, bTarget: string | null) => {
-      if (!bTarget || bTarget === "all") return true
+      if (isAllBranch(bTarget)) return true
       const lBranch = String(l.branchId || (l as any).assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
       const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
+      if (!lBranch && !lBranchName) return false
       const targetStr = String(bTarget).toLowerCase().trim()
 
       const safeBranches = Array.isArray(freshBranches) ? freshBranches : []
@@ -233,9 +206,10 @@ export default function LeadsMain() {
     }
 
     const matchLeadSubBranch = (l: Lead, sbTarget: string | null) => {
-      if (!sbTarget || sbTarget === "all") return true
+      if (isAllSubBranch(sbTarget)) return true
       const lSubBranch = String((l as any).subBranchId || (l as any).sub_branch_id || (l as any).assignedSubBranchId || "").toLowerCase().trim()
       const lSubBranchName = String((l as any).subBranchName || (l as any).sub_branch_name || (l as any).assignedSubBranchName || "").toLowerCase().trim()
+      if (!lSubBranch && !lSubBranchName) return false
       const targetStr = String(sbTarget).toLowerCase().trim()
 
       const safeSubBranches = Array.isArray(freshSubBranches) ? freshSubBranches : []
@@ -263,10 +237,19 @@ export default function LeadsMain() {
       )
     }
 
+    const sortDesc = (items: Lead[]) => {
+      return items.slice().sort((a, b) => {
+        const timeA = new Date(a.createdAt || (a as any).created_at || (a as any).date || 0).getTime()
+        const timeB = new Date(b.createdAt || (b as any).created_at || (b as any).date || 0).getTime()
+        if (timeA && timeB && timeA !== timeB) return timeB - timeA
+        return String(b.id || "").localeCompare(String(a.id || ""))
+      })
+    }
+
     // ── 1. SUPER ADMIN ROLE ──
     // Full system governance across companies & branches (unless filtered)
     if (isSuperAdmin) {
-      return leads.filter((l) => {
+      const res = leads.filter((l) => {
         const isClientPrivate = (l as any).isClientPrivate === true || l.createdByRole === "Clients"
         if (isClientPrivate) return false
 
@@ -286,12 +269,13 @@ export default function LeadsMain() {
 
         return true
       })
+      return sortDesc(res)
     }
 
     // ── 2. ADMIN ROLE ──
     // Company / Branch Admin sees leads within their assigned company and branch scope
     if (isAdmin) {
-      return leads.filter((l) => {
+      const res = leads.filter((l) => {
         const isClientPrivate = (l as any).isClientPrivate === true || l.createdByRole === "Clients"
         if (isClientPrivate) return false
 
@@ -311,6 +295,7 @@ export default function LeadsMain() {
 
         return true
       })
+      return sortDesc(res)
     }
 
     const uName = (user.name || (user as any).full_name || "").toLowerCase().trim()
@@ -320,7 +305,7 @@ export default function LeadsMain() {
     // ── 3. CLIENT ROLE ──
     // Clients only see leads created by this specific client
     if (isClient) {
-      return leads.filter((l) => {
+      const res = leads.filter((l) => {
         const cId = String((l as any).createdById || "").toLowerCase().trim()
         const cEmail = ((l as any).createdByEmail || "").toLowerCase().trim()
         const createdBy = (l.createdBy || "").toLowerCase().trim()
@@ -332,12 +317,13 @@ export default function LeadsMain() {
           (uName && createdBy === uName)
         )
       })
+      return sortDesc(res)
     }
 
     // ── 4. TEAM MEMBER ROLE (Strictly ONLY Assigned Leads) ──
     // Team members see ONLY leads assigned directly to them (or created by them).
     // They NEVER see unassigned leads or leads assigned to other members!
-    return leads.filter((l) => {
+    const res = leads.filter((l) => {
       // Exclude client-private leads
       if ((l as any).isClientPrivate === true || l.createdByRole === "Clients") {
         return false
@@ -355,6 +341,7 @@ export default function LeadsMain() {
 
       return true
     })
+    return sortDesc(res)
   }, [leads, user, isSuperAdmin, isAdmin, isClient, isTeam, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches])
 
   if (isLoading) {

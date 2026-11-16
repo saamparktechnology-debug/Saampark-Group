@@ -7,19 +7,20 @@ import {
   CheckCircle2, Clock, AlertTriangle, TrendingUp, Users, 
   Video, Image as ImageIcon, Sparkles, Share2, Layers, 
   ChevronRight, ExternalLink, Filter, Download, ArrowLeft,
-  Building2, Search, CheckCircle, Target, FileText
+  Building2, Search, CheckCircle, Target, FileText, Zap, Trash2, Edit2, BellRing
 } from "lucide-react"
 import { MarketingCampaign, MarketingPost, MarketingServiceQuota } from "../types"
-import { MarketingService } from "../services/marketingService"
-import { useAuthStore } from "@/store/useAuthStore"
+import { MarketingService } from "../service/marketingService"
+import { useAuthStore, isMatchingCompany } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
+import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
 import ViewCreativeModal from "./ViewCreativeModal"
 import AddDeliverablePostModal from "./AddDeliverablePostModal"
 import CreateCampaignModal from "./CreateCampaignModal"
 import { Button } from "@/components/ui/Button"
 
 export default function ClientMarketingReport() {
-  const { user, activeCompanyId } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   const isAdmin = user?.role === "Super Admin" || user?.role === "Admin"
   const canAdd = isAdmin || canPerformAction(user, "Digital Marketing", "add")
@@ -46,33 +47,59 @@ export default function ClientMarketingReport() {
   const loadData = React.useCallback(async () => {
     setIsLoading(true)
     try {
+      const rLower = String(user?.role || "").toLowerCase().trim()
+      const isClient = rLower === "clients" || rLower === "client" || rLower.includes("client") || Boolean((user as any)?.isClient)
+      const isTeam = !isAdmin && !isClient
+      const targetComp = (isClient || isTeam) ? "all" : (activeCompanyId || "all")
+
       const [campaignList, postsList] = await Promise.all([
-        MarketingService.getCampaigns(),
+        MarketingService.getCampaigns(targetComp),
         MarketingService.getPosts()
       ])
       setCampaigns(campaignList || [])
       setPosts(postsList || [])
 
-      // If logged-in user is a Client, auto-select their campaign
-      if (user?.role === "Clients" && user?.email) {
-        const clientCamp = campaignList.find(c => 
-          c.clientEmail?.toLowerCase() === user.email?.toLowerCase() ||
-          c.clientName?.toLowerCase().includes(user.name?.toLowerCase() || "")
-        )
+      // If logged-in user is a Client, strictly auto-select their own campaign (never another client's)
+      if (isClient && user) {
+        const clientCamp = (campaignList || []).find(c => isRecordAssignedToClient(c, user))
         if (clientCamp) {
           setSelectedCampaignId(clientCamp.id)
-        } else if (campaignList.length > 0) {
-          setSelectedCampaignId(campaignList[0].id)
+        } else {
+          setSelectedCampaignId("")
         }
       }
     } finally {
       setIsLoading(false)
     }
-  }, [user])
+  }, [user, activeCompanyId, isAdmin])
 
   React.useEffect(() => {
     loadData()
+
+    const handleSync = () => {
+      loadData()
+    }
+
+    window.addEventListener("storage", handleSync)
+    window.addEventListener("saampark_data_synced", handleSync)
+    window.addEventListener("saampark_invoices_updated", handleSync)
+    window.addEventListener("saampark_company_switched", handleSync)
+    window.addEventListener("saampark_branch_switched", handleSync)
+    window.addEventListener("saampark_subbranch_switched", handleSync)
+
+    return () => {
+      window.removeEventListener("storage", handleSync)
+      window.removeEventListener("saampark_data_synced", handleSync)
+      window.removeEventListener("saampark_invoices_updated", handleSync)
+      window.removeEventListener("saampark_company_switched", handleSync)
+      window.removeEventListener("saampark_branch_switched", handleSync)
+      window.removeEventListener("saampark_subbranch_switched", handleSync)
+    }
   }, [loadData])
+
+  // Strict Client Role Identification
+  const roleNorm = String(user?.role || "").toLowerCase().trim()
+  const isClientRole = roleNorm === "clients" || roleNorm === "client" || roleNorm.includes("client") || Boolean((user as any)?.isClient)
 
   // Check URL parameters on mount to auto-open client from invoice or deep-link
   React.useEffect(() => {
@@ -83,51 +110,100 @@ export default function ClientMarketingReport() {
       const invoiceParam = sp.get("invoice")
       
       if (campaignParam && campaigns.some(c => c.id === campaignParam)) {
-        setSelectedCampaignId(campaignParam)
-      } else if (clientParam) {
+        if (isClientRole && user) {
+          const uEmail = (user.email || "").toLowerCase().trim()
+          const uName = (user.name || "").toLowerCase().trim()
+          const uId = String(user.id || "").toLowerCase().trim()
+          const matched = campaigns.find(c => 
+            c.id === campaignParam && 
+            ((uEmail && (c.clientEmail || "").toLowerCase().trim() === uEmail) ||
+             (uName && (c.clientName || "").toLowerCase().trim().includes(uName)) ||
+             (uId && String(c.clientId || "").toLowerCase().trim() === uId))
+          )
+          if (matched) setSelectedCampaignId(campaignParam)
+        } else {
+          setSelectedCampaignId(campaignParam)
+        }
+      } else if (clientParam && !isClientRole) {
         const found = campaigns.find(c => 
           c.clientName.toLowerCase().includes(clientParam.toLowerCase()) ||
           (c.clientEmail && c.clientEmail.toLowerCase() === clientParam.toLowerCase())
         )
         if (found) setSelectedCampaignId(found.id)
-      } else if (invoiceParam) {
+      } else if (invoiceParam && !isClientRole) {
         const found = campaigns.find(c => c.invoiceId === invoiceParam)
         if (found) setSelectedCampaignId(found.id)
       }
     }
-  }, [campaigns])
+  }, [campaigns, isClientRole, user])
 
-  // Filtered campaigns for the Client Directory list (with company, branch, and role privacy scoping)
+  // Filtered campaigns for the Client Directory list (with role privacy scoping)
   const filteredCampaigns = React.useMemo(() => {
+    const targetBranch = activeBranchId
+    const targetBranchObj = (branches || []).find(b => 
+      b.id === targetBranch || 
+      b.code === targetBranch || 
+      b.name?.toLowerCase() === (targetBranch || "").toLowerCase()
+    )
+    const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
+    const targetBranchCode = String(targetBranchObj?.code || "").toLowerCase().trim()
+    const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+    const targetSubBranch = activeSubBranchId
+    const targetSubBranchObj = (subBranches || []).find(sb => 
+      sb.id === targetSubBranch || 
+      (sb as any).code === targetSubBranch ||
+      (sb as any).name?.toLowerCase() === (targetSubBranch || "").toLowerCase()
+    )
+    const targetSubBranchId = String(targetSubBranchObj?.id || targetSubBranch || "").toLowerCase().trim()
+    const targetSubBranchCode = String((targetSubBranchObj as any)?.code || "").toLowerCase().trim()
+    const targetSubBranchName = (targetSubBranchObj as any)?.name?.toLowerCase().trim() || ""
+
     return campaigns.filter(c => {
-      // 1. Company filter
-      if (companyFilter !== "all") {
-        const cComp = (c.companyId || "tech").toLowerCase()
-        if (companyFilter === "tech" && !cComp.includes("tech")) return false
-        if (companyFilter === "digital" && !cComp.includes("digital")) return false
+      // 0. Company filter
+      if (activeCompanyId && activeCompanyId !== "all") {
+        if (!isMatchingCompany({ id: c.companyId || "consultancy", slug: c.companyId || "consultancy" } as any, activeCompanyId)) return false
       }
 
-      // 2. Client role data isolation: client only sees their own campaign
-      if (user?.role === "Clients" || String(user?.role || "").toLowerCase().includes("client")) {
-        const uEmail = (user?.email || "").toLowerCase().trim()
-        const uName = (user?.name || "").toLowerCase().trim()
-        const cEmail = (c.clientEmail || "").toLowerCase().trim()
-        const cName = (c.clientName || "").toLowerCase().trim()
-        const isSelf = (uEmail && cEmail === uEmail) || (uName && cName.includes(uName)) || c.clientId === user?.id
-        if (!isSelf) return false
+      // Branch filter (strict)
+      if (targetBranch && targetBranch !== "all" && targetBranch !== "main" && targetBranch !== "hq") {
+        const cBranch = String(c.branchId || "").toLowerCase().trim()
+        const cBranchName = String(c.branchName || "").toLowerCase().trim()
+        if (!cBranch && !cBranchName) return false
+        const matchBranch = (targetBranchId && cBranch === targetBranchId) || 
+                            (targetBranchCode && cBranch === targetBranchCode) ||
+                            (targetBranchName && (cBranchName === targetBranchName || cBranch === targetBranchName))
+        if (!matchBranch) return false
       }
 
-      // 3. Team member data isolation: staff only sees campaigns assigned to or created by them
-      if (!isAdmin && user && user.role !== "Clients" && !String(user.role || "").toLowerCase().includes("client")) {
+      // Sub-Branch filter (strict)
+      if (targetSubBranch && targetSubBranch !== "all" && targetSubBranch !== "main" && targetSubBranch !== "hq" && targetSubBranch !== "all_subbranches") {
+        const cSubBranch = String(c.subBranchId || "").toLowerCase().trim()
+        const cSubBranchName = String(c.subBranchName || "").toLowerCase().trim()
+        if (!cSubBranch && !cSubBranchName) return false
+        const matchSubBranch = (targetSubBranchId && cSubBranch === targetSubBranchId) || 
+                               (targetSubBranchCode && cSubBranch === targetSubBranchCode) ||
+                               (targetSubBranchName && (cSubBranchName === targetSubBranchName || cSubBranch === targetSubBranchName))
+        if (!matchSubBranch) return false
+      }
+
+      // 1. Client role data isolation: client strictly sees their own campaign ONLY
+      if (isClientRole) {
+        if (!isRecordAssignedToClient(c, user)) return false
+      }
+
+      // 2. Team member data isolation: staff only sees campaigns assigned to or created by them
+      if (!isAdmin && user && !isClientRole) {
         const uId = String(user.id || "").trim()
         const uEmail = (user.email || "").toLowerCase().trim()
         const isAssigned = c.assignedMemberId === uId || 
                            (c.assignedMemberEmail && c.assignedMemberEmail.toLowerCase().trim() === uEmail) ||
-                           (c.createdBy && c.createdBy.toLowerCase().trim() === uEmail)
+                           (c.createdBy && c.createdBy.toLowerCase().trim() === uEmail) ||
+                           isRecordAssignedToTeamMember(c, user)
         if (!isAssigned) return false
       }
 
-      // 4. Search filter
+      // 3. Search filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim()
         const matchName = c.clientName?.toLowerCase().includes(q)
@@ -137,19 +213,118 @@ export default function ClientMarketingReport() {
         if (!matchName && !matchEmail && !matchPkg && !matchBranch) return false
       }
       return true
+    }).sort((a, b) => {
+      const timeA = new Date(a.startDate || 0).getTime()
+      const timeB = new Date(b.startDate || 0).getTime()
+      if (timeA && timeB && timeA !== timeB) return timeB - timeA
+      return String(b.id || "").localeCompare(String(a.id || ""))
     })
-  }, [campaigns, companyFilter, searchQuery, user, isAdmin])
+  }, [campaigns, searchQuery, user, isAdmin, isClientRole, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches])
 
-  // Aggregate stats across all campaigns
-  const totalClientsCount = campaigns.length
-  const activeRetainersCount = campaigns.filter(c => c.status === "Active").length
-  const totalAllPosted = campaigns.reduce((acc, c) => acc + (c.totalPosted || 0), 0)
-  const totalAllCommitment = campaigns.reduce((acc, c) => acc + (c.totalCommitment || 0), 0)
-  const totalAllLeads = campaigns.reduce((acc, c) => acc + (c.totalLeads || 0), 0)
-  const overallFulfillment = totalAllCommitment > 0 ? Math.round((totalAllPosted / totalAllCommitment) * 100) : 0
+  // Aggregate stats strictly based on filtered (authorized) campaigns
+  const totalClientsCount = filteredCampaigns.length
+  const pendingRetainersCount = filteredCampaigns.filter(c => {
+    const posted = c.totalPosted || 0
+    const total = c.totalCommitment || 1
+    const stage = c.stage || (posted >= total ? "Completed" : posted > 0 ? "Action" : "Pending")
+    return stage === "Pending"
+  }).length
+  const inActionRetainersCount = filteredCampaigns.filter(c => {
+    const posted = c.totalPosted || 0
+    const total = c.totalCommitment || 1
+    const stage = c.stage || (posted >= total ? "Completed" : posted > 0 ? "Action" : "Pending")
+    return stage === "Action" || stage === "In Progress" || stage === "Active"
+  }).length
+  const completedRetainersCount = filteredCampaigns.filter(c => {
+    const posted = c.totalPosted || 0
+    const total = c.totalCommitment || 1
+    const stage = c.stage || (posted >= total ? "Completed" : posted > 0 ? "Action" : "Pending")
+    return stage === "Completed"
+  }).length
 
-  const activeCampaign = campaigns.find(c => c.id === selectedCampaignId)
-  const campaignPosts = posts.filter(p => !activeCampaign || p.campaignId === activeCampaign.id || p.clientId === activeCampaign.clientId)
+  const handleDeleteCampaign = async (e: React.MouseEvent, id: string, name: string) => {
+    e.stopPropagation()
+    if (!window.confirm(`Are you sure you want to delete the marketing retainer for "${name}"?`)) return
+    await MarketingService.deleteCampaign(id)
+    setCampaigns(prev => prev.filter(c => c.id !== id))
+    if (selectedCampaignId === id) setSelectedCampaignId("")
+  }
+
+  const activeCampaign = campaigns.find(c => c && c.id === selectedCampaignId)
+  const campaignPosts = React.useMemo(() => {
+    if (!Array.isArray(posts)) return []
+    return posts.filter(Boolean).filter(p => !activeCampaign || String(p.campaignId) === String(activeCampaign.id) || (activeCampaign.clientId && String(p.clientId) === String(activeCampaign.clientId)))
+  }, [posts, activeCampaign])
+
+  // Service Quotas
+  const servicesList = React.useMemo(() => {
+    if (!activeCampaign?.services) return []
+    let rawList: any[] = []
+    if (Array.isArray(activeCampaign.services)) {
+      rawList = activeCampaign.services
+    } else if (typeof activeCampaign.services === "object") {
+      rawList = Object.values(activeCampaign.services)
+    }
+    return rawList.filter(Boolean).map((srv: any, idx: number) => {
+      if (typeof srv === "string") {
+        return {
+          serviceKey: `srv_${idx}`,
+          serviceName: srv,
+          commitment: 10,
+          posted: 0,
+          views: 0,
+          reach: 0,
+          leads: 0,
+        }
+      }
+      return {
+        serviceKey: srv.serviceKey || srv.key || `srv_${idx}`,
+        serviceName: srv.serviceName || srv.name || srv.title || "Marketing Service",
+        commitment: Number(srv.commitment) || 0,
+        posted: Number(srv.posted) || 0,
+        views: Number(srv.views) || 0,
+        reach: Number(srv.reach) || 0,
+        leads: Number(srv.leads) || 0,
+      }
+    })
+  }, [activeCampaign?.services])
+
+  // 1st Post Date & Retainer Timeline Calculation (Starts on 1st published post)
+  const calculatedFirstPostDate = React.useMemo(() => {
+    if (!activeCampaign) return null
+    if (activeCampaign.firstPostDate) return activeCampaign.firstPostDate
+    if (campaignPosts && campaignPosts.length > 0) {
+      const dates = campaignPosts.map(p => p.date).filter(Boolean).sort()
+      if (dates.length > 0) return dates[0]
+    }
+    return null
+  }, [activeCampaign, campaignPosts])
+
+  const calculatedRetainerExpiry = React.useMemo(() => {
+    if (!calculatedFirstPostDate || !activeCampaign) return null
+    try {
+      const durMonths = activeCampaign.packageDurationMonths || 1
+      const d = new Date(calculatedFirstPostDate)
+      if (isNaN(d.getTime())) return null
+      d.setMonth(d.getMonth() + durMonths)
+      if (isNaN(d.getTime())) return null
+      return d.toISOString().split("T")[0]
+    } catch {
+      return null
+    }
+  }, [calculatedFirstPostDate, activeCampaign])
+
+  const retainerRemainingDays = React.useMemo(() => {
+    if (!calculatedRetainerExpiry) return null
+    try {
+      const exp = new Date(calculatedRetainerExpiry).getTime()
+      if (isNaN(exp)) return null
+      const now = new Date().getTime()
+      return Math.ceil((exp - now) / (1000 * 60 * 60 * 24))
+    } catch {
+      return null
+    }
+  }, [calculatedRetainerExpiry])
 
   if (isLoading && campaigns.length === 0) {
     return (
@@ -158,6 +333,31 @@ export default function ClientMarketingReport() {
         <p className="text-xs text-zinc-500 font-medium">Loading Client Marketing Intelligence...</p>
       </div>
     )
+  }
+
+  // ═════════════════════════════════════════════════════════════════════
+  // CLIENT ROLE DEDICATED SCOPING GUARD
+  // ═════════════════════════════════════════════════════════════════════
+  if (isClientRole && (!selectedCampaignId || !activeCampaign)) {
+    if (filteredCampaigns.length > 0) {
+      if (selectedCampaignId !== filteredCampaigns[0].id) {
+        setSelectedCampaignId(filteredCampaigns[0].id)
+      }
+    } else {
+      return (
+        <div className="min-h-[50vh] flex items-center justify-center p-6 text-center font-sans">
+          <div className="max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 shadow-sm space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
+              <Sparkles size={24} />
+            </div>
+            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Digital Marketing Retainer Portal</h2>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              No active digital marketing retainer campaign was found linked to your client profile (<span className="font-semibold text-zinc-700 dark:text-zinc-300">{user?.email}</span>). Once your campaign is provisioned by the marketing team, your live creative deliverables, posters, reels, and analytics reports will appear here automatically.
+            </p>
+          </div>
+        </div>
+      )
+    }
   }
 
   // ═════════════════════════════════════════════════════════════════════
@@ -211,47 +411,47 @@ export default function ClientMarketingReport() {
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[11px] font-semibold text-zinc-400 block">Total Clients</span>
+              <span className="text-[11px] font-semibold text-zinc-400 block">Total Retainers</span>
               <span className="text-xl font-black text-zinc-900 dark:text-zinc-100">{totalClientsCount}</span>
-              <span className="text-[10px] text-emerald-600 font-bold block">{activeRetainersCount} Active Retainers</span>
+              <span className="text-[10px] text-zinc-500 font-medium block">Client Campaign Contracts</span>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-xs flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[11px] font-semibold text-zinc-400 block">Pending</span>
+              <span className="text-xl font-black text-amber-600 dark:text-amber-400">{pendingRetainersCount}</span>
+              <span className="text-[10px] text-zinc-500 font-medium block">Awaiting Kickoff / Content</span>
             </div>
           </div>
 
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-xs flex items-center gap-3.5">
             <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-              <Layers className="w-5 h-5" />
+              <Zap className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[11px] font-semibold text-zinc-400 block">Total Deliverables</span>
-              <span className="text-xl font-black text-zinc-900 dark:text-zinc-100">{totalAllPosted} <span className="text-xs font-normal text-zinc-400">/ {totalAllCommitment}</span></span>
-              <span className="text-[10px] text-zinc-400 font-semibold block">{overallFulfillment}% overall fulfillment</span>
+              <span className="text-[11px] font-semibold text-zinc-400 block">In Action</span>
+              <span className="text-xl font-black text-blue-600 dark:text-blue-400">{inActionRetainersCount}</span>
+              <span className="text-[10px] text-zinc-500 font-medium block">Active Fulfillment & Ads</span>
             </div>
           </div>
 
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-xs flex items-center gap-3.5">
             <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-              <TrendingUp className="w-5 h-5" />
+              <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[11px] font-semibold text-zinc-400 block">Leads Generated</span>
-              <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">+{totalAllLeads}</span>
-              <span className="text-[10px] text-zinc-400 font-semibold block">Across Meta &amp; Ads</span>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-xs flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[11px] font-semibold text-zinc-400 block">Creatives Live</span>
-              <span className="text-xl font-black text-purple-600 dark:text-purple-400">{posts.length}</span>
-              <span className="text-[10px] text-zinc-400 font-semibold block">Posters &amp; Videos</span>
+              <span className="text-[11px] font-semibold text-zinc-400 block">Completed</span>
+              <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">{completedRetainersCount}</span>
+              <span className="text-[10px] text-zinc-500 font-medium block">Deliverables 100% Fulfilled</span>
             </div>
           </div>
         </div>
 
-        {/* Search & Filter Controls */}
+        {/* Search & Action Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3 sm:px-4 shadow-xs">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -264,29 +464,12 @@ export default function ClientMarketingReport() {
             />
           </div>
 
-          <div className="flex items-center gap-1.5 self-start sm:self-auto overflow-x-auto">
-            <span className="text-[11px] font-semibold text-zinc-400 mr-1 hidden sm:inline">Company:</span>
-            {[
-              { id: "all", label: "All Companies" },
-              { id: "tech", label: "SAAMPARK Technology" },
-              { id: "digital", label: "SAAMPARK Digital Marketing" },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setCompanyFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  companyFilter === tab.id
-                    ? "bg-indigo-600 text-white shadow-xs"
-                    : "bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+            Showing {filteredCampaigns.length} marketing {filteredCampaigns.length === 1 ? "retainer" : "retainers"}
           </div>
         </div>
 
-        {/* Client Directory Grid */}
+        {/* Client Directory Line-by-Line List Table */}
         {filteredCampaigns.length === 0 ? (
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-12 text-center">
             <Sparkles className="w-12 h-12 text-indigo-500 mx-auto mb-3" />
@@ -295,7 +478,7 @@ export default function ClientMarketingReport() {
             </h3>
             <p className="text-xs text-zinc-500 max-w-sm mx-auto mb-5">
               {searchQuery 
-                ? "Try clearing your search query or company filter to view other marketing clients."
+                ? "Try clearing your search query to view all marketing clients."
                 : "Launch a digital marketing retainer contract for your clients with deliverable commitments."}
             </p>
             {(isAdmin || canAdd) && (
@@ -305,134 +488,139 @@ export default function ClientMarketingReport() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredCampaigns.map((camp) => {
-              const compName = (camp.companyId || "tech").includes("digital") 
-                ? "SAAMPARK Digital Marketing" 
-                : "SAAMPARK Technology"
-              const compBadgeClass = (camp.companyId || "tech").includes("digital")
-                ? "bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800"
-                : "bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200/90 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/75 dark:bg-zinc-800/50 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                    <th className="py-3 px-4">Client</th>
+                    <th className="py-3 px-4">Retainer Package</th>
+                    <th className="py-3 px-4">Stage</th>
+                    <th className="py-3 px-4">Deliverables Fulfillment</th>
+                    <th className="py-3 px-4">Performance</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200/70 dark:divide-zinc-800 text-xs">
+                  {filteredCampaigns.map((camp) => {
+                    const campCommitment = camp.totalCommitment || 1
+                    const campPosted = camp.totalPosted || 0
+                    const progressPct = Math.min(100, Math.round((campPosted / campCommitment) * 100))
+                    const currentStage = camp.stage || (campPosted >= campCommitment ? "Completed" : (campPosted > 0 ? "Action" : "Pending"))
 
-              const campCommitment = camp.totalCommitment || 1
-              const campPosted = camp.totalPosted || 0
-              const progressPct = Math.min(100, Math.round((campPosted / campCommitment) * 100))
-              const services = Object.values(camp.services || {})
-              const currentStage = camp.stage || (campPosted >= campCommitment ? "Completed" : (campPosted > 0 ? "Action" : "Pending"))
-
-              return (
-                <div
-                  key={camp.id}
-                  onClick={() => setSelectedCampaignId(camp.id)}
-                  className="bg-white dark:bg-zinc-900 border border-zinc-200/90 dark:border-zinc-800 rounded-2xl p-5 shadow-xs hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700 transition-all cursor-pointer flex flex-col justify-between group"
-                >
-                  <div>
-                    {/* Top Meta */}
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-100 shrink-0 shadow-2xs">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={camp.clientAvatar || "https://images.unsplash.com/photo-1541888946425-d0fbb186c5f7?w=150&auto=format&fit=crop&q=80"}
-                            alt={camp.clientName}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div>
-                          <h3 className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 group-hover:text-indigo-600 transition-colors">
-                            {camp.clientName}
-                          </h3>
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-[9.5px] font-bold border mt-0.5 ${compBadgeClass}`}>
-                            {compName}
-                          </span>
-                        </div>
-                      </div>
-
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${
-                        camp.status === "Active" 
-                          ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950 dark:border-emerald-800" 
-                          : "bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:border-zinc-700"
-                      }`}>
-                        {camp.status || "Active"}
-                      </span>
-                    </div>
-
-                    {/* 3-Stage Lifecycle Stepper */}
-                    <div className="flex items-center justify-between p-1.5 bg-zinc-50 dark:bg-zinc-800/80 rounded-xl border border-zinc-100 dark:border-zinc-800 text-[10px] mb-3">
-                      <span className={`px-2 py-0.5 rounded-lg font-bold ${currentStage === "Pending" ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300" : "text-zinc-400"}`}>
-                        1. 🕒 Pending
-                      </span>
-                      <span className="text-zinc-300 dark:text-zinc-600">→</span>
-                      <span className={`px-2 py-0.5 rounded-lg font-bold ${currentStage === "Action" ? "bg-indigo-600 text-white shadow-xs" : "text-zinc-400"}`}>
-                        2. ⚡ In Action
-                      </span>
-                      <span className="text-zinc-300 dark:text-zinc-600">→</span>
-                      <span className={`px-2 py-0.5 rounded-lg font-bold ${currentStage === "Completed" ? "bg-emerald-600 text-white shadow-xs" : "text-zinc-400"}`}>
-                        3. 🏆 Completed
-                      </span>
-                    </div>
-
-                    {/* Package details */}
-                    <div className="bg-zinc-50 dark:bg-zinc-800/60 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800 mb-3.5 space-y-1">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-zinc-800 dark:text-zinc-200">{camp.packageName}</span>
-                        <span className="text-[10px] text-zinc-400 font-medium">{camp.packageDurationMonths || 3} Months</span>
-                      </div>
-                      <div className="text-[10px] text-zinc-400 flex items-center justify-between">
-                        <span>Contract Period:</span>
-                        <span className="font-semibold text-zinc-600 dark:text-zinc-300">{camp.startDate || "Ongoing"} → {camp.endDate || "Active"}</span>
-                      </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="space-y-1.5 mb-3.5">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-[11px] font-semibold text-zinc-500">Deliverables Fulfilled</span>
-                        <span className="font-black text-xs text-zinc-900 dark:text-zinc-100">
-                          {campPosted} / {campCommitment} <span className="text-zinc-400 font-normal">({progressPct}%)</span>
-                        </span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full transition-all duration-300"
-                          style={{ width: `${progressPct}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Service Quotas preview pills */}
-                    {services.length > 0 && (
-                      <div className="grid grid-cols-2 gap-1.5 mb-3.5 text-[10.5px]">
-                        {services.slice(0, 4).map((s) => (
-                          <div key={s.serviceKey} className="px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
-                            <span className="text-zinc-500 font-medium truncate">{s.serviceName}:</span>
-                            <span className="font-bold text-zinc-800 dark:text-zinc-200 shrink-0 ml-1">
-                              {s.posted}/{s.commitment}
-                            </span>
+                    return (
+                      <tr
+                        key={camp.id}
+                        onClick={() => setSelectedCampaignId(camp.id)}
+                        className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer group"
+                      >
+                        {/* Client column */}
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-100 shrink-0">
+                              <img
+                                src={camp.clientAvatar || "https://images.unsplash.com/photo-1541888946425-d0fbb186c5f7?w=150&auto=format&fit=crop&q=80"}
+                                alt={camp.clientName}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div>
+                              <div className="font-extrabold text-zinc-900 dark:text-zinc-100 group-hover:text-indigo-600 transition-colors">
+                                {camp.clientName}
+                              </div>
+                              <div className="text-[11px] text-zinc-400">
+                                {camp.clientEmail || camp.clientPhone || "Marketing Client"}
+                              </div>
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                        </td>
 
-                  {/* Card Bottom CTA */}
-                  <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      <TrendingUp className="w-3.5 h-3.5" />
-                      +{camp.totalLeads || 0} Leads
-                    </span>
+                        {/* Package Column */}
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold text-zinc-800 dark:text-zinc-200">
+                            {camp.packageName}
+                          </div>
+                          <div className="text-[11px] text-zinc-400">
+                            {camp.packageDurationMonths || 1} Month Retainer • {camp.startDate || "Ongoing"}
+                          </div>
+                        </td>
 
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 group-hover:translate-x-0.5 transition-transform"
-                    >
-                      <span>View Overview</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
+                        {/* Stage Column */}
+                        <td className="py-3.5 px-4">
+                          {currentStage === "Pending" && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                              <Clock className="w-3 h-3" />
+                              <span>Pending</span>
+                            </span>
+                          )}
+                          {(currentStage === "Action" || currentStage === "In Progress" || currentStage === "Active") && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                              <Zap className="w-3 h-3 text-blue-600" />
+                              <span>In Action</span>
+                            </span>
+                          )}
+                          {currentStage === "Completed" && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>Completed</span>
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Deliverables fulfillment column */}
+                        <td className="py-3.5 px-4 min-w-[180px]">
+                          <div className="flex justify-between items-center text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                            <span>{campPosted} / {campCommitment} Fulfilled</span>
+                            <span className="font-mono text-indigo-600">{progressPct}%</span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full transition-all duration-300"
+                              style={{ width: `${progressPct}%` }}
+                            />
+                          </div>
+                        </td>
+
+                        {/* Performance column */}
+                        <td className="py-3.5 px-4">
+                          <div className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200">
+                            +{camp.totalLeads || 0} Leads
+                          </div>
+                          <div className="text-[10px] text-zinc-400">
+                            {campPosted} Creatives Live
+                          </div>
+                        </td>
+
+                        {/* Actions column */}
+                        <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCampaignId(camp.id)}
+                              title="View Marketing Report & Creatives"
+                              className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <Eye size={13} />
+                              <span className="hidden sm:inline">View Report</span>
+                            </button>
+                            {(isAdmin || canDelete) && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteCampaign(e, camp.id, camp.clientName)}
+                                title="Delete Retainer"
+                                className="p-1.5 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
@@ -451,22 +639,57 @@ export default function ClientMarketingReport() {
   // VIEW 2: CLIENT MARKETING REPORT OVERVIEW (Opened upon clicking client)
   // ═════════════════════════════════════════════════════════════════════
 
+  // Safe Guard: If active campaign is not found or loaded yet
+  if (!activeCampaign) {
+    return (
+      <div className="p-8 text-center bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-3 font-sans">
+        <p className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Marketing retainer campaign not found or still loading...</p>
+        <button
+          onClick={() => setSelectedCampaignId("")}
+          className="px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer"
+        >
+          Back to Campaigns List
+        </button>
+      </div>
+    )
+  }
+
+  // Data Isolation Guard: If user is a Client, strictly verify this campaign belongs to them
+  if (isClientRole && activeCampaign) {
+    const uEmail = (user?.email || "").toLowerCase().trim()
+    const uName = (user?.name || "").toLowerCase().trim()
+    const cEmail = (activeCampaign.clientEmail || "").toLowerCase().trim()
+    const cName = (activeCampaign.clientName || "").toLowerCase().trim()
+    const cId = String(activeCampaign.clientId || "").toLowerCase().trim()
+    const uId = String(user?.id || "").toLowerCase().trim()
+    const isSelf = (uEmail && cEmail === uEmail) || (uName && cName.includes(uName)) || (uId && cId === uId)
+    if (!isSelf) {
+      return (
+        <div className="min-h-[50vh] flex items-center justify-center p-6 text-center font-sans">
+          <div className="max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 shadow-sm space-y-4">
+            <h2 className="text-lg font-bold text-red-600">Access Restricted</h2>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              You are only permitted to view your own organization's digital marketing campaigns.
+            </p>
+          </div>
+        </div>
+      )
+    }
+  }
+
   // Calculate Aggregates for Selected Client
-  const totalCommitment = activeCampaign.totalCommitment || 68
-  const totalPosted = activeCampaign.totalPosted || 52
+  const totalCommitment = Number(activeCampaign?.totalCommitment) || 68
+  const totalPosted = Number(activeCampaign?.totalPosted) || 0
   const totalDue = Math.max(0, totalCommitment - totalPosted)
   const fulfillmentPercentage = Math.round((totalPosted / (totalCommitment || 1)) * 100)
-
-  // Service Quotas
-  const servicesList = Object.values(activeCampaign.services || {})
 
   return (
     <div className="space-y-5 animate-in fade-in duration-200 font-sans pb-16">
       {/* ── TOP NAV BAR WITH BACK BUTTON ── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-zinc-900 border border-zinc-200/90 dark:border-zinc-800 rounded-2xl p-4 sm:px-6 shadow-xs">
         <div className="flex items-center gap-3">
-          {/* Back to Client List Button */}
-          {user?.role !== "Clients" && (
+          {/* Back to Client List Button (Staff / Admin only) */}
+          {!isClientRole && (
             <button
               onClick={() => setSelectedCampaignId("")}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 text-xs font-bold transition-colors cursor-pointer shrink-0"
@@ -493,8 +716,8 @@ export default function ClientMarketingReport() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Switch Client Dropdown (for Admins) */}
-          {user?.role !== "Clients" && campaigns.length > 1 && (
+          {/* Switch Client Dropdown (Staff / Admin only) */}
+          {!isClientRole && campaigns.length > 1 && (
             <div className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-1.5 shadow-2xs">
               <Users className="w-3.5 h-3.5 text-zinc-400" />
               <span className="text-[11px] text-zinc-500 font-medium">Switch Client:</span>
@@ -512,11 +735,56 @@ export default function ClientMarketingReport() {
             </div>
           )}
 
-          {/* Date Range Badge */}
-          <div className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-1.5 shadow-2xs text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-            <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-            <span>{activeCampaign.startDate || "01 Oct 2026"} – {activeCampaign.endDate || "Ongoing"}</span>
+          {/* Date Range & Retainer Countdown Badge (Starts on 1st Post) */}
+          <div className="flex items-center gap-2 bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 rounded-xl px-3 py-1.5 shadow-2xs text-xs font-semibold text-purple-900 dark:text-purple-200">
+            <Clock className="w-3.5 h-3.5 text-purple-600" />
+            {calculatedFirstPostDate ? (
+              <span>
+                1st Post: <strong>{calculatedFirstPostDate}</strong> → Expiry: <strong>{calculatedRetainerExpiry || ""}</strong>
+                {retainerRemainingDays !== null && (
+                  <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
+                    retainerRemainingDays <= 7 ? "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300" : "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
+                  }`}>
+                    {retainerRemainingDays > 0 ? `${retainerRemainingDays}d left` : "Expired / Renewal Due"}
+                  </span>
+                )}
+              </span>
+            ) : (
+              <span className="text-amber-700 dark:text-amber-300">
+                ⏳ Awaiting 1st Post (Retainer countdown starts on 1st live post)
+              </span>
+            )}
           </div>
+
+          {/* Send Retainer Expiry Alert Button (Staff / Admin only) */}
+          {!isClientRole && calculatedFirstPostDate && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!activeCampaign.clientEmail) {
+                  alert("Client email is required to send retainer expiry alert.")
+                  return
+                }
+                const { sendRetainerExpiryEmailNotification } = await import("@/services/emailNotificationService")
+                const res = await sendRetainerExpiryEmailNotification({
+                  to: activeCampaign.clientEmail,
+                  clientName: activeCampaign.clientName,
+                  packageName: activeCampaign.packageName,
+                  durationText: `${activeCampaign.packageDurationMonths || 1} Month Retainer`,
+                  firstPostDate: calculatedFirstPostDate,
+                  expiryDate: calculatedRetainerExpiry || "",
+                  remainingDays: retainerRemainingDays !== null ? retainerRemainingDays : undefined,
+                  companyId: (activeCampaign as any).companyId,
+                })
+                alert(res.message || "Retainer expiry alert dispatched!")
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              title="Send Campaign Expiry & Renewal Reminder email to client"
+            >
+              <BellRing className="w-3.5 h-3.5" />
+              <span>Send Expiry Alert</span>
+            </button>
+          )}
 
           {/* Sync Button */}
           <button
@@ -528,7 +796,7 @@ export default function ClientMarketingReport() {
             <span>Sync Now</span>
           </button>
 
-          {(isAdmin || canAdd) && (
+          {(isAdmin || canAdd) && !isClientRole && (
             <Button
               onClick={() => setIsCreateCampaignOpen(true)}
               variant="outline"
@@ -779,7 +1047,7 @@ export default function ClientMarketingReport() {
               </p>
             </div>
 
-            {(isAdmin || canAdd) && (
+            {(isAdmin || canAdd) && !isClientRole && (
               <Button
                 onClick={() => setIsAddPostOpen(true)}
                 size="sm"
@@ -810,21 +1078,21 @@ export default function ClientMarketingReport() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {campaignPosts.slice(0, 10).map((p) => (
-                    <tr key={p.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                  {campaignPosts.slice(0, 10).filter(Boolean).map((p) => (
+                    <tr key={p.id || Math.random()} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
                       <td className="py-2.5 pr-2">
                         <div className="flex items-center gap-2.5">
                           <div className="w-9 h-9 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0 border border-zinc-200 dark:border-zinc-700">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={p.contentPreview || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"}
-                              alt={p.title}
+                              alt={p.title || "Creative"}
                               className="w-full h-full object-cover"
                             />
                           </div>
                           <div className="min-w-0">
                             <span className="font-bold text-zinc-900 dark:text-zinc-100 block truncate max-w-[180px]">
-                              {p.title}
+                              {p.title || "Untitled Creative"}
                             </span>
                             <span className="text-[10px] text-zinc-400 block truncate">
                               ID: {p.id}
@@ -835,7 +1103,7 @@ export default function ClientMarketingReport() {
 
                       <td className="py-2.5 pr-2">
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-                          {p.service}
+                          {p.service || "Marketing"}
                         </span>
                       </td>
 
@@ -846,16 +1114,16 @@ export default function ClientMarketingReport() {
                       </td>
 
                       <td className="py-2.5 pr-2 text-zinc-500 font-medium whitespace-nowrap">
-                        {p.publishedAt}
+                        {p.publishedAt || "-"}
                       </td>
 
                       <td className="py-2.5 pr-2 font-bold text-zinc-800 dark:text-zinc-200">
-                        <div>{(p.views || 0).toLocaleString()} 👁️</div>
+                        <div>{(Number(p.views) || 0).toLocaleString()} 👁️</div>
                         {p.likes ? <div className="text-[10px] font-medium text-rose-600">+{p.likes} ❤️</div> : null}
                       </td>
 
                       <td className="py-2.5 pr-2 font-bold text-zinc-800 dark:text-zinc-200">
-                        {(p.reach || 0).toLocaleString()}
+                        {(Number(p.reach) || 0).toLocaleString()}
                       </td>
 
                       <td className="py-2.5 pr-2">
@@ -901,17 +1169,17 @@ export default function ClientMarketingReport() {
             </h3>
 
             <div className="space-y-3 relative before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-zinc-200 dark:before:bg-zinc-800">
-              {campaignPosts.slice(0, 5).map((p) => (
-                <div key={p.id} className="relative pl-6 text-xs">
+              {campaignPosts.slice(0, 5).filter(Boolean).map((p) => (
+                <div key={p.id || Math.random()} className="relative pl-6 text-xs">
                   <span className="absolute left-1 top-1.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-4 ring-white dark:ring-zinc-900" />
                   <span className="text-[10px] text-zinc-400 block font-medium">
-                    {p.publishedAt}
+                    {p.publishedAt || "-"}
                   </span>
                   <p className="font-semibold text-zinc-800 dark:text-zinc-200">
-                    {p.service} Delivered
+                    {p.service || "Marketing Deliverable"} Delivered
                   </p>
                   <p className="text-[10px] text-zinc-400 truncate">
-                    "{p.title}"
+                    "{p.title || "Creative Post"}"
                   </p>
                 </div>
               ))}
@@ -921,7 +1189,7 @@ export default function ClientMarketingReport() {
           <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 mt-4">
             <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800">
               <span className="text-[11px] font-bold text-purple-900 dark:text-purple-300 block mb-0.5">
-                Official Retainer Contract (Form 9)
+                Official Retainer Contract
               </span>
               <p className="text-[10px] text-purple-700 dark:text-purple-400">
                 Commitments are locked under contract. Deliverables sync automatically upon upload.

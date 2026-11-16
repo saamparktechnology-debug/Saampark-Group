@@ -1,17 +1,41 @@
 "use client"
 
 import * as React from "react"
-import { X, Check, Bold, Italic, Underline, List, ListOrdered, Table, Link2, Code, Sparkles, Minus, Maximize2, Users, UserCheck, Search, Percent } from "lucide-react"
-import { Project, ProjectMember, ProjectStatus, ProjectType } from "../types"
-import { updateProject } from "../services/projectService"
-import { getUsers } from "@/app/feature/users/services/userService"
+import { 
+  X, Check, Bold, Italic, Underline, List, ListOrdered, Table, Link2, Code, Sparkles, 
+  Minus, Maximize2, Users, UserCheck, Search, Percent, ExternalLink, Globe, GitBranch, 
+  Server, Layers, Megaphone, Video, Image as ImageIcon, Calendar, MapPin, Receipt, 
+  RefreshCw, FileText, CheckCircle2, DollarSign, Clock
+} from "lucide-react"
+import { Project, ProjectMember, ProjectStatus, ProjectType, isMarketingProject } from "../types"
+import { updateProject } from "../service/projectService"
+import { getInvoices, updateInvoice } from "@/app/feature/sales/invoices/service/invoiceService"
+import { getUsers } from "@/app/feature/users/service/userService"
 import { UserService } from "@/services/apiServices"
+import { ProjectCompletionModal } from "./ProjectCompletionModal"
 
 interface EditProjectModalProps {
   isOpen: boolean
   project: Project | null
   onClose: () => void
   onProjectUpdated: (updatedProject: Project) => void
+}
+
+const toDateInputValue = (d: string) => {
+  if (!d) return ""
+  const trimmed = String(d).trim()
+  if (/^\d{2}-\d{2}-\d{4}$/.test(trimmed)) {
+    const [day, month, year] = trimmed.split("-")
+    return `${year}-${month}-${day}`
+  }
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    return trimmed.slice(0, 10)
+  }
+  const parsed = new Date(trimmed)
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().split("T")[0]
+  }
+  return trimmed
 }
 
 export function EditProjectModal({
@@ -22,6 +46,7 @@ export function EditProjectModal({
 }: EditProjectModalProps) {
   const [title, setTitle] = React.useState("")
   const [projectType, setProjectType] = React.useState<ProjectType>("Client Project")
+  const [projectCategory, setProjectCategory] = React.useState<"Technical Project" | "Digital Marketing Retainer">("Technical Project")
   const [client, setClient] = React.useState("")
   const [description, setDescription] = React.useState("")
   const [startDate, setStartDate] = React.useState("")
@@ -37,6 +62,29 @@ export function EditProjectModal({
   const [memberSearchQuery, setMemberSearchQuery] = React.useState("")
   const [teamMembers, setTeamMembers] = React.useState<any[]>([])
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [isCompletionModalOpen, setIsCompletionModalOpen] = React.useState(false)
+
+  // Technical Project specific state
+  const [techStack, setTechStack] = React.useState<string[]>([])
+  const [newTechInput, setNewTechInput] = React.useState("")
+  const [gitUrl, setGitUrl] = React.useState("")
+  const [liveUrl, setLiveUrl] = React.useState("")
+  const [hostingEnvironment, setHostingEnvironment] = React.useState("Dedicated Linux VPS")
+  const [scopeDeliverables, setScopeDeliverables] = React.useState("")
+
+  // Digital Marketing Retainer specific state
+  const [planTier, setPlanTier] = React.useState("Grow")
+  const [postersQuota, setPostersQuota] = React.useState(12)
+  const [reelsQuota, setReelsQuota] = React.useState(2)
+  const [shootDate, setShootDate] = React.useState("")
+  const [shootLocation, setShootLocation] = React.useState("")
+  const [targetGeo, setTargetGeo] = React.useState("")
+  const [monthlyAdBudget, setMonthlyAdBudget] = React.useState(0)
+  const [driveUrl, setDriveUrl] = React.useState("")
+
+  // Attached invoice state
+  const [attachedInvoice, setAttachedInvoice] = React.useState<any | null>(null)
+  const [isLoadingInvoice, setIsLoadingInvoice] = React.useState(false)
 
   // Load team members reliably from both DB and API
   React.useEffect(() => {
@@ -78,6 +126,9 @@ export function EditProjectModal({
   // Initialize form when project prop changes
   React.useEffect(() => {
     if (project) {
+      const isMkt = isMarketingProject(project)
+      setProjectCategory(isMkt ? "Digital Marketing Retainer" : "Technical Project")
+
       setTitle(project.title || "")
       setProjectType(project.projectType || "Client Project")
       setClient(project.client || "")
@@ -87,6 +138,39 @@ export function EditProjectModal({
       setPrice(project.price || "")
       setLabelsList(project.labels || [])
       setStatus(project.status || "Open")
+
+      // Tech details
+      setTechStack(Array.isArray(project.techStack) && project.techStack.length > 0 ? project.techStack : ["Next.js", "React", "Node.js", "PostgreSQL"])
+      setGitUrl(project.gitUrl || "")
+      setLiveUrl(project.liveUrl || "")
+      setHostingEnvironment(project.hostingEnvironment || "Dedicated Linux VPS")
+      setScopeDeliverables(project.scopeDeliverables || "")
+
+      // Marketing details
+      const mkt = project.marketingRetainer || {}
+      setPlanTier(mkt.planTier || project.marketingPackage?.planName || "Grow")
+      setPostersQuota(mkt.postersQuota !== undefined ? mkt.postersQuota : (project.marketingPackage?.postersCount ?? 12))
+      setReelsQuota(mkt.reelsQuota !== undefined ? mkt.reelsQuota : (project.marketingPackage?.reelsCount ?? 2))
+      setShootDate(mkt.shootDate || "")
+      setShootLocation(mkt.shootLocation || "")
+      setTargetGeo(mkt.targetGeo || "")
+      setMonthlyAdBudget(mkt.monthlyAdBudget || 0)
+      setDriveUrl(mkt.driveUrl || "")
+
+      // Fetch attached invoice
+      setIsLoadingInvoice(true)
+      getInvoices(project.companyId).then((invList) => {
+        if (!Array.isArray(invList)) return
+        const inv = invList.find((i: any) => 
+          (project.invoiceId && (String(i.id) === String(project.invoiceId) || String(i.invoiceNumber) === String(project.invoiceId))) ||
+          (project.invoiceNumber && (String(i.invoiceNumber) === String(project.invoiceNumber) || String(i.id) === String(project.invoiceNumber))) ||
+          (String(i.project || "").trim().toLowerCase() === String(project.title || "").trim().toLowerCase() && 
+           String(i.client || "").trim().toLowerCase() === String(project.client || "").trim().toLowerCase())
+        )
+        if (inv) {
+          setAttachedInvoice(inv)
+        }
+      }).catch(console.error).finally(() => setIsLoadingInvoice(false))
       
       const numProjTotal = parseFloat(
         String(project.totalAmount ?? project.baseAmount ?? project.price ?? "0").replace(/[^0-9.]/g, "")
@@ -120,6 +204,19 @@ export function EditProjectModal({
   const numericProjectTotal = parseFloat(
     String(project.totalAmount ?? project.baseAmount ?? price ?? project.price ?? "0").replace(/[^0-9.]/g, "")
   ) || 0
+
+  // Effective client paid amount: derived from attached invoice or project payments
+  const clientPaidAmount = attachedInvoice && typeof attachedInvoice.paidAmount === "number"
+    ? attachedInvoice.paidAmount
+    : (typeof project.paidAmount === "number"
+      ? project.paidAmount
+      : (project.paymentStatus === "Paid" || project.status === "Completed"
+        ? numericProjectTotal
+        : (typeof project.advanceAmount === "number" ? project.advanceAmount : 0)))
+
+  const clientDueAmount = Math.max(0, numericProjectTotal - clientPaidAmount)
+  const clientPaidRatio = numericProjectTotal > 0 ? Math.min(1, clientPaidAmount / numericProjectTotal) : 0
+  const isSubscriptionProject = projectCategory === "Digital Marketing Retainer" || Boolean(project.subscriptionId) || String(project.title).toLowerCase().includes("package") || String(project.title).toLowerCase().includes("retainer")
 
   const handleToggleMember = (mem: any) => {
     const memId = String(mem.id)
@@ -220,6 +317,41 @@ export function EditProjectModal({
         }
       })
 
+      if (status === "Completed" && project.status !== "Completed") {
+        setIsCompletionModalOpen(true)
+        return
+      }
+
+      // Live bidirectional sync: If price changed, update attached invoice!
+      const newPriceNum = parseFloat(String(price).replace(/[^0-9.]/g, "")) || 0
+      if (attachedInvoice && newPriceNum > 0 && newPriceNum !== (attachedInvoice.totalAmount || 0)) {
+        try {
+          const invGstRate = attachedInvoice.gstRate || 18
+          const invBase = attachedInvoice.invoiceType === "nongst" ? newPriceNum : Math.round(newPriceNum / (1 + invGstRate / 100))
+          const invGst = newPriceNum - invBase
+          const invDue = Math.max(0, newPriceNum - (attachedInvoice.paidAmount || 0))
+          
+          await updateInvoice({
+            ...attachedInvoice,
+            baseAmount: invBase,
+            gstAmount: invGst,
+            totalAmount: newPriceNum,
+            due: `₹${invDue.toLocaleString("en-IN")}`,
+            subtotal: invBase,
+          }, attachedInvoice.companyId)
+        } catch (syncErr) {
+          console.warn("Could not sync invoice price:", syncErr)
+        }
+      }
+
+      // Ensure appropriate labels list
+      let finalLabels = [...labelsList]
+      if (projectCategory === "Digital Marketing Retainer") {
+        if (!finalLabels.includes("Digital Marketing")) finalLabels.push("Digital Marketing")
+      } else {
+        finalLabels = finalLabels.filter((l) => l.toLowerCase() !== "digital marketing")
+      }
+
       const updated = await updateProject(project.id, {
         title,
         projectType,
@@ -228,10 +360,30 @@ export function EditProjectModal({
         startDate,
         deadline,
         price,
-        labels: labelsList,
+        labels: finalLabels,
         status,
         members: assignedMembers,
-        progress: status === "Completed" ? 100 : project.progress,
+        progress: (status === "Completed" || status === "Finished") ? 100 : (status === "Open" ? 0 : (project.progress === 100 ? 50 : project.progress)),
+        category: projectCategory === "Digital Marketing Retainer" ? "Digital Marketing" : (project.category || "Website"),
+        techStack: projectCategory === "Technical Project" ? techStack : undefined,
+        gitUrl: projectCategory === "Technical Project" ? gitUrl : undefined,
+        liveUrl: projectCategory === "Technical Project" ? liveUrl : undefined,
+        hostingEnvironment: projectCategory === "Technical Project" ? hostingEnvironment : undefined,
+        scopeDeliverables: projectCategory === "Technical Project" ? scopeDeliverables : undefined,
+        marketingRetainer: projectCategory === "Digital Marketing Retainer" ? {
+          planTier,
+          postersQuota,
+          reelsQuota,
+          shootDate,
+          shootLocation,
+          targetGeo,
+          monthlyAdBudget,
+          driveUrl,
+        } : undefined,
+        paidAmount: clientPaidAmount,
+        dueAmount: clientDueAmount,
+        invoiceId: attachedInvoice?.id || project.invoiceId,
+        invoiceNumber: attachedInvoice?.invoiceNumber || project.invoiceNumber,
       })
 
       onProjectUpdated(updated)
@@ -250,9 +402,18 @@ export function EditProjectModal({
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
-          <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-            Edit project
-          </h2>
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+              Edit Project
+            </h2>
+            <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${
+              projectCategory === "Digital Marketing Retainer"
+                ? "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                : "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+            }`}>
+              {projectCategory === "Digital Marketing Retainer" ? "Digital Marketing Retainer" : "Technical Project"}
+            </span>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -262,8 +423,80 @@ export function EditProjectModal({
           </button>
         </div>
 
+        {/* Project Architecture Specification Pill Selector */}
+        <div className="px-6 py-2.5 bg-zinc-50/90 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+            Architecture Type:
+          </span>
+          <div className="inline-flex rounded-xl p-0.5 bg-zinc-200/70 dark:bg-zinc-700/60 border border-zinc-300 dark:border-zinc-600 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setProjectCategory("Technical Project")}
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                projectCategory === "Technical Project"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-zinc-600 dark:text-zinc-300 hover:text-zinc-900"
+              }`}
+            >
+              <Code size={13} />
+              <span>Normal / Tech Project</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setProjectCategory("Digital Marketing Retainer")}
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                projectCategory === "Digital Marketing Retainer"
+                  ? "bg-purple-600 text-white shadow-xs"
+                  : "text-zinc-600 dark:text-zinc-300 hover:text-zinc-900"
+              }`}
+            >
+              <Megaphone size={13} />
+              <span>Digital Marketing Retainer</span>
+            </button>
+          </div>
+        </div>
+
         {/* Modal Body Form */}
         <div className="p-6 overflow-y-auto space-y-4 text-xs">
+          {/* Attached Invoice Direct Sync Card */}
+          <div className="p-3.5 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-900/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-lg bg-blue-600 text-white shrink-0">
+                <Receipt size={16} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-zinc-900 dark:text-zinc-100">
+                    Attached Invoice: {attachedInvoice?.invoiceNumber || project.invoiceNumber || project.invoiceId || "Live Synced"}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    clientPaidAmount >= numericProjectTotal && numericProjectTotal > 0
+                      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                      : clientPaidAmount > 0
+                      ? "bg-blue-100 text-blue-800 border border-blue-200"
+                      : "bg-amber-100 text-amber-800 border border-amber-200"
+                  }`}>
+                    {clientPaidAmount >= numericProjectTotal && numericProjectTotal > 0 ? "Fully Paid" : clientPaidAmount > 0 ? "Advance Received" : "Payment Pending"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-500">
+                  Project price is attached to invoice. Modifying price synchronizes the official invoice.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0 text-[11px]">
+              <div className="text-right">
+                <span className="text-zinc-400 block text-[10px]">Client Paid</span>
+                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">₹{clientPaidAmount.toLocaleString("en-IN")}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-zinc-400 block text-[10px]">Balance Due</span>
+                <span className="font-mono font-bold text-amber-600 dark:text-amber-400">₹{clientDueAmount.toLocaleString("en-IN")}</span>
+              </div>
+            </div>
+          </div>
+
           {/* Title */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Title</label>
@@ -272,7 +505,7 @@ export function EditProjectModal({
               placeholder="Title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
             />
           </div>
 
@@ -299,6 +532,228 @@ export function EditProjectModal({
                 onChange={(e) => setClient(e.target.value)}
                 className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
               />
+            </div>
+          )}
+
+          {/* DEDICATED SPECIFICATIONS CARD: NORMAL TECH PROJECT */}
+          {projectCategory === "Technical Project" && (
+            <div className="p-4 rounded-xl bg-blue-50/40 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider pb-1 border-b border-blue-100 dark:border-blue-900/40">
+                <Code size={14} />
+                <span>Technical Project Architecture & Environment</span>
+              </div>
+
+              {/* Tech Stack Pills */}
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">
+                  Technology Stack
+                </label>
+                <div className="flex flex-wrap items-center gap-1.5 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg min-h-[38px]">
+                  {techStack.map((tech) => (
+                    <span
+                      key={tech}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setTechStack(techStack.filter((t) => t !== tech))}
+                        className="hover:text-rose-600 cursor-pointer"
+                      >
+                        ×
+                      </button>
+                      {tech}
+                    </span>
+                  ))}
+                  <input
+                    type="text"
+                    placeholder="Add tech (e.g. Next.js, Flutter) & hit Enter..."
+                    value={newTechInput}
+                    onChange={(e) => setNewTechInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        if (newTechInput.trim() && !techStack.includes(newTechInput.trim())) {
+                          setTechStack([...techStack, newTechInput.trim()])
+                          setNewTechInput("")
+                        }
+                      }
+                    }}
+                    className="flex-1 bg-transparent border-none focus:outline-none text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 text-xs min-w-[120px]"
+                  />
+                </div>
+                {/* Quick Add Suggestions */}
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {["Next.js", "React", "Node.js", "Flutter", "PostgreSQL", "Docker", "Tailwind"].map((sug) => (
+                    !techStack.includes(sug) && (
+                      <button
+                        key={sug}
+                        type="button"
+                        onClick={() => setTechStack([...techStack, sug])}
+                        className="px-1.5 py-0.5 rounded text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-blue-100 hover:text-blue-700 cursor-pointer transition-colors"
+                      >
+                        + {sug}
+                      </button>
+                    )
+                  ))}
+                </div>
+              </div>
+
+              {/* Git URL & Live URL */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1 flex items-center gap-1">
+                    <GitBranch size={12} className="text-zinc-400" />
+                    <span>Git Repository URL</span>
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://github.com/saampark/..."
+                    value={gitUrl}
+                    onChange={(e) => setGitUrl(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-[11px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1 flex items-center gap-1">
+                    <Globe size={12} className="text-zinc-400" />
+                    <span>Live / Staging Domain</span>
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://gramgo.in"
+                    value={liveUrl}
+                    onChange={(e) => setLiveUrl(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-[11px]"
+                  />
+                </div>
+              </div>
+
+              {/* Hosting Environment */}
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1 flex items-center gap-1">
+                  <Server size={12} className="text-zinc-400" />
+                  <span>Hosting Infrastructure & Server</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Dedicated Linux VPS (Hostinger / DigitalOcean), AWS EC2, Vercel"
+                  value={hostingEnvironment}
+                  onChange={(e) => setHostingEnvironment(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* DEDICATED SPECIFICATIONS CARD: DIGITAL MARKETING RETAINER */}
+          {projectCategory === "Digital Marketing Retainer" && (
+            <div className="p-4 rounded-xl bg-purple-50/40 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/40 space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider pb-1 border-b border-purple-100 dark:border-purple-900/40">
+                <Megaphone size={14} />
+                <span>Digital Marketing Campaign & Retainer Quotas</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">
+                    Retainer Plan Tier
+                  </label>
+                  <select
+                    value={planTier}
+                    onChange={(e) => setPlanTier(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg font-semibold cursor-pointer"
+                  >
+                    <option value="Starter">Package 01 - Starter</option>
+                    <option value="Grow">Package 02 - Grow</option>
+                    <option value="Scale">Package 03 - Scale</option>
+                    <option value="Enterprise">Enterprise / Custom</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1 flex items-center gap-1">
+                    <ImageIcon size={12} className="text-purple-500" />
+                    <span>Monthly Posters Quota</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={postersQuota}
+                    onChange={(e) => setPostersQuota(Number(e.target.value))}
+                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg font-bold font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1 flex items-center gap-1">
+                    <Video size={12} className="text-purple-500" />
+                    <span>Monthly Reels / Shorts Quota</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={reelsQuota}
+                    onChange={(e) => setReelsQuota(Number(e.target.value))}
+                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg font-bold font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1 flex items-center gap-1">
+                    <Calendar size={12} className="text-zinc-400" />
+                    <span>Model Shoot Date</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={toDateInputValue(shootDate)}
+                    onChange={(e) => setShootDate(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-mono cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1 flex items-center gap-1">
+                    <MapPin size={12} className="text-zinc-400" />
+                    <span>Target Geography & Location</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Kolkata, West Bengal, 15km radius"
+                    value={targetGeo}
+                    onChange={(e) => setTargetGeo(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1 flex items-center gap-1">
+                    <DollarSign size={12} className="text-emerald-500" />
+                    <span>Monthly Ad Spend Budget (₹)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 5000"
+                    value={monthlyAdBudget || ""}
+                    onChange={(e) => setMonthlyAdBudget(Number(e.target.value))}
+                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1 flex items-center gap-1">
+                    <Link2 size={12} className="text-zinc-400" />
+                    <span>Creative Drive Assets URL</span>
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://drive.google.com/..."
+                    value={driveUrl}
+                    onChange={(e) => setDriveUrl(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono text-[11px]"
+                  />
+                </div>
+              </div>
             </div>
           )}
 
@@ -334,106 +789,152 @@ export function EditProjectModal({
                         email: "",
                       }
                       const shareVal = memberShares[mId] !== undefined ? memberShares[mId] : 15
-                      const memberCalculatedAmt = Math.round((numericProjectTotal * shareVal) / 100)
+                      const memberTotalPayout = memberPayoutTypes[mId] === "fixed"
+                        ? (memberAmounts[mId] || 0)
+                        : Math.round((numericProjectTotal * shareVal) / 100)
+                      const memberEarnedPayout = Math.round(clientPaidRatio * memberTotalPayout)
+                      const memberPendingPayout = Math.max(0, memberTotalPayout - memberEarnedPayout)
 
                       return (
                         <div
                           key={mId}
-                          className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200/80 dark:border-purple-800/60 shadow-2xs flex items-center justify-between gap-2.5"
+                          className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200/80 dark:border-purple-800/60 shadow-2xs space-y-2.5"
                         >
-                          {/* Member Info */}
-                          <div className="flex items-center gap-2 min-w-0">
-                            <img
-                              src={m.avatar}
-                              alt={m.name}
-                              className="w-7 h-7 rounded-full object-cover border border-purple-200 shrink-0"
-                            />
-                            <div className="min-w-0">
-                              <div className="font-bold text-zinc-900 dark:text-zinc-100 truncate text-xs">
-                                {m.name}
-                              </div>
-                              <div className="text-[10px] text-zinc-400 truncate">
-                                {m.role}
+                          <div className="flex items-center justify-between gap-2.5">
+                            {/* Member Info */}
+                            <div className="flex items-center gap-2 min-w-0">
+                              <img
+                                src={m.avatar}
+                                alt={m.name}
+                                className="w-7 h-7 rounded-full object-cover border border-purple-200 shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <div className="font-bold text-zinc-900 dark:text-zinc-100 truncate text-xs">
+                                  {m.name}
+                                </div>
+                                <div className="text-[10px] text-zinc-400 truncate">
+                                  {m.role}
+                                </div>
                               </div>
                             </div>
-                          </div>
 
-                          {/* Payout Controls: % Share vs ₹ Manual Amount */}
-                          <div className="flex items-center gap-2 shrink-0">
-                            {/* Mode Toggle Pills: % vs ₹ */}
-                            <div className="inline-flex rounded-lg p-0.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
-                              <button
-                                type="button"
-                                onClick={() => handlePayoutTypeChange(mId, "percentage")}
-                                className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
-                                  (memberPayoutTypes[mId] || "percentage") === "percentage"
-                                    ? "bg-purple-600 text-white shadow-xs"
-                                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-                                }`}
-                                title="Set percentage of project"
-                              >
-                                %
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handlePayoutTypeChange(mId, "fixed")}
-                                className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
-                                  memberPayoutTypes[mId] === "fixed"
-                                    ? "bg-purple-600 text-white shadow-xs"
-                                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-                                }`}
-                                title="Type manual fixed amount in ₹"
-                              >
-                                ₹
-                              </button>
-                            </div>
-
-                            {/* Value Input */}
-                            {memberPayoutTypes[mId] === "fixed" ? (
-                              <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
-                                <span className="text-zinc-400 font-bold text-[11px]">₹</span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  placeholder="5000"
-                                  value={memberAmounts[mId] !== undefined ? memberAmounts[mId] : ""}
-                                  onChange={(e) => handleAmountChange(mId, Number(e.target.value))}
-                                  className="w-16 bg-transparent text-purple-600 dark:text-purple-400 font-bold text-left focus:outline-none text-xs"
-                                />
+                            {/* Payout Controls: % Share vs ₹ Manual Amount */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              {/* Mode Toggle Pills: % vs ₹ */}
+                              <div className="inline-flex rounded-lg p-0.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                                <button
+                                  type="button"
+                                  onClick={() => handlePayoutTypeChange(mId, "percentage")}
+                                  className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                                    (memberPayoutTypes[mId] || "percentage") === "percentage"
+                                      ? "bg-purple-600 text-white shadow-xs"
+                                      : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                                  }`}
+                                  title="Set percentage of project"
+                                >
+                                  %
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handlePayoutTypeChange(mId, "fixed")}
+                                  className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                                    memberPayoutTypes[mId] === "fixed"
+                                      ? "bg-purple-600 text-white shadow-xs"
+                                      : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                                  }`}
+                                  title="Type manual fixed amount in ₹"
+                                >
+                                  ₹
+                                </button>
                               </div>
-                            ) : (
-                              <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  value={shareVal}
-                                  onChange={(e) => handleShareChange(mId, Number(e.target.value))}
-                                  className="w-10 bg-transparent text-purple-600 dark:text-purple-400 font-black text-center focus:outline-none text-xs"
-                                />
-                                <span className="text-zinc-400 font-bold text-[10px]">%</span>
-                              </div>
-                            )}
 
-                            {/* Payout Preview Badge */}
-                            <div className="px-2 py-1 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-200 font-black text-[11px] border border-purple-200 dark:border-purple-800 whitespace-nowrap">
+                              {/* Value Input */}
                               {memberPayoutTypes[mId] === "fixed" ? (
-                                <span>≈ {numericProjectTotal > 0 ? ((memberAmounts[mId] || 0) / numericProjectTotal * 100).toFixed(1) : 0}%</span>
+                                <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                                  <span className="text-zinc-400 font-bold text-[11px]">₹</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    placeholder="5000"
+                                    value={memberAmounts[mId] !== undefined ? memberAmounts[mId] : ""}
+                                    onChange={(e) => handleAmountChange(mId, Number(e.target.value))}
+                                    className="w-16 bg-transparent text-purple-600 dark:text-purple-400 font-bold text-left focus:outline-none text-xs"
+                                  />
+                                </div>
                               ) : (
-                                <span>₹{memberCalculatedAmt.toLocaleString("en-IN")}</span>
+                                <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={shareVal}
+                                    onChange={(e) => handleShareChange(mId, Number(e.target.value))}
+                                    className="w-10 bg-transparent text-purple-600 dark:text-purple-400 font-black text-center focus:outline-none text-xs"
+                                  />
+                                  <span className="text-zinc-400 font-bold text-[10px]">%</span>
+                                </div>
                               )}
-                            </div>
 
-                            {/* Remove button */}
-                            <button
-                              type="button"
-                              onClick={() => handleToggleMember(m)}
-                              className="p-1 rounded-md text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
-                              title="Remove member"
-                            >
-                              <X size={13} />
-                            </button>
+                              {/* Payout Preview Badge */}
+                              <div className="px-2 py-1 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-200 font-black text-[11px] border border-purple-200 dark:border-purple-800 whitespace-nowrap">
+                                {memberPayoutTypes[mId] === "fixed" ? (
+                                  <span>≈ {numericProjectTotal > 0 ? ((memberAmounts[mId] || 0) / numericProjectTotal * 100).toFixed(1) : 0}%</span>
+                                ) : (
+                                  <span>₹{memberTotalPayout.toLocaleString("en-IN")}</span>
+                                )}
+                              </div>
+
+                              {/* Remove button */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleMember(m)}
+                                className="p-1 rounded-md text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                                title="Remove member"
+                              >
+                                <X size={13} />
+                              </button>
+                            </div>
                           </div>
+
+                          {/* Pro-Rata Commission Attribution Breakdown */}
+                          <div className="pt-2 border-t border-purple-100 dark:border-purple-900/40 grid grid-cols-3 gap-2 text-[10.5px]">
+                            <div className="bg-purple-50/60 dark:bg-purple-950/40 p-2 rounded-lg border border-purple-100 dark:border-purple-900/40">
+                              <div className="text-zinc-500 text-[10px]">Total Potential</div>
+                              <div className="font-bold font-mono text-purple-700 dark:text-purple-300">
+                                ₹{memberTotalPayout.toLocaleString("en-IN")}
+                              </div>
+                            </div>
+                            <div className="bg-emerald-50/70 dark:bg-emerald-950/40 p-2 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40">
+                              <div className="text-emerald-700 dark:text-emerald-300 font-semibold text-[10px] flex items-center justify-between">
+                                <span>Earned (Pro-Rata)</span>
+                                <span className="text-[9px] font-bold">{(clientPaidRatio * 100).toFixed(0)}%</span>
+                              </div>
+                              <div className="font-black font-mono text-emerald-700 dark:text-emerald-300">
+                                ₹{memberEarnedPayout.toLocaleString("en-IN")}
+                              </div>
+                              <div className="text-[9px] text-emerald-600 dark:text-emerald-400 mt-0.5 truncate">
+                                {clientPaidAmount > 0 ? `Against ₹${clientPaidAmount.toLocaleString("en-IN")} paid` : "Pending client payment"}
+                              </div>
+                            </div>
+                            <div className="bg-amber-50/70 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200/60 dark:border-amber-800/40">
+                              <div className="text-amber-700 dark:text-amber-300 font-semibold text-[10px]">Pending Due</div>
+                              <div className="font-bold font-mono text-amber-700 dark:text-amber-300">
+                                ₹{memberPendingPayout.toLocaleString("en-IN")}
+                              </div>
+                              <div className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5 truncate">
+                                {clientDueAmount > 0 ? `On client balance ₹${clientDueAmount.toLocaleString("en-IN")}` : "Fully settled"}
+                              </div>
+                            </div>
+                          </div>
+
+                          {isSubscriptionProject && (
+                            <div className="px-2 py-1 rounded-md bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/40 text-[10.5px] text-indigo-700 dark:text-indigo-300 font-semibold flex items-center justify-between">
+                              <span>🔄 Retainer Recurring Payout:</span>
+                              <span className="font-mono font-bold">
+                                ₹{memberTotalPayout.toLocaleString("en-IN")} / monthly cycle paid
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -545,23 +1046,29 @@ export function EditProjectModal({
 
           {/* Start date */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-zinc-500 font-medium">Start date</label>
+            <label className="text-zinc-500 font-medium flex items-center gap-1.5">
+              <Calendar size={13} className="text-zinc-400" />
+              <span>Start date</span>
+            </label>
             <input
-              type="text"
-              value={startDate}
+              type="date"
+              value={toDateInputValue(startDate)}
               onChange={(e) => setStartDate(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-mono text-xs cursor-pointer"
             />
           </div>
 
           {/* Deadline */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-zinc-500 font-medium">Deadline</label>
+            <label className="text-zinc-500 font-medium flex items-center gap-1.5">
+              <Calendar size={13} className="text-zinc-400" />
+              <span>Deadline</span>
+            </label>
             <input
-              type="text"
-              value={deadline}
+              type="date"
+              value={toDateInputValue(deadline)}
               onChange={(e) => setDeadline(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-red-600 dark:text-red-400 font-mono text-xs font-bold cursor-pointer"
             />
           </div>
 
@@ -685,9 +1192,11 @@ export function EditProjectModal({
             >
               <option value="Open">Open</option>
               <option value="In Progress">In Progress</option>
+              <option value="Under Review">Under Review</option>
               <option value="Hold">Hold</option>
               <option value="Completed">Completed</option>
               <option value="Finished">Finished</option>
+              <option value="Cancelled">Cancelled</option>
             </select>
           </div>
 
@@ -716,6 +1225,85 @@ export function EditProjectModal({
         </div>
 
       </div>
+
+      {isCompletionModalOpen && (
+        <ProjectCompletionModal
+          isOpen={isCompletionModalOpen}
+          project={project}
+          onClose={() => setIsCompletionModalOpen(false)}
+          onConfirmComplete={async (completedData) => {
+            const { sendProjectCompletionEmailNotification } = await import("@/services/emailNotificationService")
+
+            const currentMembers: ProjectMember[] = selectedMemberIds.map((mId) => {
+              const found = teamMembers.find(
+                (t) => String(t.id).toLowerCase() === mId.toLowerCase()
+              )
+              const pType = memberPayoutTypes[mId] || "percentage"
+              const sharePct = memberShares[mId] !== undefined ? Number(memberShares[mId]) : 15
+              const manualAmt = memberAmounts[mId] !== undefined ? Number(memberAmounts[mId]) : Math.round((numericProjectTotal * sharePct) / 100)
+              const finalPayoutAmt = pType === "fixed" ? manualAmt : Math.round((numericProjectTotal * sharePct) / 100)
+
+              return {
+                id: mId,
+                name: found?.name || "Team Member",
+                role: found?.role || "Developer",
+                avatar: found?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${found?.name || mId}`,
+                email: found?.email || "",
+                payoutType: pType,
+                payoutValue: pType === "fixed" ? manualAmt : sharePct,
+                payoutAmount: finalPayoutAmt,
+                sharePercentage: pType === "fixed" && numericProjectTotal > 0
+                  ? Number(((manualAmt / numericProjectTotal) * 100).toFixed(1))
+                  : sharePct,
+              }
+            })
+
+            const updated = await updateProject(project.id, {
+              title,
+              projectType,
+              client: projectType === "Client Project" ? client : "-",
+              description,
+              startDate,
+              deadline,
+              price,
+              labels: labelsList,
+              status: "Completed",
+              members: currentMembers,
+              progress: 100,
+              completedAt: new Date().toISOString(),
+              countdownStartDate: completedData.countdownStartDate,
+              countdownEndDate: completedData.countdownEndDate,
+              planDuration: completedData.planDuration,
+              planType: completedData.planType as any,
+              firstPostDate: completedData.firstPostDate,
+              clientEmail: completedData.clientEmail,
+            })
+
+            onProjectUpdated(updated)
+            setIsCompletionModalOpen(false)
+            onClose()
+
+            if (completedData.notifyClient && completedData.clientEmail) {
+              await sendProjectCompletionEmailNotification(
+                updated,
+                completedData.clientEmail,
+                client || project.client,
+                {
+                  planType: completedData.planType,
+                  countdownDuration: completedData.planDuration,
+                  countdownStartDate: completedData.countdownStartDate,
+                  countdownEndDate: completedData.countdownEndDate,
+                  countdownNotice: completedData.planType === "digital_marketing"
+                    ? (completedData.firstPostDate 
+                        ? `Campaign timeline started from 1st post on ${completedData.firstPostDate} and expires on ${completedData.countdownEndDate}.`
+                        : "Campaign countdown paused until first creative post goes live.")
+                    : `Your service & hosting countdown started today (${new Date().toLocaleDateString("en-IN")}) and remains active until ${completedData.countdownEndDate}.`,
+                }
+              )
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

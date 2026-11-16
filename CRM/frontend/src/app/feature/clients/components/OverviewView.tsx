@@ -34,8 +34,8 @@ export function OverviewView({ totalClients = 0, totalContacts = 0 }: OverviewVi
   React.useEffect(() => {
     const loadRealMetrics = async () => {
       try {
-        const { getInvoices } = await import("@/app/feature/sales/invoices/services/invoiceService")
-        const { getProjects } = await import("@/app/feature/projects/services/projectService")
+        const { getInvoices } = await import("@/app/feature/sales/invoices/service/invoiceService")
+        const { getProjects } = await import("@/app/feature/projects/service/projectService")
 
         const [invoicesList, projectsList] = await Promise.all([
           getInvoices().catch(() => []),

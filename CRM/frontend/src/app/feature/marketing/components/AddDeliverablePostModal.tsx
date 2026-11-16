@@ -4,7 +4,7 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Upload, Sparkles, Check, Image as ImageIcon, Video, UserCheck, Share2 } from "lucide-react"
 import { MarketingCampaign, MarketingPost } from "../types"
-import { MarketingService } from "../services/marketingService"
+import { MarketingService } from "../service/marketingService"
 import { Button } from "@/components/ui/Button"
 
 interface AddDeliverablePostModalProps {

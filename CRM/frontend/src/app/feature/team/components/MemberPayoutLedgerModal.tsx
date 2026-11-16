@@ -4,7 +4,7 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Receipt, Eye, Send, CreditCard, Building2, Calendar, CheckCircle2 } from "lucide-react"
 import { TeamMemberPayoutProfile, TeamPayoutRecord } from "../types"
-import { getPayoutRecords } from "../services/teamPaymentService"
+import { getPayoutRecords } from "../service/teamPaymentService"
 import { Button } from "@/components/ui/Button"
 
 interface MemberPayoutLedgerModalProps {

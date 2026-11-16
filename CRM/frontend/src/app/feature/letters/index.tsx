@@ -8,7 +8,7 @@ import {
 } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
-import { getLetters, deleteLetter } from "./services/letterService"
+import { useDeleteLetterMutation, useLettersQuery } from "./hooks/useLetters"
 import { LetterRecord, LetterType } from "./types"
 import { LetterComposerModal } from "./components/LetterComposerModal"
 import { LetterViewModal } from "./components/LetterViewModal"
@@ -23,37 +23,18 @@ export default function LettersMain() {
   const canAddLetter = isAdmin || canPerformAction(user, "HR", "add")
   const canDeleteLetter = isAdmin || canPerformAction(user, "HR", "delete")
 
-  const [letters, setLetters] = React.useState<LetterRecord[]>([])
+  const companyKey = activeCompanyId || "all"
+  const { data: letters = [], isLoading, refetch: loadData } = useLettersQuery(companyKey)
+  const deleteLetterMutation = useDeleteLetterMutation(companyKey)
   const [searchQuery, setSearchQuery] = React.useState("")
   const [typeFilter, setTypeFilter] = React.useState<string>("all")
-  const [isLoading, setIsLoading] = React.useState(true)
 
   // Modals
   const [isComposerOpen, setIsComposerOpen] = React.useState(false)
   const [viewingLetter, setViewingLetter] = React.useState<LetterRecord | null>(null)
   const [deletingLetter, setDeletingLetter] = React.useState<LetterRecord | null>(null)
 
-  const loadData = React.useCallback(async () => {
-    setIsLoading(true)
-    try {
-      const data = await getLetters(activeCompanyId || "all")
-      setLetters(data)
-    } catch (err) {
-      console.warn("Failed to load letters:", err)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [activeCompanyId])
-
-  React.useEffect(() => {
-    loadData()
-    window.addEventListener("saampark_letter_created", loadData)
-    window.addEventListener("saampark_data_synced", loadData)
-    return () => {
-      window.removeEventListener("saampark_letter_created", loadData)
-      window.removeEventListener("saampark_data_synced", loadData)
-    }
-  }, [loadData])
+  
 
   const handleDelete = async () => {
     if (!deletingLetter) return

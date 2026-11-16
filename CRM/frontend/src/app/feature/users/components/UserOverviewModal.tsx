@@ -8,7 +8,7 @@ import {
   Camera, Users, Home, Copy
 } from "lucide-react"
 import { UserItem, KycStatus } from "../types"
-import { recordUserAccount, updateUser } from "../services/userService"
+import { recordUserAccount, updateUser } from "../service/userService"
 import { api } from "@/lib/api"
 import { saveModuleDataToDB } from "@/lib/storageSync"
 import { useAuthStore, getSelectableCompanies, isMatchingCompany } from "@/store/useAuthStore"
@@ -469,7 +469,7 @@ export function UserOverviewModal({
     }
     await recordUserAccount(updatedUser)
     try {
-      const { cascadeUserAvatarChange } = await import("../services/userService")
+      const { cascadeUserAvatarChange } = await import("../service/userService")
       cascadeUserAvatarChange(user.name, user.email, newAvatarUrl).catch(() => {})
     } catch (e) {
       console.error(e)

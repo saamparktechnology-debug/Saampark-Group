@@ -122,9 +122,9 @@ function PublicQuotationContent() {
             const targetCompId = String(target.companyId || "tech").toLowerCase().trim()
             const compList = Array.isArray(allCompanies) && allCompanies.length > 0 ? allCompanies : DEFAULT_COMPANIES
             const matchedComp = compList.find(c => {
-              const cId = c.id.toLowerCase().trim()
-              const cSlug = (c.slug || "").toLowerCase().trim()
-              const cName = c.name.toLowerCase().trim()
+              const cId = String(c.id || "").toLowerCase().trim()
+              const cSlug = String(c.slug || "").toLowerCase().trim()
+              const cName = String(c.name || "").toLowerCase().trim()
               return cId === targetCompId || cSlug === targetCompId || cName === targetCompId
             }) || compList[0] || DEFAULT_COMPANIES[0]
             setResolvedCompany(matchedComp)

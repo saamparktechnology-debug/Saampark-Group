@@ -3,9 +3,9 @@
 import * as React from "react"
 import { X, Plus, Check, Calendar, Clock, Wrench, FileText, User as UserIcon, Trash2, MapPin, Building, Info } from "lucide-react"
 import { Lead, LeadStatus, LeadType } from "../types"
-import { updateLead, unlockLead, parseLeadDate, formatLeadReminderDate, isReminderDateOverdue, MONTH_NAMES_SHORT, canUserUnlockLead, isLeadClientPrivate } from "../services/leadService"
+import { updateLead, unlockLead, parseLeadDate, formatLeadReminderDate, isReminderDateOverdue, MONTH_NAMES_SHORT, canUserUnlockLead, isLeadClientPrivate } from "../service/leadService"
 import { useAuthStore, isMatchingCompany, getSelectableCompanies } from "@/store/useAuthStore"
-import { getUsers } from "@/app/feature/users/services/userService"
+import { getUsers } from "@/app/feature/users/service/userService"
 
 // Helper to convert date string to "YYYY-MM-DD" for input[type="date"] (Zero UTC Timezone Shift)
 function formatDateForInput(dateStr?: string): string {

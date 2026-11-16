@@ -10,12 +10,12 @@ import {
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { CreditNoteService } from "@/services/salesService"
-import { getClients } from "@/app/feature/clients/services/clientService"
+import { getClients } from "@/app/feature/clients/service/clientService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { formatDisplayDate } from "@/lib/utils"
 
-import { getCreditNotes, createCreditNote, deleteCreditNote, CreditNoteItem } from "./services/creditNoteService"
+import { getCreditNotes, createCreditNote, deleteCreditNote, CreditNoteItem } from "./service/creditNoteService"
 
 export default function CreditNotesPage() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()

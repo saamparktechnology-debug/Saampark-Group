@@ -14,6 +14,7 @@ const PATH_TO_MODULE_MAP: Array<{ prefix: string; moduleName: string }> = [
   { prefix: "/feature/events", moduleName: "Events" },
   { prefix: "/feature/clients", moduleName: "Clients" },
   { prefix: "/feature/projects", moduleName: "Projects" },
+  { prefix: "/feature/marketing", moduleName: "Digital Marketing" },
   { prefix: "/feature/tasks", moduleName: "Tasks" },
   { prefix: "/feature/leads", moduleName: "Leads" },
   { prefix: "/feature/proposals", moduleName: "Proposals" },

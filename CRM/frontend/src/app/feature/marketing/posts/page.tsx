@@ -7,7 +7,7 @@ import {
   Layers, ExternalLink, Calendar, CheckCircle2, Clock
 } from "lucide-react"
 import { MarketingCampaign, MarketingPost } from "../types"
-import { MarketingService } from "../services/marketingService"
+import { MarketingService } from "../service/marketingService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import ViewCreativeModal from "../components/ViewCreativeModal"

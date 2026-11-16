@@ -1,8 +1,8 @@
 import { Lead } from "@/app/feature/leads/types"
-import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
-import { addProject, getProjects } from "@/app/feature/projects/services/projectService"
-import { addInvoice, InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
-import { recordUserAccount } from "@/app/feature/users/services/userService"
+import { getClients, saveStoredClient } from "@/app/feature/clients/service/clientService"
+import { addProject, getProjects } from "@/app/feature/projects/service/projectService"
+import { addInvoice, InvoiceItem } from "@/app/feature/sales/invoices/service/invoiceService"
+import { recordUserAccount } from "@/app/feature/users/service/userService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 
 export interface ProposalWorkflowData {

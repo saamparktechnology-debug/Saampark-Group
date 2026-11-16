@@ -11,8 +11,8 @@ import {
   ArrowDownCircle,
 } from "lucide-react"
 import { Task, TaskStatus, getTaskCountdownChip } from "../types"
-import { taskService } from "../services/taskService"
-import { getUsers, getUserAvatar } from "@/app/feature/users/services/userService"
+import { taskService } from "../service/taskService"
+import { getUsers, getUserAvatar } from "@/app/feature/users/service/userService"
 import { UserItem } from "@/app/feature/users/types"
 import { formatDisplayDate } from "@/lib/utils"
 

@@ -10,8 +10,8 @@ import {
 import { useAuthStore, getCompanyFullName, getCompanyLogoUrl } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { QuotationService } from "@/services/salesService"
-import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
-import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
+import { getClients, saveStoredClient } from "@/app/feature/clients/service/clientService"
+import { addInvoice } from "@/app/feature/sales/invoices/service/invoiceService"
 import { createNotification } from "@/services/notificationService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
@@ -169,7 +169,7 @@ export default function QuotationsMain() {
   }, [activeCompanyId])
 
   const filtered = React.useMemo(() => {
-    const { activeCompanyId: freshComp, activeBranchId: freshBranch, branches: freshBranches } = useAuthStore.getState()
+    const { activeCompanyId: freshComp, activeBranchId: freshBranch, activeSubBranchId: freshSubBranch, branches: freshBranches, subBranches: freshSubBranches } = useAuthStore.getState()
     const userComp = (freshComp || user?.companyId || "").toLowerCase().trim()
     const targetBranch = freshBranch
     const branchObj = (freshBranches || []).find(b => 
@@ -179,7 +179,15 @@ export default function QuotationsMain() {
     const targetBranchId = String(branchObj?.id || targetBranch || "").toLowerCase().trim()
     const targetBranchName = branchObj?.name?.toLowerCase().trim() || ""
 
-    return quotations.filter(q => {
+    const targetSubBranch = freshSubBranch
+    const subBranchObj = (freshSubBranches || []).find(sb => 
+      String(sb.id) === String(targetSubBranch) || 
+      String(sb.name || "").toLowerCase() === String(targetSubBranch || "").toLowerCase()
+    )
+    const targetSubBranchId = String(subBranchObj?.id || targetSubBranch || "").toLowerCase().trim()
+    const targetSubBranchName = subBranchObj?.name?.toLowerCase().trim() || ""
+
+    const result = quotations.filter(q => {
       // 1. Client Scoping: Client users strictly see all quotations created for them across their company (bypassing internal branch filter)
       if (isClientUser) {
         if (!isRecordAssignedToClient(q, user)) return false
@@ -203,10 +211,17 @@ export default function QuotationsMain() {
         if (!normQComp && normUserComp !== "tech") return false
       }
       // Branch filter (strict)
-      if (targetBranch && targetBranch !== "all") {
+      if (targetBranch && targetBranch !== "all" && targetBranch !== "hq" && targetBranch !== "main" && targetBranchId !== "main" && targetBranchId !== "hq") {
         const qBranch = String((q as any).branchId || "").toLowerCase().trim()
         if (!qBranch) return false
         const match = qBranch === targetBranchId || (targetBranchName && qBranch === targetBranchName)
+        if (!match) return false
+      }
+      // Sub-Branch filter (strict)
+      if (targetSubBranch && targetSubBranch !== "all" && targetSubBranch !== "hq" && targetSubBranch !== "main" && targetSubBranchId !== "main" && targetSubBranchId !== "hq") {
+        const qSub = String((q as any).subBranchId || "").toLowerCase().trim()
+        if (!qSub) return false
+        const match = qSub === targetSubBranchId || (targetSubBranchName && qSub === targetSubBranchName)
         if (!match) return false
       }
       // Discipline separation filter (Software vs Digital Marketing Retainer)
@@ -221,6 +236,16 @@ export default function QuotationsMain() {
         (q.customerEmail && q.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()))
       return match
     })
+
+    // Newly created quotations on top
+    result.sort((a, b) => {
+      const timeA = new Date((a as any).date || (a as any).createdAt || 0).getTime()
+      const timeB = new Date((b as any).date || (b as any).createdAt || 0).getTime()
+      if (timeA !== timeB && !isNaN(timeA) && !isNaN(timeB)) return timeB - timeA
+      return String(b.id || "").localeCompare(String(a.id || ""), undefined, { numeric: true })
+    })
+
+    return result
   }, [quotations, activeCompanyId, activeBranchId, branches, searchQuery, statusFilter, disciplineFilter, user, isClientUser])
 
   const subtotal = items.reduce((s, i) => s + (Number(i.quantity) * Number(i.unitPrice)), 0)
@@ -408,6 +433,11 @@ export default function QuotationsMain() {
     })
   }
 
+  const [modifyingItem, setModifyingItem] = React.useState<QuotationData | null>(null)
+  const [modifyNotes, setModifyNotes] = React.useState("")
+  const [decliningItem, setDecliningItem] = React.useState<QuotationData | null>(null)
+  const [declineReason, setDeclineReason] = React.useState("")
+
   const handleAcceptQuotation = async (quotation: QuotationData) => {
     const updated: QuotationData = {
       ...quotation,
@@ -421,6 +451,47 @@ export default function QuotationsMain() {
     if (viewingItem && viewingItem.id === quotation.id) {
       setViewingItem(updated)
     }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    }
+  }
+
+  const handleDeclineQuotation = async (quotation: QuotationData, reason?: string) => {
+    const updated: QuotationData = {
+      ...quotation,
+      status: "Declined",
+      clientAccepted: false,
+      declinedAt: Date.now(),
+      declinedBy: quotation.customer || user?.name || "Client",
+      declineReason: reason || declineReason || "Declined by client",
+    } as any
+    await QuotationService.update(quotation.id, updated).catch(() => {})
+    setQuotations(prev => prev.map(q => q.id === quotation.id ? updated : q))
+    if (viewingItem && viewingItem.id === quotation.id) {
+      setViewingItem(updated)
+    }
+    setDecliningItem(null)
+    setDeclineReason("")
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    }
+  }
+
+  const handleRequestModifyQuotation = async (quotation: QuotationData, note: string) => {
+    const updated: QuotationData = {
+      ...quotation,
+      status: "Modification Requested",
+      clientNotes: note || "Client requested modifications.",
+      requestedModifyAt: Date.now(),
+      requestedModifyBy: quotation.customer || user?.name || "Client",
+    } as any
+    await QuotationService.update(quotation.id, updated).catch(() => {})
+    setQuotations(prev => prev.map(q => q.id === quotation.id ? updated : q))
+    if (viewingItem && viewingItem.id === quotation.id) {
+      setViewingItem(updated)
+    }
+    setModifyingItem(null)
+    setModifyNotes("")
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("saampark_data_synced"))
     }
@@ -510,7 +581,7 @@ export default function QuotationsMain() {
 
       // Auto-create/sync Project in Projects module
       try {
-        const { getProjects, addProject } = await import("@/app/feature/projects/services/projectService")
+        const { getProjects, addProject } = await import("@/app/feature/projects/service/projectService")
         const existingProjects = await getProjects(targetCompanyId)
         const projTitle = (resolvedProjectName || `${quotation.customer} - ${isDigitalMarketing ? "Digital Marketing Campaign" : "Project"}`).trim()
         const found = existingProjects.find(p => p.title.toLowerCase().trim() === projTitle.toLowerCase())
@@ -610,7 +681,7 @@ export default function QuotationsMain() {
       ) || quotation.companyId === "consultancy"
 
       if (hasMarketing) {
-        import("@/app/feature/marketing/services/marketingService").then(({ MarketingService }) => {
+        import("@/app/feature/marketing/service/marketingService").then(({ MarketingService }) => {
           MarketingService.autoProvisionFromQuotation(
             {
               id: matchedClient?.id || quotation.clientId || `CLT-${Date.now().toString().slice(-4)}`,
@@ -744,39 +815,13 @@ export default function QuotationsMain() {
           </button>
 
           {canAdd && (
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => { setEditingItem(null); setIsStudioOpen(true) }} 
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
-              >
-                <Plus size={15} />
-                <span>+ Standard Quotation</span>
-              </button>
-
-              <button 
-                onClick={() => {
-                  setEditingItem({
-                    companyId: "consultancy",
-                    category: "Digital Marketing",
-                    marketingPackage: {
-                      enabled: true,
-                      planName: "Grow - 2",
-                      packageDuration: "3 Months",
-                      postersCount: 20,
-                      videosCount: 15,
-                      hasRealModelShoot: true,
-                      packagePrice: 25000,
-                      specialNote: "Complete monthly digital marketing deliverable commitments"
-                    }
-                  } as any)
-                  setIsStudioOpen(true)
-                }} 
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
-              >
-                <Sparkles size={14} />
-                <span>+ Marketing Retainer (Form 9)</span>
-              </button>
-            </div>
+            <button 
+              onClick={() => { setEditingItem(null); setIsStudioOpen(true) }} 
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
+            >
+              <Plus size={15} />
+              <span>+ Create Quotation</span>
+            </button>
           )}
         </div>
       </div>
@@ -1001,48 +1046,109 @@ export default function QuotationsMain() {
                         >
                           <Eye size={14} />
                         </button>
-                        <button 
-                          onClick={() => handleConvertToClient(q)}
-                          className="p-1 hover:text-emerald-600 transition-colors cursor-pointer" 
-                          title="Convert / Move to CRM Client"
-                        >
-                          <UserCheck size={14} className="text-emerald-600" />
-                        </button>
-                        <button 
-                          onClick={() => handleCreateEstimateFromQuote(q)}
-                          className="p-1 hover:text-blue-600 transition-colors cursor-pointer" 
-                          title="Generate Estimate from Quotation"
-                        >
-                          <Sparkles size={14} className="text-blue-600" />
-                        </button>
-                        <button 
-                          onClick={() => {
-                            setSendingItem(q)
-                            setSendEmail(q.customerEmail || "")
-                            setSendMessage(`Dear ${q.customer},\n\nPlease find attached our commercial quotation ${q.number} totaling ₹${(q.total || 0).toLocaleString("en-IN")}.\n\nBest regards,\n${user?.name || "SAAMPARK Group"}`)
-                          }}
-                          className="p-1 hover:text-blue-600 transition-colors cursor-pointer" 
-                          title="Email Quotation"
-                        >
-                          <Send size={14} />
-                        </button>
-                        {canEdit && (
-                          <button 
-                            onClick={() => openEditModal(q)} 
-                            className="p-1 hover:text-amber-600 transition-colors cursor-pointer" 
-                            title="Edit"
-                          >
-                            <Edit size={14} />
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button 
-                            onClick={() => setDeleteConfirm(q)} 
-                            className="p-1 hover:text-rose-600 transition-colors cursor-pointer" 
-                            title="Delete"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+
+                        {/* CLIENT SPECIFIC ACTIONS: Accept, Modify, Reject */}
+                        {isClientUser ? (
+                          <>
+                            {q.status !== "Accepted" && q.status !== "Declined" && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAcceptQuotation(q)}
+                                  className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold shadow-xs transition-colors flex items-center gap-0.5 cursor-pointer"
+                                  title="Accept this quotation"
+                                >
+                                  <Check size={12} strokeWidth={2.5} />
+                                  <span>Accept</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setModifyingItem(q)
+                                    setModifyNotes("")
+                                  }}
+                                  className="px-2 py-0.5 rounded bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold shadow-xs transition-colors flex items-center gap-0.5 cursor-pointer"
+                                  title="Request modifications or adjustments"
+                                >
+                                  <Edit size={12} />
+                                  <span>Modify</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDecliningItem(q)
+                                    setDeclineReason("")
+                                  }}
+                                  className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-300 text-[10px] font-bold transition-colors cursor-pointer"
+                                  title="Decline this quotation"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </>
+                            )}
+                            {q.status === "Accepted" && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                ✓ Accepted
+                              </span>
+                            )}
+                            {q.status === "Declined" && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                ✕ Declined
+                              </span>
+                            )}
+                            {q.status === "Modification Requested" && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                ✎ Modifying
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          /* TEAM & ADMIN ACTIONS: Convert to Client, Create Estimate, Email, Edit, Delete */
+                          <>
+                            <button 
+                              onClick={() => handleConvertToClient(q)}
+                              className="p-1 hover:text-emerald-600 transition-colors cursor-pointer" 
+                              title="Convert / Move to CRM Client"
+                            >
+                              <UserCheck size={14} className="text-emerald-600" />
+                            </button>
+                            <button 
+                              onClick={() => handleCreateEstimateFromQuote(q)}
+                              className="p-1 hover:text-blue-600 transition-colors cursor-pointer" 
+                              title="Generate Estimate from Quotation"
+                            >
+                              <Sparkles size={14} className="text-blue-600" />
+                            </button>
+                            <button 
+                              onClick={() => {
+                                setSendingItem(q)
+                                setSendEmail(q.customerEmail || "")
+                                setSendMessage(`Dear ${q.customer},\n\nPlease find attached our commercial quotation ${q.number} totaling ₹${(q.total || 0).toLocaleString("en-IN")}.\n\nBest regards,\n${user?.name || "SAAMPARK Group"}`)
+                              }}
+                              className="p-1 hover:text-blue-600 transition-colors cursor-pointer" 
+                              title="Email Quotation"
+                            >
+                              <Send size={14} />
+                            </button>
+                            {canEdit && (
+                              <button 
+                                onClick={() => openEditModal(q)} 
+                                className="p-1 hover:text-amber-600 transition-colors cursor-pointer" 
+                                title="Edit"
+                              >
+                                <Edit size={14} />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button 
+                                onClick={() => setDeleteConfirm(q)} 
+                                className="p-1 hover:text-rose-600 transition-colors cursor-pointer" 
+                                title="Delete"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>
@@ -1063,6 +1169,18 @@ export default function QuotationsMain() {
               quotation={viewingItem}
               onClose={() => setViewingItem(null)}
               onAccept={() => handleAcceptQuotation(viewingItem)}
+              onDecline={() => {
+                const target = viewingItem
+                setViewingItem(null)
+                setDecliningItem(target)
+                setDeclineReason("")
+              }}
+              onRequestModify={() => {
+                const target = viewingItem
+                setViewingItem(null)
+                setModifyingItem(target)
+                setModifyNotes("")
+              }}
               onSendEstimate={() => handleCreateEstimateFromQuote(viewingItem)}
               onSendEmail={() => {
                 const target = viewingItem
@@ -1074,6 +1192,125 @@ export default function QuotationsMain() {
               onConvertToInvoice={() => handleConvertToInvoice(viewingItem)}
               isClientRole={isClientUser}
             />
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── CLIENT QUOTATION MODIFICATION REQUEST MODAL ──────────────────── */}
+      <AnimatePresence>
+        {modifyingItem && (
+          <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/60 flex items-center justify-center font-bold">
+                    ✎
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">Request Quotation Modification</h3>
+                    <p className="text-[11px] text-zinc-400">Quote #{modifyingItem.number} for {modifyingItem.customer}</p>
+                  </div>
+                </div>
+                <button onClick={() => setModifyingItem(null)} className="p-1 text-zinc-400 hover:text-zinc-600 rounded-lg cursor-pointer">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-300 block mb-1.5">
+                  Describe what you would like modified or adjusted:
+                </label>
+                <textarea 
+                  rows={4}
+                  value={modifyNotes}
+                  onChange={(e) => setModifyNotes(e.target.value)}
+                  placeholder="e.g. Please adjust the timeline to 45 days, add an extra revision round for posters, and provide revised pricing..."
+                  className="w-full text-xs p-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none font-medium text-zinc-800 dark:text-zinc-200"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setModifyingItem(null)}
+                  className="px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 rounded-lg cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!modifyNotes.trim()}
+                  onClick={() => handleRequestModifyQuotation(modifyingItem, modifyNotes.trim())}
+                  className="px-4 py-2 text-xs font-bold text-amber-950 bg-amber-400 hover:bg-amber-300 disabled:opacity-50 rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  Submit Modification Request
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── CLIENT DECLINE QUOTATION CONFIRMATION MODAL ─────────────────── */}
+      <AnimatePresence>
+        {decliningItem && (
+          <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950/60 flex items-center justify-center font-bold">
+                    ✕
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">Decline Quotation</h3>
+                    <p className="text-[11px] text-zinc-400">Quote #{decliningItem.number} (₹{(decliningItem.total || 0).toLocaleString("en-IN")})</p>
+                  </div>
+                </div>
+                <button onClick={() => setDecliningItem(null)} className="p-1 text-zinc-400 hover:text-zinc-600 rounded-lg cursor-pointer">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-300 block mb-1.5">
+                  Reason for declining (Optional):
+                </label>
+                <input 
+                  type="text"
+                  value={declineReason}
+                  onChange={(e) => setDeclineReason(e.target.value)}
+                  placeholder="e.g. Budget constraints, opted for another option, deferred..."
+                  className="w-full text-xs p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-rose-500 font-medium text-zinc-800 dark:text-zinc-200"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDecliningItem(null)}
+                  className="px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 rounded-lg cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeclineQuotation(decliningItem, declineReason.trim())}
+                  className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  Confirm Decline
+                </button>
+              </div>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>

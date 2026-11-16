@@ -7,7 +7,7 @@ import {
   Printer, AlertCircle, Share2,
   CheckCircle2
 } from "lucide-react"
-import { getEstimates, updateEstimateStatus, EstimateItem } from "@/app/feature/estimates/services/estimateService"
+import { getEstimates, updateEstimateStatus, EstimateItem } from "@/app/feature/estimates/service/estimateService"
 import { OfficialEstimateDocument } from "@/app/feature/estimates/components/OfficialEstimateDocument"
 import { fetchModuleDataFromDB } from "@/lib/storageSync"
 import { Company, DEFAULT_COMPANIES } from "@/store/useAuthStore"
@@ -78,9 +78,9 @@ function PublicEstimateContent() {
             const targetCompId = String(target.companyId || "tech").toLowerCase().trim()
             const compList = Array.isArray(allCompanies) && allCompanies.length > 0 ? allCompanies : DEFAULT_COMPANIES
             const matchedComp = compList.find(c => {
-              const cId = c.id.toLowerCase().trim()
-              const cSlug = (c.slug || "").toLowerCase().trim()
-              const cName = c.name.toLowerCase().trim()
+              const cId = String(c.id || "").toLowerCase().trim()
+              const cSlug = String(c.slug || "").toLowerCase().trim()
+              const cName = String(c.name || "").toLowerCase().trim()
               return cId === targetCompId || cSlug === targetCompId || cName === targetCompId
             }) || compList[0] || DEFAULT_COMPANIES[0]
             setResolvedCompany(matchedComp)

@@ -1,6 +1,6 @@
 "use client"
 
-import { CompanyApiService } from "@/app/feature/companies/services/companyService"
+import { CompanyApiService } from "@/app/feature/companies/service/companyService"
 import { api } from "@/lib/api"
 
 import * as React from "react"
@@ -24,7 +24,7 @@ import {
   cascadeUserAvatarChange, 
   checkUsernameAvailabilityAsync, 
   updateUserUsernameAsync 
-} from "@/app/feature/users/services/userService"
+} from "@/app/feature/users/service/userService"
 import { uploadToImgBB } from "@/lib/imgbbUpload"
 import { KycData, KycStatus } from "@/app/feature/users/types"
 import { 
@@ -32,7 +32,7 @@ import {
   saveCompanyPaymentSettings, 
   CompanyPaymentSettings,
   DEFAULT_COMPANY_PAYMENT_SETTINGS 
-} from "./services/companyPaymentService"
+} from "./service/companyPaymentService"
 import { EntityModulePermissionsTab } from "./components/EntityModulePermissionsTab"
 
 type SettingsTab = "profile" | "kyc" | "payments" | "entity-permissions" | "company" | "smtp" | "theme"
@@ -755,7 +755,7 @@ export default function SettingsMain() {
 
       // Sync with Team Banking & Payroll hub
       try {
-        const { updateMemberBankingDetails } = await import("@/app/feature/team/services/teamPaymentService")
+        const { updateMemberBankingDetails } = await import("@/app/feature/team/service/teamPaymentService")
         await updateMemberBankingDetails(String(user?.id || user?.email || email), {
           bankName: kycBankName.trim() || undefined,
           accountNumber: kycAccountNumber.trim() || undefined,

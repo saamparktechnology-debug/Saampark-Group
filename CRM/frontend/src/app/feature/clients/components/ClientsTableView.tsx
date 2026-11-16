@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Search, ChevronDown, FileSpreadsheet, Printer, LayoutGrid, SlidersHorizontal, Edit3, X, Eye, ChevronLeft, ChevronRight, User, FolderPlus, MapPin, Info, Trash2, Receipt } from "lucide-react"
 import { ClientItem } from "../types"
-import { formatDisplayEmail } from "../services/clientService"
+import { formatDisplayEmail } from "../service/clientService"
 
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"

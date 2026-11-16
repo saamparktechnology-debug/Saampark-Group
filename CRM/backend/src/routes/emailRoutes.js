@@ -9,6 +9,7 @@ const {
   sendClientWelcomeEmail,
   sendPaymentReceiptEmail,
   sendPaymentDueReminderEmail,
+  sendRetainerExpiryEmail,
   sendGenericEmail,
   sendKycSuccessEmail,
   sendKycRejectedEmail,
@@ -400,7 +401,19 @@ router.post('/respond', handleDocumentResponse);
 // ─── SEND PROJECT COMPLETION ────────────────────────────────────────────────
 router.post('/send-completion', async (req, res, next) => {
   try {
-    const { to, clientName, projectTitle, invoiceId, companyId, company_id } = req.body;
+    const {
+      to,
+      clientName,
+      projectTitle,
+      invoiceId,
+      planType,
+      countdownDuration,
+      countdownStartDate,
+      countdownEndDate,
+      countdownNotice,
+      companyId,
+      company_id,
+    } = req.body;
     if (!to) {
       return res.status(400).json({ status: 'error', message: 'Recipient email is required' });
     }
@@ -409,6 +422,11 @@ router.post('/send-completion', async (req, res, next) => {
       clientName,
       projectTitle,
       invoiceId,
+      planType,
+      countdownDuration,
+      countdownStartDate,
+      countdownEndDate,
+      countdownNotice,
       companyId: companyId || company_id || null,
     });
     res.status(200).json({ status: 'success', message: `Completion email successfully sent to ${to}` });
@@ -478,6 +496,41 @@ router.post('/send-reminder', async (req, res, next) => {
       companyId: companyId || company_id || null,
     });
     res.status(200).json({ status: 'success', message: `Payment due reminder email sent to ${to}` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── SEND DIGITAL MARKETING RETAINER EXPIRY REMINDER ─────────────────────────
+router.post('/send-retainer-expiry', async (req, res, next) => {
+  try {
+    const {
+      to,
+      clientName,
+      invoiceId,
+      packageName,
+      durationText,
+      firstPostDate,
+      expiryDate,
+      remainingDays,
+      companyId,
+      company_id,
+    } = req.body;
+    if (!to) {
+      return res.status(400).json({ status: 'error', message: 'Recipient email is required' });
+    }
+    await sendRetainerExpiryEmail({
+      to,
+      clientName,
+      invoiceId,
+      packageName,
+      durationText,
+      firstPostDate,
+      expiryDate,
+      remainingDays,
+      companyId: companyId || company_id || null,
+    });
+    res.status(200).json({ status: 'success', message: `Retainer expiry notice successfully sent to ${to}` });
   } catch (err) {
     next(err);
   }

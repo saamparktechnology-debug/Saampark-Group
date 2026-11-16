@@ -1,5 +1,5 @@
 import { api } from "@/lib/api"
-import { InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
+import { InvoiceItem } from "@/app/feature/sales/invoices/service/invoiceService"
 import { ClientItem } from "@/app/feature/clients/types"
 import { Project } from "@/app/feature/projects/types"
 
@@ -82,10 +82,37 @@ export async function sendInvoiceDetailsEmailNotification(
 export async function sendProjectCompletionEmailNotification(
   project: Project,
   clientEmail?: string,
-  clientName?: string
+  clientName?: string,
+  extraDetails?: {
+    planType?: string
+    countdownDuration?: string
+    countdownStartDate?: string
+    countdownEndDate?: string
+    countdownNotice?: string
+  }
 ): Promise<{ success: boolean; message: string }> {
-  const recipient = (clientEmail || project.createdByEmail || "").trim()
+  let recipient = (clientEmail || (project as any).clientEmail || "").trim()
   const name = clientName || project.client || "Client"
+
+  // Try finding client email from clients storage if not provided directly
+  if (!recipient && typeof window !== "undefined") {
+    try {
+      const { fetchModuleDataFromDB } = await import("@/lib/storageSync")
+      const clients = await fetchModuleDataFromDB<any[]>("clients", [], "all")
+      const matched = (clients || []).find(c => 
+        (c.id && project.clientId && String(c.id) === String(project.clientId)) ||
+        (c.name && project.client && c.name.toLowerCase().trim() === project.client.toLowerCase().trim())
+      )
+      if (matched && matched.email) {
+        recipient = matched.email.trim()
+      }
+    } catch {}
+  }
+
+  // Fallback to creator email only if no client email could be resolved
+  if (!recipient) {
+    recipient = (project.createdByEmail || "").trim()
+  }
 
   if (recipient) {
     recordInAppNotification(
@@ -101,15 +128,74 @@ export async function sendProjectCompletionEmailNotification(
         clientName: name,
         projectTitle: project.title,
         invoiceId: (project as any).invoiceId || "",
+        planType: extraDetails?.planType || (project as any).planType || "general",
+        countdownDuration: extraDetails?.countdownDuration || (project as any).countdownDuration || (project as any).planDuration || "",
+        countdownStartDate: extraDetails?.countdownStartDate || (project as any).countdownStartDate || "",
+        countdownEndDate: extraDetails?.countdownEndDate || (project as any).countdownEndDate || "",
+        countdownNotice: extraDetails?.countdownNotice || (project as any).countdownNotice || "",
         companyId: (project as any).companyId || (project as any).company_id || undefined,
       })
-
     } catch (err) {
       console.warn("Completion email dispatch error:", err)
     }
   }
 
   return { success: true, message: `Project completion notice sent for ${project.title}` }
+}
+
+/**
+ * Send Digital Marketing Retainer Expiry Alert Email
+ */
+export async function sendRetainerExpiryEmailNotification({
+  to,
+  clientName,
+  invoiceId,
+  packageName,
+  durationText,
+  firstPostDate,
+  expiryDate,
+  remainingDays,
+  companyId,
+}: {
+  to: string
+  clientName?: string
+  invoiceId?: string
+  packageName?: string
+  durationText?: string
+  firstPostDate?: string
+  expiryDate?: string
+  remainingDays?: string | number
+  companyId?: string
+}): Promise<{ success: boolean; message: string }> {
+  const recipient = (to || "").trim()
+  if (!recipient) {
+    return { success: false, message: "Client email address is required to dispatch retainer expiry alert." }
+  }
+
+  recordInAppNotification(
+    recipient,
+    `Campaign Expiry Notice: ${packageName || "Marketing Retainer"}`,
+    `Your digital marketing retainer is approaching expiry (${expiryDate || "End of Term"}). Please confirm renewal to maintain active ad campaigns and creative deliveries.`,
+    { invoiceId, packageName }
+  )
+
+  try {
+    await api.post("/email/send-retainer-expiry", {
+      to: recipient,
+      clientName: clientName || "Valued Client",
+      invoiceId: invoiceId || "",
+      packageName: packageName || "Digital Marketing Retainer",
+      durationText: durationText || "Monthly Retainer",
+      firstPostDate: firstPostDate || "",
+      expiryDate: expiryDate || "",
+      remainingDays: remainingDays !== undefined ? String(remainingDays) : "",
+      companyId: companyId || undefined,
+    })
+    return { success: true, message: `Retainer expiry notice dispatched to ${recipient}` }
+  } catch (err: any) {
+    console.warn("Retainer expiry dispatch error:", err)
+    return { success: false, message: err?.response?.data?.message || err?.message || "Failed to dispatch email." }
+  }
 }
 
 /**

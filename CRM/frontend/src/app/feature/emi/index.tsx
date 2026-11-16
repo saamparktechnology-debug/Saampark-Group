@@ -19,10 +19,10 @@ import {
   recordInstallmentPayment, 
   sendInstallmentReminder,
   deleteInstallmentRecord
-} from "../subscriptions/services/subscriptionService"
+} from "../subscriptions/service/subscriptionService"
 import { ClientInstallmentDetailModal } from "../subscriptions/components/ClientInstallmentDetailModal"
 import { RecordInstallmentPaymentModal } from "../subscriptions/components/RecordInstallmentPaymentModal"
-import { getClients } from "@/app/feature/clients/services/clientService"
+import { getClients } from "@/app/feature/clients/service/clientService"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 

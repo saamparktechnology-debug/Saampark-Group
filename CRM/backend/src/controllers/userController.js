@@ -765,8 +765,9 @@ const createUser = async (req, res, next) => {
     const compIdsStr = JSON.stringify(parsedCompList);
 
     let userId = null;
+    const isExisting = Array.isArray(existing) && existing.length > 0;
 
-    if (existing.length > 0) {
+    if (isExisting) {
       // Update existing or reactivate soft deleted account
       userId = existing[0].id;
       try {
@@ -886,16 +887,20 @@ const createUser = async (req, res, next) => {
       console.warn('App data sync warning:', appDataErr.message);
     }
 
-    // Send Welcome Email with credentials and change password instructions
+    // Send Welcome Email with credentials ONLY for newly registered accounts (never for existing users)
     const compName = companyName || (compVal === 'digital' ? 'SAAMPARK Digital Marketing' : 'SAAMPARK Technology');
     let emailSent = false;
-    try {
-      const { sendAdminCreatedAccountEmail } = require('../utils/emailService');
-      await sendAdminCreatedAccountEmail(normEmail, displayName, roleName, compName, password, compVal);
-      emailSent = true;
-      console.log(`Welcome credentials email sent successfully to ${normEmail}`);
-    } catch (emailErr) {
-      console.warn('Welcome email warning:', emailErr.message);
+    if (!isExisting) {
+      try {
+        const { sendAdminCreatedAccountEmail } = require('../utils/emailService');
+        await sendAdminCreatedAccountEmail(normEmail, displayName, roleName, compName, password, compVal);
+        emailSent = true;
+        console.log(`Welcome credentials email sent successfully to new user ${normEmail}`);
+      } catch (emailErr) {
+        console.warn('Welcome email warning:', emailErr.message);
+      }
+    } else {
+      console.log(`User ${normEmail} already exists. Skipping credentials email dispatch.`);
     }
 
     return successResponse(res, 201, `User account saved successfully${emailSent ? ' and welcome credentials email sent!' : ' (email sending queued).'}`, { id: userId, user: newUserItem });

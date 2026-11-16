@@ -10,7 +10,7 @@ import {
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { DebitNoteService } from "@/services/salesService"
-import { getClients } from "@/app/feature/clients/services/clientService"
+import { getClients } from "@/app/feature/clients/service/clientService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { formatDisplayDate } from "@/lib/utils"

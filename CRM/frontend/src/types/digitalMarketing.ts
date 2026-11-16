@@ -314,9 +314,24 @@ export const DURATION_OFFERS = [
   { label: "3 Months Plan (5% OFF)", value: "3 months", months: 3, discountPct: 5, offer: "5% OFF" },
   { label: "6 Months Plan (10% OFF)", value: "6 months", months: 6, discountPct: 10, offer: "10% OFF" },
   { label: "12 Months / 1 Year Plan (20% OFF + TOTO or Model FREE)", value: "1 year", months: 12, discountPct: 20, offer: "20% OFF + TOTO or Model FREE" },
+  { label: "Custom Duration & Offer", value: "custom", months: 1, discountPct: 0, offer: "Custom" },
 ]
 
-export function calculatePackageTotal(baseMonthlyPrice: number, duration: string) {
+export function calculatePackageTotal(baseMonthlyPrice: number, duration: string, customMonths?: number, customDiscountPct?: number, customOffer?: string) {
+  if (duration === "custom") {
+    const m = Math.max(1, Number(customMonths) || 1)
+    const disc = Math.max(0, Math.min(100, Number(customDiscountPct) || 0))
+    const gross = baseMonthlyPrice * m
+    const discountAmount = Math.round(gross * (disc / 100))
+    const net = gross - discountAmount
+    return {
+      months: m,
+      discountPct: disc,
+      discountAmount,
+      netPrice: net,
+      offer: customOffer || `${disc > 0 ? `${disc}% OFF` : ""}`
+    }
+  }
   const opt = DURATION_OFFERS.find(d => d.value === duration) || DURATION_OFFERS[0]
   const gross = baseMonthlyPrice * opt.months
   const discountAmount = Math.round(gross * (opt.discountPct / 100))

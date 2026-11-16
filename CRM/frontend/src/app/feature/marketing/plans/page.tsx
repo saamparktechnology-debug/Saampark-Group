@@ -7,7 +7,7 @@ import {
   ShieldCheck, FileText, ExternalLink
 } from "lucide-react"
 import { MarketingCampaign } from "../types"
-import { MarketingService } from "../services/marketingService"
+import { MarketingService } from "../service/marketingService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import CreateCampaignModal from "../components/CreateCampaignModal"

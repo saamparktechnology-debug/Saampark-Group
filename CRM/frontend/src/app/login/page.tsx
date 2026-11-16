@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { useAuthStore, DEMO_USERS, Role } from "@/store/useAuthStore"
-import { recordUserAccount, getStoredUserAccountsAsync, unmarkUserAsDeleted } from "@/app/feature/users/services/userService"
+import { recordUserAccount, getStoredUserAccountsAsync, unmarkUserAsDeleted } from "@/app/feature/users/service/userService"
 import { UserItem } from "@/app/feature/users/types"
 import { fetchModuleDataFromDB, isGlobalItemDeleted, getLocalDeletedIds } from "@/lib/storageSync"
 import { normalizeRole } from "@/store/usePermissionStore"
