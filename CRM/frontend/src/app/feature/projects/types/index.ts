@@ -131,6 +131,10 @@ export interface Project {
   planType?: string;
   firstPostDate?: string;
   clientEmail?: string;
+  clientName?: string;
+  clientPhone?: string;
+  customer?: string;
+  customerEmail?: string;
   developer?: string;
   marketingRetainer?: {
     planTier?: string;

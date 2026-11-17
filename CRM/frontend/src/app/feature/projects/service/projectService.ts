@@ -57,13 +57,35 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
   try {
     const { getInvoices } = await import("@/app/feature/sales/invoices/service/invoiceService")
     const companyInvoices = await getInvoices(targetComp)
+    let hasRepaired = false
+
     for (const inv of (Array.isArray(companyInvoices) ? companyInvoices : [])) {
-      const projTitle = inv.project || inv.primaryCategory || inv.category
+      const projTitle = String(
+        inv.project || 
+        (inv.items && inv.items[0]?.serviceName) || 
+        inv.primaryCategory || 
+        inv.category || 
+        "Client Project"
+      ).trim()
       if (!projTitle) continue
+
+      const clientName = String(
+        inv.client || 
+        inv.clientName || 
+        (inv as any).customer || 
+        (inv as any).customerName || 
+        (inv as any).primaryContact || 
+        "Client"
+      ).trim()
+
+      const startDate = inv.billDate || inv.invoiceDate || (inv as any).date || "-"
+      const deadline = inv.dueDate || (inv as any).validTill || "-"
       const invIdNorm = String(inv.id || (inv as any).invoiceNumber || "").toUpperCase().trim()
       
       const existingProjectForInvoice = Array.from(map.values()).find(p => 
-        p.invoiceId && String(p.invoiceId).toUpperCase().trim() === invIdNorm
+        (p.invoiceId && String(p.invoiceId).toUpperCase().trim() === invIdNorm) ||
+        (p.invoiceNumber && String(p.invoiceNumber).toUpperCase().trim() === invIdNorm) ||
+        (p.id && String(p.id).toLowerCase().trim() === `prj_inv_${String(inv.id).toLowerCase().replace(/[^a-z0-9]/g, '_')}`)
       )
 
       if (!existingProjectForInvoice) {
@@ -71,7 +93,10 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
         map.set(synId, {
           id: synId,
           title: projTitle,
-          client: inv.client || "Client",
+          client: clientName,
+          clientName: clientName,
+          clientEmail: inv.clientEmail,
+          clientPhone: inv.clientPhone,
           companyId: inv.companyId || targetComp,
           branchId: inv.branchId,
           branchName: (inv as any).branchName,
@@ -89,10 +114,51 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
           members: [],
           activityLogs: [],
           taskBreakdown: { todo: 0, inProgress: 1, review: 0, done: 0 },
-          startDate: inv.billDate || new Date().toLocaleDateString("en-GB"),
-          deadline: inv.dueDate || "-",
+          startDate: startDate,
+          deadline: deadline,
         } as any)
+        hasRepaired = true
       } else {
+        // ALWAYS heal/enrich existing project if title, client, or dates are generic or missing
+        const currTitle = String(existingProjectForInvoice.title || "").trim()
+        if (!currTitle || currTitle.toLowerCase() === "project" || currTitle.toLowerCase() === "untitled project") {
+          existingProjectForInvoice.title = projTitle
+          hasRepaired = true
+        }
+
+        const currClient = String(existingProjectForInvoice.client || "").trim()
+        if (!currClient || currClient.toLowerCase() === "client") {
+          existingProjectForInvoice.client = clientName
+          ;(existingProjectForInvoice as any).clientName = clientName
+          hasRepaired = true
+        }
+
+        if (!existingProjectForInvoice.startDate || existingProjectForInvoice.startDate === "-") {
+          existingProjectForInvoice.startDate = startDate
+          hasRepaired = true
+        }
+
+        if (!existingProjectForInvoice.deadline || existingProjectForInvoice.deadline === "-") {
+          existingProjectForInvoice.deadline = deadline
+          hasRepaired = true
+        }
+
+        if (!(existingProjectForInvoice as any).clientEmail && inv.clientEmail) {
+          (existingProjectForInvoice as any).clientEmail = inv.clientEmail
+        }
+        if (!(existingProjectForInvoice as any).clientPhone && inv.clientPhone) {
+          (existingProjectForInvoice as any).clientPhone = inv.clientPhone
+        }
+        if (!(existingProjectForInvoice as any).branchId && inv.branchId) {
+          (existingProjectForInvoice as any).branchId = inv.branchId
+        }
+        if (!(existingProjectForInvoice as any).branchName && (inv as any).branchName) {
+          (existingProjectForInvoice as any).branchName = (inv as any).branchName
+        }
+        if (!existingProjectForInvoice.category && (inv.primaryCategory || inv.category)) {
+          existingProjectForInvoice.category = inv.primaryCategory || inv.category
+        }
+
         existingProjectForInvoice.price = inv.totalInvoiced || `₹${(inv as any).total || 0}`
         if ((inv as any).paymentReceived !== undefined) {
           existingProjectForInvoice.paidAmount = (inv as any).paymentReceived
@@ -105,8 +171,15 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
         } else if (inv.status === "Partially paid") {
           existingProjectForInvoice.paymentStatus = "Partially Paid"
         }
-        // STRICT RULE: Do NOT overwrite project operational status or progress!
-        // Payment status (Fully paid) is strictly financial and does NOT complete the project deliverables.
+      }
+    }
+
+    // Persist healed project list back to DB so subsequent reads stay consistent
+    if (hasRepaired) {
+      const allSynced = Array.from(map.values())
+      saveModuleDataToDB("projects", allSynced, targetComp).catch(() => {})
+      if (targetComp !== "all") {
+        saveModuleDataToDB("projects", allSynced, "all").catch(() => {})
       }
     }
   } catch (err) {
@@ -117,11 +190,24 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
 }
 
 function normalizeProject(p: any): Project {
+  const rawTitle = String(p?.title || "").trim()
+  const cleanTitle = (rawTitle && rawTitle.toLowerCase() !== "project" && rawTitle.toLowerCase() !== "untitled project")
+    ? rawTitle
+    : (p?.name || p?.service || p?.projectName || p?.category || "Client Project")
+
+  const rawClient = String(p?.client || "").trim()
+  const cleanClient = (rawClient && rawClient.toLowerCase() !== "client")
+    ? rawClient
+    : (p?.clientName || p?.customer || p?.customerName || p?.primaryContact || "Client")
+
   return {
     ...p,
     id: String(p?.id || ""),
-    title: String(p?.title || "Untitled Project"),
-    client: String(p?.client || "Client"),
+    title: String(cleanTitle),
+    client: String(cleanClient),
+    clientName: String(cleanClient),
+    startDate: p?.startDate || p?.billDate || p?.date || "-",
+    deadline: p?.deadline || p?.dueDate || "-",
     labels: Array.isArray(p?.labels) ? p.labels : [],
     members: Array.isArray(p?.members) ? p.members : [],
     milestones: Array.isArray(p?.milestones) ? p.milestones : [],
@@ -129,7 +215,7 @@ function normalizeProject(p: any): Project {
     taskBreakdown: p?.taskBreakdown || { todo: 0, inProgress: 0, review: 0, done: 0 },
     progress: typeof p?.progress === "number" ? p.progress : 0,
     status: p?.status || "Open",
-    price: String(p?.price || "₹0"),
+    price: String(p?.price || (p?.totalAmount ? `₹${Number(p.totalAmount).toLocaleString("en-IN")}` : "₹0")),
   }
 }
 
@@ -283,10 +369,14 @@ export const updateProject = async (id: string, updates: Partial<Project>, compa
 
   const prevStatus = foundInAll?.status
   const updatedProj: Project = {
-    id: String(id),
-    title: updates.title || foundInAll?.title || "Project",
     ...foundInAll,
     ...updates,
+    id: String(id),
+    title: updates.title || (foundInAll?.title && foundInAll.title !== "Project" ? foundInAll.title : (updates as any).projectName || (updates as any).category || "Client Project"),
+    client: updates.client || (updates as any).clientName || (foundInAll?.client && foundInAll.client !== "Client" ? foundInAll.client : "Client"),
+    clientName: updates.client || (updates as any).clientName || (foundInAll?.client && foundInAll.client !== "Client" ? foundInAll.client : "Client"),
+    startDate: updates.startDate || foundInAll?.startDate || "-",
+    deadline: updates.deadline || foundInAll?.deadline || "-",
     companyId: newCompanyId,
   } as Project
 

@@ -1332,8 +1332,13 @@ export function DocumentStudioModal({
               try {
                 const { updateProject } = await import("@/app/feature/projects/service/projectService")
                 await updateProject(found.id, {
+                  title: cleanTitle,
+                  client: String(clientName || selectedClient?.name || "Client"),
+                  clientName: String(clientName || selectedClient?.name || "Client"),
                   clientEmail: targetClientEmail || clientEmail || selectedClient?.email,
                   clientPhone: targetClientPhone || clientPhone || selectedClient?.phone,
+                  startDate: issueDate || found.startDate,
+                  deadline: dueDate || found.deadline,
                   price: `₹${effectiveDocTotal.toLocaleString("en-IN")}`,
                   totalAmount: effectiveDocTotal,
                   paidAmount: advancePaidNum,
@@ -1342,7 +1347,10 @@ export function DocumentStudioModal({
                   invoiceNumber: docNumber,
                   paymentStatus: effectiveDue === 0 ? "Paid" : advancePaidNum > 0 ? "Partially Paid" : "Payment Pending",
                   category: effectiveCategory,
-                })
+                  companyId: companyId,
+                  branchId: branchId || found.branchId,
+                  branchName: selectedBranch?.name || (found as any).branchName,
+                }, companyId)
               } catch {}
             }
           } catch (projErr) {

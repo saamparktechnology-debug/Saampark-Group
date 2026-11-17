@@ -366,7 +366,7 @@ export function ProjectList({
                           onClick={() => onSelectProjectDetail(p)}
                           className="font-semibold text-blue-600 dark:text-blue-400 hover:underline text-left text-xs"
                         >
-                          {p.title}
+                          {p.title && p.title !== "Project" ? p.title : ((p as any).projectName || (p as any).category || p.title || "Project")}
                         </button>
                         
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -454,7 +454,9 @@ export function ProjectList({
                     </td>
 
                     {/* Client */}
-                    <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">{p.client}</td>
+                    <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">
+                      {p.client && p.client !== "Client" ? p.client : ((p as any).clientName && (p as any).clientName !== "Client" ? (p as any).clientName : ((p as any).customer || p.client || "Client"))}
+                    </td>
 
                     {/* Price */}
                     <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">
