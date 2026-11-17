@@ -6,7 +6,9 @@ const apiRoutes = require('./routes');
 const errorHandler = require('./middlewares/errorHandler');
 const companyScopeMiddleware = require('./middlewares/companyScopeMiddleware');
 
-
+const app = express();
+app.use(express.json({limit:'20mb'})) 
+app.set('trust proxy', 1);
 
 // ==========================================
 // 1. GLOBAL MIDDLEWARES
@@ -58,9 +60,7 @@ const authLimiter = rateLimit({
 });
 
 // Body Parsers
-app.use(express.json({ limit: '20mb' }));
-app.use(express.urlencoded({ extended: true }));
-app.use(companyScopeMiddleware);
+
 
 
 // ==========================================
