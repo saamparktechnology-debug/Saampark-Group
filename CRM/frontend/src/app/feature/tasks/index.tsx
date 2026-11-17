@@ -18,17 +18,16 @@ import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 export default function TasksMain() {
   const queryClient = useQueryClient()
+  const { user, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
   const targetComp = activeCompanyId || user?.companyId || "tech"
-  const { data: tasks = [], isLoading } = useTasksQuery(targetComp)
+  const { data: tasks = [], isLoading, refetch } = useTasksQuery(targetComp)
   const updateTaskMutation = useUpdateTaskMutation(targetComp)
   const deleteTaskMutation = useDeleteTaskMutation(targetComp)
   const [activeViewTab, setActiveViewTab] = React.useState<"list" | "kanban" | "gantt">("list")
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false)
-  const { user, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches, companies } = useAuthStore()
   const [selectedTask, setSelectedTask] = React.useState<Task | null>(null)
   const [isManageLabelsOpen, setIsManageLabelsOpen] = React.useState(false)
-  
 
   const roleLower = (user?.role || "").toLowerCase().trim()
   const isSuperAdmin = roleLower.includes("super") || roleLower === "super admin" || roleLower === "superadmin"
@@ -43,50 +42,28 @@ export default function TasksMain() {
   )
   const isClient = roleLower.includes("client")
 
-  const fetchTasks = React.useCallback(async (showLoading = false) => {
-    if (showLoading) setIsLoading(true)
-    try {
-      // Read fresh from store — avoids stale closure on company switch
-      const { activeCompanyId: freshCompanyId, user: freshUser } = useAuthStore.getState()
-      const targetComp = freshCompanyId || freshUser?.companyId || "tech"
-      try {
-        const { getLeads } = await import("@/app/feature/leads/service/leadService")
-        await getLeads(targetComp)
-      } catch {}
-      const data = await taskService.getTasks(targetComp)
-      setTasks(data || [])
-    } catch (err) {
-      console.error("Error loading tasks:", err)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
   React.useEffect(() => {
-    fetchTasks(true)
-    const handleReload = () => fetchTasks(false)
-    window.addEventListener("storage", handleReload)
+    const handleReload = () => { refetch() }
     window.addEventListener("saampark_company_switched", handleReload)
     window.addEventListener("saampark_branch_switched", handleReload)
     window.addEventListener("saampark_subbranch_switched", handleReload)
     window.addEventListener("saampark_tasks_updated", handleReload)
     window.addEventListener("saampark_data_synced", handleReload)
     return () => {
-      window.removeEventListener("storage", handleReload)
       window.removeEventListener("saampark_company_switched", handleReload)
       window.removeEventListener("saampark_branch_switched", handleReload)
       window.removeEventListener("saampark_subbranch_switched", handleReload)
       window.removeEventListener("saampark_tasks_updated", handleReload)
       window.removeEventListener("saampark_data_synced", handleReload)
     }
-  }, [fetchTasks])
+  }, [refetch])
 
   const handleTaskAdded = (newTask: Task) => {
     queryClient.setQueryData<Task[]>(tasksQueryKey(targetComp), (prev = []) => [newTask, ...prev])
   }
 
   const handleTaskUpdated = (updatedTask: Task) => {
-    setTasks((prev) =>
+    queryClient.setQueryData<Task[]>(tasksQueryKey(targetComp), (prev = []) =>
       prev.map((t) =>
         String(t.id).toLowerCase().trim() === String(updatedTask.id).toLowerCase().trim()
           ? updatedTask
@@ -99,14 +76,14 @@ export default function TasksMain() {
     const task = tasks.find(t => String(t.id).toLowerCase().trim() === String(id).toLowerCase().trim())
     const taskTitle = task?.title || "Task"
     await executeWithFeedback(async () => {
-      setTasks((prev) =>
+      queryClient.setQueryData<Task[]>(tasksQueryKey(targetComp), (prev = []) =>
         prev.map((t) =>
           String(t.id).toLowerCase().trim() === String(id).toLowerCase().trim()
             ? { ...t, status: newStatus }
             : t
         )
       )
-      await taskService.updateTask(id, { status: newStatus })
+      await updateTaskMutation.mutateAsync({ id, updates: { status: newStatus } })
     }, {
       actionType: "update",
       loadingTitle: "Updating Status...",
@@ -120,9 +97,9 @@ export default function TasksMain() {
   }
 
   const handleDeleteTask = async (id: string) => {
-    const { user } = useAuthStore.getState()
+    const { user: currentUser } = useAuthStore.getState()
     const { canPerformAction } = usePermissionStore.getState()
-    if (!canPerformAction(user, "Tasks", "delete")) {
+    if (!canPerformAction(currentUser, "Tasks", "delete")) {
       useActionFeedbackStore.getState().showError({
         title: "Permission Denied",
         message: "You do not have permission to delete tasks.",
@@ -133,13 +110,11 @@ export default function TasksMain() {
 
     const task = tasks.find(t => String(t.id).toLowerCase().trim() === String(id).toLowerCase().trim())
     const taskTitle = task?.title || "Task"
-    const strId = String(id).toLowerCase().trim()
 
     if (!await confirmTwoStepDelete(taskTitle, "task")) return
 
     await executeWithFeedback(async () => {
-      setTasks((prev) => prev.filter((t) => String(t.id).toLowerCase().trim() !== strId))
-      await taskService.deleteTask(id)
+      await deleteTaskMutation.mutateAsync(id)
     }, {
       actionType: "delete",
       loadingTitle: "Deleting Task...",

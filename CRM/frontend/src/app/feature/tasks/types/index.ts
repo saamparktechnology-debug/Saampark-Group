@@ -35,6 +35,7 @@ export interface Task {
   clientEmail?: string
   createdBy?: string
   createdByEmail?: string
+  createdAt?: string
   projectName?: string
 }
 
