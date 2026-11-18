@@ -29,6 +29,7 @@ export interface ActivityLog {
   userName?: string
   userEmail?: string
   userRole?: string
+  userId?: string
   details?: string
 }
 

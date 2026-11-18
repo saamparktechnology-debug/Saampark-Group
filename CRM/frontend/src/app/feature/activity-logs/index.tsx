@@ -17,15 +17,6 @@ import { Button } from "@/components/ui/Button"
 
 export default function ActivityLogsMain() {
   const { user, companies, activeCompanyId } = useAuthStore()
-  const targetCompany = React.useMemo(() => {
-    if (!isSuperAdmin && selectedCompany === "all") {
-      return allowedCompanies[0]?.id || user?.companyId || "tech"
-    }
-    return selectedCompany
-  }, [isSuperAdmin, selectedCompany, allowedCompanies, user?.companyId])
-
-  const { data: logs = [], isLoading: loading } = useActivityLogsQuery(targetCompany)
-  const clearLogsMutation = useClearActivityLogsMutation(targetCompany)
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedCompany, setSelectedCompany] = React.useState<string>(activeCompanyId || "all")
   const [selectedActor, setSelectedActor] = React.useState<string>("all")
@@ -44,7 +35,15 @@ export default function ActivityLogsMain() {
     return companies.filter(c => compIds.includes(String(c.id).toLowerCase().trim()) || (c.slug && compIds.includes(String(c.slug).toLowerCase().trim())))
   }, [user, companies, isSuperAdmin])
 
-  
+  const targetCompany = React.useMemo(() => {
+    if (!isSuperAdmin && selectedCompany === "all") {
+      return allowedCompanies[0]?.id || user?.companyId || "tech"
+    }
+    return selectedCompany
+  }, [isSuperAdmin, selectedCompany, allowedCompanies, user?.companyId])
+
+  const { data: logs = [], isLoading: loading, refetch } = useActivityLogsQuery(targetCompany)
+  const clearLogsMutation = useClearActivityLogsMutation(targetCompany)
 
   const handleClearLogs = async () => {
     if (!isSuperAdmin) return
@@ -316,7 +315,7 @@ export default function ActivityLogsMain() {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => loadLogs()}
+            onClick={() => refetch()}
             className="text-xs font-semibold gap-1.5 cursor-pointer"
           >
             <RotateCcw size={13} className={loading ? "animate-spin" : ""} />
