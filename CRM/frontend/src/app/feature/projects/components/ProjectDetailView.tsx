@@ -3110,7 +3110,7 @@ export function ProjectDetailView({
           onClose={() => setIsCompletionModalOpen(false)}
           onConfirmComplete={async (completedData) => {
             const { updateProject } = await import("../service/projectService")
-            const { sendProjectCompletionEmailNotification } = await import("@/services/emailNotificationService")
+            const { sendProjectCompletionEmailNotification, sendGenericReminderEmail } = await import("@/services/emailNotificationService")
 
             const updated = await updateProject(selectedProject.id, {
               status: "Completed",
@@ -3126,6 +3126,7 @@ export function ProjectDetailView({
 
             onSelectProject(updated)
 
+            // Send completion email to client
             if (completedData.notifyClient && completedData.clientEmail) {
               await sendProjectCompletionEmailNotification(
                 updated,
@@ -3137,12 +3138,60 @@ export function ProjectDetailView({
                   countdownStartDate: completedData.countdownStartDate,
                   countdownEndDate: completedData.countdownEndDate,
                   countdownNotice: completedData.planType === "digital_marketing"
-                    ? (completedData.firstPostDate 
+                    ? (completedData.firstPostDate
                         ? `Campaign timeline started from 1st post on ${completedData.firstPostDate} and expires on ${completedData.countdownEndDate}.`
                         : "Campaign countdown paused until first creative post goes live.")
                     : `Your service & hosting countdown started today (${new Date().toLocaleDateString("en-IN")}) and remains active until ${completedData.countdownEndDate}.`,
                 }
               )
+            }
+
+            // Auto-add to Subscriptions module on expiry
+            if (completedData.autoAddToSubscriptions && completedData.countdownEndDate) {
+              try {
+                const { saveModuleDataToDB, fetchModuleDataFromDB } = await import("@/lib/storageSync")
+                const companyId = updated.companyId || selectedProject.companyId || "tech"
+                const existingSubs: any[] = await fetchModuleDataFromDB("subscriptions", [], companyId).catch(() => [])
+
+                const subId = `sub_proj_${String(updated.id).replace(/[^a-z0-9]/gi, "_")}`
+                const alreadyExists = existingSubs.some(s => s.id === subId || s.projectId === updated.id)
+
+                if (!alreadyExists) {
+                  const expiryDate = new Date(completedData.countdownEndDate)
+                  const renewalDate = new Date(expiryDate)
+                  renewalDate.setDate(renewalDate.getDate() - 30) // Remind 30 days before expiry
+
+                  const newSub = {
+                    id: subId,
+                    projectId: updated.id,
+                    projectName: updated.title,
+                    clientName: updated.client,
+                    clientEmail: completedData.clientEmail || updated.clientEmail,
+                    companyId,
+                    branchId: updated.branchId,
+                    branchName: updated.branchName,
+                    name: `${updated.title} – ${completedData.planDuration}`,
+                    plan: completedData.planLabel || completedData.planDuration,
+                    planType: completedData.planType,
+                    status: "Active",
+                    billingCycle: completedData.planType.includes("year") || completedData.planType.includes("amc") || completedData.planType.includes("hosting") ? "Annually" : "Monthly",
+                    startDate: completedData.countdownStartDate || new Date().toISOString().split("T")[0],
+                    nextBillingDate: completedData.countdownEndDate,
+                    expiryDate: completedData.countdownEndDate,
+                    renewalReminderDate: renewalDate.toISOString().split("T")[0],
+                    amount: Number(String(updated.price || "0").replace(/[^0-9.]/g, "")) || 0,
+                    createdAt: new Date().toISOString(),
+                    source: "project_completion",
+                    notes: `Auto-created from project completion. Plan: ${completedData.planDuration}.`,
+                  }
+
+                  const updatedSubs = [...existingSubs, newSub]
+                  await saveModuleDataToDB("subscriptions", updatedSubs, companyId)
+                  console.log("[ProjectCompletion] Auto-added subscription:", subId)
+                }
+              } catch (subErr) {
+                console.warn("[ProjectCompletion] Failed to auto-add subscription:", subErr)
+              }
             }
           }}
         />

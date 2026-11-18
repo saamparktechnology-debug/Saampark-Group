@@ -45,6 +45,18 @@ export async function sendInvoiceDetailsEmailNotification(
     ? `${window.location.origin}/sales/invoices?view=${encodeURIComponent(invoice.id)}`
     : `https://crm.saampark.com/sales/invoices?view=${encodeURIComponent(invoice.id)}`
 
+  const publicUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/public/invoice?id=${encodeURIComponent(invoice.id)}`
+    : `https://crm.saampark.com/public/invoice?id=${encodeURIComponent(invoice.id)}`
+
+  const isNonGst = Boolean(
+    invoice.id?.toUpperCase().startsWith("NGINV") ||
+    (invoice as any).invoiceNumber?.toUpperCase().startsWith("NGINV") ||
+    (invoice as any).isNonGst ||
+    (invoice as any).docScheme === "nongst" ||
+    Number((invoice as any).gstRate) === 0
+  )
+
   // 1. In-App Notification
   recordInAppNotification(
     recipient,
@@ -62,11 +74,16 @@ export async function sendInvoiceDetailsEmailNotification(
       project: invoice.project,
       billDate: invoice.billDate,
       dueDate: invoice.dueDate,
+      subtotal: (invoice as any).subtotal || (invoice as any).baseAmount ? `₹${Number((invoice as any).subtotal || (invoice as any).baseAmount).toLocaleString("en-IN")}` : undefined,
+      discount: (invoice as any).discount || 0,
       totalAmount: invoice.totalInvoiced,
       receivedAmount: invoice.paymentReceived || "₹0",
       dueAmount: invoice.due || invoice.totalInvoiced,
       items: invoice.items || [],
-      viewUrl: invoiceUrl,
+      isNonGst,
+      gstRate: (invoice as any).gstRate,
+      viewUrl: publicUrl,
+      downloadUrl: publicUrl,
       companyId: (invoice as any).companyId || (invoice as any).company_id || undefined,
     })
     return { success: true, message: `Invoice email successfully delivered to ${recipient}` }

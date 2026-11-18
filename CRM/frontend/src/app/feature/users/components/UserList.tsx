@@ -57,7 +57,9 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
       const matchesSearch =
         u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (u.department && u.department.toLowerCase().includes(searchTerm.toLowerCase()))
+        (u.department && u.department.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (u.employeeId && u.employeeId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        String(u.id).toLowerCase().includes(searchTerm.toLowerCase())
 
       const matchesRole = selectedRole === "All" || u.role === selectedRole
       const matchesStatus = selectedStatus === "All" || u.status === selectedStatus
@@ -219,7 +221,9 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                             <div className="font-semibold text-foreground group-hover/user:text-primary transition-colors flex items-center gap-1.5 flex-wrap">
                               <span>{u.name}</span>
                               <span className="font-mono text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.2 rounded border border-primary/20">
-                                {u.employeeId || `SP-EMP-${String(u.id).replace(/[^0-9]/g, "").slice(-4).padStart(4, "0") || "0041"}`}
+                                {u.role === "Clients"
+                                  ? (u.employeeId?.startsWith("CLI-") ? u.employeeId : (String(u.id).startsWith("CLI-") ? String(u.id) : `CLI-${String(u.id).replace(/[^0-9]/g, "").slice(-4).padStart(4, "0") || "2601"}`))
+                                  : (u.employeeId || `SP-EMP-${String(u.id).replace(/[^0-9]/g, "").slice(-4).padStart(4, "0") || "0041"}`)}
                               </span>
                               {u.kycStatus === "Verified" && (
                                 <span className="text-[10px] text-emerald-500 font-bold" title="KYC Verified">✓</span>

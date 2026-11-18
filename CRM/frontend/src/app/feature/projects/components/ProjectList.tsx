@@ -57,9 +57,29 @@ export function ProjectList({
 
   const [activeFilter, setActiveFilter] = React.useState("All projects")
   const [categoryFilter, setCategoryFilter] = React.useState<"all" | "software" | "marketing">("all")
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = React.useState<string>("all")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [isFiltersDropdownOpen, setIsFiltersDropdownOpen] = React.useState(false)
   const [completionProject, setCompletionProject] = React.useState<Project | null>(null)
+
+  const availableProjectCategories = React.useMemo(() => {
+    const preset = [
+      "Website Development",
+      "Custom Software Application",
+      "Android / iOS Mobile App",
+      "Cloud Infrastructure & Domain",
+      "Digital Marketing & Social Media Retainer",
+      "Custom / Other Services",
+    ]
+    const dynSet = new Set<string>()
+    ;(Array.isArray(projects) ? projects : []).forEach((p) => {
+      const cat = (p as any).category
+      if (cat && typeof cat === "string" && cat.trim() && !preset.some(pr => pr.toLowerCase() === cat.trim().toLowerCase())) {
+        dynSet.add(cat.trim())
+      }
+    })
+    return [...preset, ...Array.from(dynSet)]
+  }, [projects])
 
   const isMarketingProject = (p: any) => {
     if (!p) return false
@@ -91,6 +111,24 @@ export function ProjectList({
     const isMarketing = isMarketingProject(p)
     if (categoryFilter === "software" && isMarketing) return false
     if (categoryFilter === "marketing" && !isMarketing) return false
+
+    if (selectedCategoryFilter !== "all") {
+      const targetCat = selectedCategoryFilter.toLowerCase().trim()
+      const cat = String((p as any).category || "").toLowerCase().trim()
+      if (targetCat === "digital marketing & social media retainer" || targetCat === "digital marketing") {
+        if (!isMarketing) return false
+      } else if (targetCat === "website development" || targetCat === "website") {
+        if (!cat.includes("website") && !pTitle.includes("website") && !pTitle.includes("web")) return false
+      } else if (targetCat === "custom software application" || targetCat === "custom software") {
+        if (!cat.includes("software") && !pTitle.includes("software") && !pTitle.includes("portal") && !pTitle.includes("erp") && !pTitle.includes("crm")) return false
+      } else if (targetCat === "android / ios mobile app") {
+        if (!cat.includes("mobile") && !cat.includes("app") && !cat.includes("android") && !cat.includes("ios") && !pTitle.includes("app")) return false
+      } else if (targetCat === "cloud infrastructure & domain") {
+        if (!cat.includes("cloud") && !cat.includes("domain") && !cat.includes("hosting") && !cat.includes("server")) return false
+      } else {
+        if (!cat.includes(targetCat) && !pTitle.includes(targetCat)) return false
+      }
+    }
 
     if (activeFilter === "Digital Marketing") {
       return matchesSearch && isMarketing
@@ -221,6 +259,23 @@ export function ProjectList({
             {marketingProjectsCount}
           </span>
         </button>
+
+        {/* Category Filter Dropdown */}
+        <div className="flex items-center gap-1.5 pl-2 border-l border-zinc-200 dark:border-zinc-700 ml-1">
+          <span className="text-[11px] font-bold text-muted-foreground whitespace-nowrap">Category:</span>
+          <select
+            value={selectedCategoryFilter}
+            onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+            className="px-2.5 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer shadow-2xs"
+          >
+            <option value="all">All Categories</option>
+            {availableProjectCategories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* ---------------- CONTROL TOOLBAR (Image 1 & 2) ---------------- */}

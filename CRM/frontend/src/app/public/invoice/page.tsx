@@ -59,11 +59,24 @@ function PublicInvoiceContent() {
 
         if (invoiceQuery) {
           const queryNorm = invoiceQuery.toLowerCase()
-          const target = allInvoices.find((i) => {
+          let target = allInvoices.find((i) => {
             const idNorm = (i.id || "").toLowerCase()
             const numNorm = ((i as any).invoiceNumber || (i as any).invoice_number || "").toLowerCase()
             return idNorm === queryNorm || numNorm === queryNorm || idNorm.endsWith(queryNorm) || numNorm.endsWith(queryNorm)
           })
+
+          if (!target) {
+            const [techInvoices, consultInvoices] = await Promise.all([
+              fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "tech").catch(() => []),
+              fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "consultancy").catch(() => []),
+            ])
+            const fallbackList = [...(techInvoices || []), ...(consultInvoices || [])]
+            target = fallbackList.find((i) => {
+              const idNorm = (i.id || "").toLowerCase()
+              const numNorm = ((i as any).invoiceNumber || (i as any).invoice_number || "").toLowerCase()
+              return idNorm === queryNorm || numNorm === queryNorm || idNorm.endsWith(queryNorm) || numNorm.endsWith(queryNorm)
+            })
+          }
 
           if (target) {
             setInvoice(target)

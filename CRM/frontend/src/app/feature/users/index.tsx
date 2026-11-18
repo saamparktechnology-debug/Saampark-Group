@@ -104,7 +104,7 @@ export default function UsersMain() {
       const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
       filtered = filtered.filter((u) => {
-        if (u.role === "Super Admin" || u.role === "Admin") return true
+        if (u.role === "Super Admin" || u.role === "Admin" || u.role === "Clients") return true
 
         const uBranchIds = (u.branchIds && u.branchIds.length > 0)
           ? u.branchIds.map(id => String(id).toLowerCase().trim())
@@ -134,7 +134,7 @@ export default function UsersMain() {
       const targetSubBranchName = targetSubBranchObj?.name?.toLowerCase().trim() || ""
 
       filtered = filtered.filter((u) => {
-        if (u.role === "Super Admin" || u.role === "Admin") return true
+        if (u.role === "Super Admin" || u.role === "Admin" || u.role === "Clients") return true
 
         const uSubIds = (u.subBranchIds && u.subBranchIds.length > 0)
           ? u.subBranchIds.map(id => String(id).toLowerCase().trim())

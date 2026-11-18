@@ -119,6 +119,7 @@ function InvoicesPageContent() {
   const [moduleCategoryFilter, setModuleCategoryFilter] = React.useState<
     "all" | "software" | "marketing"
   >("all");
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = React.useState<string>("all");
 
   const queryClient = useQueryClient();
   const invoiceScopeComp =
@@ -147,6 +148,25 @@ function InvoicesPageContent() {
   const loadInvoices = React.useCallback(async () => {
     await refetchInvoices();
   }, [refetchInvoices]);
+
+  const availableInvoiceCategories = React.useMemo(() => {
+    const preset = [
+      "Website Development",
+      "Custom Software Application",
+      "Android / iOS Mobile App",
+      "Cloud Infrastructure & Domain",
+      "Digital Marketing & Social Media Retainer",
+      "Custom / Other Services",
+    ];
+    const dynSet = new Set<string>();
+    (invoices || []).forEach((inv) => {
+      const cat = (inv as any).primaryCategory || (inv as any).category;
+      if (cat && typeof cat === "string" && cat.trim() && !preset.some(p => p.toLowerCase() === cat.trim().toLowerCase())) {
+        dynSet.add(cat.trim());
+      }
+    });
+    return [...preset, ...Array.from(dynSet)];
+  }, [invoices]);
   const [activeTab, setActiveTab] = React.useState<
     "all" | InvoiceStatus | "overdue"
   >("all");
@@ -1993,6 +2013,30 @@ function InvoicesPageContent() {
       filtered = filtered.filter((i) => isMkt(i));
     }
 
+    if (selectedCategoryFilter !== "all") {
+      const targetCat = selectedCategoryFilter.toLowerCase().trim();
+      filtered = filtered.filter((i) => {
+        const cat = String((i as any).primaryCategory || (i as any).category || "").toLowerCase().trim();
+        const pTitle = String(i.project || "").toLowerCase().trim();
+        if (targetCat === "digital marketing & social media retainer" || targetCat === "digital marketing") {
+          return isMkt(i);
+        }
+        if (targetCat === "website development" || targetCat === "website") {
+          return cat.includes("website") || pTitle.includes("website") || pTitle.includes("web");
+        }
+        if (targetCat === "custom software application" || targetCat === "custom software") {
+          return cat.includes("software") || pTitle.includes("software") || pTitle.includes("portal") || pTitle.includes("erp") || pTitle.includes("crm");
+        }
+        if (targetCat === "android / ios mobile app") {
+          return cat.includes("mobile") || cat.includes("app") || cat.includes("android") || cat.includes("ios") || pTitle.includes("app");
+        }
+        if (targetCat === "cloud infrastructure & domain") {
+          return cat.includes("cloud") || cat.includes("domain") || cat.includes("hosting") || cat.includes("server");
+        }
+        return cat.includes(targetCat) || pTitle.includes(targetCat);
+      });
+    }
+
     // Newly created / latest invoices strictly on top
     filtered.sort((a, b) => {
       const timeA = new Date(
@@ -2025,6 +2069,7 @@ function InvoicesPageContent() {
     user?.branchId,
     activeTab,
     moduleCategoryFilter,
+    selectedCategoryFilter,
   ]);
 
   // Summary Metrics based on displayed invoices
@@ -2643,6 +2688,23 @@ function InvoicesPageContent() {
             >
               <span>📱 Digital Marketing Retainers</span>
             </button>
+
+            {/* Category Filter Dropdown */}
+            <div className="flex items-center gap-1.5 pl-2 border-l border-zinc-200 dark:border-zinc-700 ml-1">
+              <span className="text-[11px] font-bold text-muted-foreground whitespace-nowrap">Category:</span>
+              <select
+                value={selectedCategoryFilter}
+                onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                className="px-2.5 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer shadow-2xs"
+              >
+                <option value="all">All Categories</option>
+                {availableInvoiceCategories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <a

@@ -565,10 +565,14 @@ async function sendInvoiceDetailsEmail({
   project = 'Service',
   billDate,
   dueDate,
+  subtotal = null,
+  discount = 0,
   totalAmount,
   receivedAmount = '₹0',
   dueAmount = '₹0',
   items = [],
+  isNonGst = false,
+  gstRate = null,
   viewUrl = `https://crm.saampark.com/sales/invoices?view=${invoiceId}`,
   downloadUrl = null,
   companyId = null,
@@ -577,6 +581,15 @@ async function sendInvoiceDetailsEmail({
   const brand = getCompanyBranding(companyId);
 
   const effectiveDownloadUrl = downloadUrl || (viewUrl.includes('?') ? `${viewUrl}&action=download` : `${viewUrl}?action=download`);
+  const isNonGstBill = Boolean(isNonGst) || String(invoiceId || '').toUpperCase().startsWith('NGINV') || (gstRate !== null && Number(gstRate) === 0);
+
+  const headingText = isNonGstBill ? 'Invoice' : 'Tax Invoice';
+  const badgeText = isNonGstBill ? `INVOICE • ${brand.shortName}` : `TAX INVOICE • ${brand.shortName}`;
+  const subjectText = isNonGstBill 
+    ? `📄 Invoice ${invoiceId} for ${project} - ${brand.shortName}`
+    : `📄 Tax Invoice ${invoiceId} for ${project} - ${brand.shortName}`;
+
+  const numDiscount = typeof discount === 'number' ? discount : (parseInt(String(discount || '0').replace(/[^0-9]/g, '')) || 0);
 
   const itemsHtml = (items && items.length > 0)
     ? items.map(it => `
@@ -602,9 +615,9 @@ async function sendInvoiceDetailsEmail({
         <!-- Header -->
         <div style="background: linear-gradient(135deg, #059669, #0f766e); padding: 36px 40px; text-align: center;">
           <div style="display: inline-block; padding: 4px 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 12px;">
-            TAX INVOICE • ${brand.shortName}
+            ${badgeText}
           </div>
-          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Official Tax Invoice</h1>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">${headingText}</h1>
           <p style="color: rgba(255,255,255,0.9); margin: 6px 0 0; font-size: 13px;">${brand.fullName}</p>
         </div>
 
@@ -612,7 +625,7 @@ async function sendInvoiceDetailsEmail({
         <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb;">
           <p style="color: #f9fafb; font-size: 16px; font-weight: 600; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
           <p style="color: #9ca3af; font-size: 13.5px; line-height: 1.6; margin: 0 0 24px;">
-            Please find your official tax invoice details for <strong style="color: #f9fafb;">${project}</strong> issued by <strong>${brand.fullName}</strong>.
+            Please find your ${isNonGstBill ? 'invoice' : 'tax invoice'} details for <strong style="color: #f9fafb;">${project}</strong> issued by <strong>${brand.fullName}</strong>.
           </p>
 
           <!-- Metadata Box -->
@@ -652,6 +665,18 @@ async function sendInvoiceDetailsEmail({
 
           <!-- Commercial Total Box -->
           <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 22px; margin-bottom: 28px;">
+            ${subtotal ? `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13.5px; color: #9ca3af;">
+              <span>Subtotal:</span>
+              <strong style="color: #f3f4f6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${subtotal}</strong>
+            </div>
+            ` : ''}
+            ${numDiscount > 0 ? `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13.5px; color: #fb7185;">
+              <span>Discount Applied:</span>
+              <strong style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">-₹${numDiscount.toLocaleString('en-IN')}</strong>
+            </div>
+            ` : ''}
             <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13.5px; color: #9ca3af;">
               <span>Grand Total:</span>
               <strong style="color: #f3f4f6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">${totalAmount}</strong>
@@ -672,15 +697,40 @@ async function sendInvoiceDetailsEmail({
               💳 View &amp; Settle Invoice →
             </a>
             <a href="${effectiveDownloadUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 13px 26px; border-radius: 12px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);">
-              📥 Download Verified PDF
+              📥 Download PDF
             </a>
           </div>
         </div>
 
         <!-- Footer -->
         <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
-          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
-          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
+          <p style="color: #9ca3af; font-size: 13px; font-weight: 700; margin: 0 0 6px;">${brand.fullName}</p>
+          <p style="color: #9ca3af; font-size: 12px; margin: 0 0 6px;">
+            Help Line No: <a href="tel:+919046232424" style="color: #38bdf8; text-decoration: none;">+91 9046232424</a> &nbsp;|&nbsp; Land No: <a href="tel:+9103222464688" style="color: #38bdf8; text-decoration: none;">+91 03222-464688</a>
+          </p>
+          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 14px;">
+            🌐 <a href="https://www.saampark.com" target="_blank" style="color: #38bdf8; text-decoration: none;">www.saampark.com</a> &nbsp;|&nbsp; <a href="https://www.saamparktechnologyresearch.in" target="_blank" style="color: #38bdf8; text-decoration: none;">www.saamparktechnologyresearch.in</a>
+          </p>
+          
+          <!-- Social Media Icons (Facebook, Instagram, WhatsApp, LinkedIn, YouTube) -->
+          <div style="margin: 10px 0 14px; text-align: center;">
+            <a href="https://www.facebook.com/saamparktechnology" target="_blank" style="display: inline-block; margin: 0 6px;" title="Facebook">
+              <img src="https://cdn-icons-png.flaticon.com/512/733/733547.png" width="22" height="22" alt="Facebook" style="vertical-align: middle;" />
+            </a>
+            <a href="https://www.instagram.com/saamparktechnology" target="_blank" style="display: inline-block; margin: 0 6px;" title="Instagram">
+              <img src="https://cdn-icons-png.flaticon.com/512/2111/2111463.png" width="22" height="22" alt="Instagram" style="vertical-align: middle;" />
+            </a>
+            <a href="https://wa.me/919046232424" target="_blank" style="display: inline-block; margin: 0 6px;" title="WhatsApp">
+              <img src="https://cdn-icons-png.flaticon.com/512/733/733585.png" width="22" height="22" alt="WhatsApp" style="vertical-align: middle;" />
+            </a>
+            <a href="https://www.linkedin.com/company/saampark" target="_blank" style="display: inline-block; margin: 0 6px;" title="LinkedIn">
+              <img src="https://cdn-icons-png.flaticon.com/512/3536/3536505.png" width="22" height="22" alt="LinkedIn" style="vertical-align: middle;" />
+            </a>
+            <a href="https://www.youtube.com/@saampark" target="_blank" style="display: inline-block; margin: 0 6px;" title="YouTube">
+              <img src="https://cdn-icons-png.flaticon.com/512/1384/1384060.png" width="22" height="22" alt="YouTube" style="vertical-align: middle;" />
+            </a>
+          </div>
+
           <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
         </div>
       </div>
@@ -690,7 +740,7 @@ async function sendInvoiceDetailsEmail({
   await transporter.sendMail({
     from,
     to,
-    subject: `📄 Tax Invoice ${invoiceId} for ${project} - ${brand.shortName}`,
+    subject: subjectText,
     html,
   });
 }

@@ -32,7 +32,7 @@ export default function ApprovalsMain() {
   }, [user, companies, branches, subBranches])
 
   const companyKey = activeCompanyId || "all"
-  const { data: requests = [], isLoading: loading } = useApprovalsQuery(companyKey, canAccessApprovals)
+  const { data: requests = [], isLoading: loading, refetch: loadRequests } = useApprovalsQuery(companyKey, canAccessApprovals)
   const approveMutation = useApproveRequestMutation(companyKey)
   const rejectMutation = useRejectRequestMutation(companyKey)
   const deleteMutation = useDeleteApprovalMutation(companyKey)
@@ -139,11 +139,9 @@ export default function ApprovalsMain() {
 
   const handleApprove = async (req: ApprovalRequest) => {
     await executeWithFeedback(async () => {
-      await approveApprovalRequest(req.id, {
-        id: String(user.id || ""),
-        name: user.name || "Administrator",
-        email: user.email || "",
-        role: user.role || "Admin",
+      await approveMutation.mutateAsync({
+        id: req.id,
+        reviewerName: user.name || "Administrator",
       })
       await loadRequests()
     }, {
@@ -151,7 +149,7 @@ export default function ApprovalsMain() {
       loadingTitle: "Approving Submission...",
       loadingMsg: `Approving ${req.type.toUpperCase()} #${req.documentNumber}...`,
       successTitle: "Approved Successfully!",
-      successMsg: `${req.title} is now officially approved and activated.`,
+      successMsg: `${req.title} is now approved and activated.`,
     })
   }
 
@@ -160,12 +158,11 @@ export default function ApprovalsMain() {
     const reason = rejectionReason.trim() || "Declined by administrator."
 
     await executeWithFeedback(async () => {
-      await rejectApprovalRequest(rejectItem.id, {
-        id: String(user.id || ""),
-        name: user.name || "Administrator",
-        email: user.email || "",
-        role: user.role || "Admin",
-      }, reason)
+      await rejectMutation.mutateAsync({
+        id: rejectItem.id,
+        reviewerName: user.name || "Administrator",
+        reason,
+      })
       setRejectItem(null)
       setRejectionReason("")
       await loadRequests()
@@ -222,7 +219,7 @@ export default function ApprovalsMain() {
         </div>
 
         <button
-          onClick={loadRequests}
+          onClick={() => { loadRequests(); }}
           className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border border-border bg-surface hover:bg-surface-hover text-foreground transition-all cursor-pointer shadow-xs self-start sm:self-auto"
         >
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} />

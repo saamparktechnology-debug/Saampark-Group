@@ -872,11 +872,11 @@ export function OfficialInvoiceDocument({
     customPaymentQrUrl = null
   }
 
-  // Generate Official Public Verification / View Online PDF QR Code against Invoice Number (Crisp 300x300 M-level ECC QR)
+  // Generate Public Verification / View Online PDF QR Code against Invoice Number (Crisp 300x300 M-level ECC QR)
   const invoiceNumOrId = (invoice as any).invoiceNumber || (invoice as any).invoice_number || invoice.id || "INV"
-  const originUrl = typeof window !== "undefined" && window.location.origin
+  const originUrl = typeof window !== "undefined" && window.location.origin && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
     ? window.location.origin
-    : "https://saampark.com"
+    : "https://crm.saampark.com"
   const publicInvoiceViewUrl = `${originUrl}/public/invoice?id=${encodeURIComponent(String(invoice.id || invoiceNumOrId))}`
   const invoiceVerificationQrUrl = React.useMemo(() => {
     return getQrCodeDataUri(publicInvoiceViewUrl, 160) || `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(publicInvoiceViewUrl)}`

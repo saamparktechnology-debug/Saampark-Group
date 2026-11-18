@@ -1094,14 +1094,20 @@ export default function CompaniesMain() {
         : [...curStoreBranches.filter(b => !isMatchBranch(b, savedBranch)), savedBranch]
       useAuthStore.setState({ branches: nextStoreBranches })
 
-      // Always persist branches to app_data so they survive page refresh for all users
+      // Isolate branches by company so branches from one company NEVER mix with another company
+      const techBranches = nextStoreBranches.filter(b => {
+        const bComp = b.company_id || (b as any).companyId
+        return bComp == 1 || String(bComp).toLowerCase() === "tech" || String(bComp).toLowerCase() === "1"
+      })
+      const consultBranches = nextStoreBranches.filter(b => {
+        const bComp = b.company_id || (b as any).companyId
+        return bComp == 2 || String(bComp).toLowerCase() === "consultancy" || String(bComp).toLowerCase() === "2" || String(bComp).toLowerCase() === "print"
+      })
+
+      // Persist only company-scoped branches to company keys
+      saveModuleDataToDB("branches", techBranches, "tech").catch(() => {})
+      saveModuleDataToDB("branches", consultBranches, "consultancy").catch(() => {})
       saveModuleDataToDB("branches", nextStoreBranches, "all").catch(() => {})
-      saveModuleDataToDB("branches", nextStoreBranches, resolvedCompSlug).catch(() => {})
-      if (resolvedCompSlug === "consultancy" || resolvedCompNumeric === 2) {
-        saveModuleDataToDB("branches", nextStoreBranches, "consultancy").catch(() => {})
-      } else {
-        saveModuleDataToDB("branches", nextStoreBranches, "tech").catch(() => {})
-      }
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("storage"))

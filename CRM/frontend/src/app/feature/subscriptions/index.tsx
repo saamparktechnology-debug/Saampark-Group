@@ -30,7 +30,8 @@ import {
   updateSubscription,
   calculateNextCycleDate,
   generateSubscriptionInvoice,
-  checkAndSendSubscriptionOverdueReminders
+  checkAndSendSubscriptionOverdueReminders,
+  checkAndSendRenewalReminders
 } from "./service/subscriptionService"
 import { SubscriptionList } from "./components/SubscriptionList"
 import { RenewSubscriptionModal } from "./components/RenewSubscriptionModal"
@@ -152,6 +153,8 @@ export default function SubscriptionsMain() {
 
   React.useEffect(() => {
     loadData(true)
+    // Run renewal reminder check on page load (rate-limited to once per 24h)
+    checkAndSendRenewalReminders(activeCompanyId || "tech").catch(() => {})
     
     // Load team members strictly excluding clients
     UserService.getTeamMembers().then((users: any[]) => {

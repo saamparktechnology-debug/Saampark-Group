@@ -899,3 +899,115 @@ export const deleteInstallmentRecord = async (id: string, companyId?: string): P
 
   return true
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUBSCRIPTION EXPIRY CHECKER — runs on app load, checks for expiring/expired
+// project-linked subscriptions and sends renewal reminders to admin + client.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RENEWAL_CHECK_KEY = "saampark_renewal_last_checked"
+
+export async function checkAndSendRenewalReminders(companyId?: string): Promise<void> {
+  if (typeof window === "undefined") return
+
+  // Run at most once per 24 hours per session
+  const lastChecked = localStorage.getItem(RENEWAL_CHECK_KEY)
+  const now = Date.now()
+  if (lastChecked && now - Number(lastChecked) < 24 * 60 * 60 * 1000) return
+  localStorage.setItem(RENEWAL_CHECK_KEY, String(now))
+
+  try {
+    const targetComp = companyId || (() => {
+      try {
+        const { useAuthStore } = require("@/store/useAuthStore")
+        return useAuthStore.getState().activeCompanyId || "tech"
+      } catch { return "tech" }
+    })()
+
+    const subs: any[] = await fetchModuleDataFromDB("subscriptions", [], targetComp).catch(() => [])
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const { sendGenericReminderEmail } = await import("@/services/emailNotificationService")
+    const { useAuthStore } = require("@/store/useAuthStore")
+    const { user } = useAuthStore.getState()
+    const adminEmail = user?.email || ""
+
+    for (const sub of (Array.isArray(subs) ? subs : [])) {
+      if (!sub.expiryDate || sub.status === "Canceled" || sub.status === "Cancelled") continue
+
+      const expiry = new Date(sub.expiryDate)
+      expiry.setHours(0, 0, 0, 0)
+      const daysUntilExpiry = Math.round((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+      // Send reminder at 30 days, 7 days, 1 day before, and on expiry day
+      const shouldNotify = daysUntilExpiry === 30 || daysUntilExpiry === 7 || daysUntilExpiry === 1 || daysUntilExpiry === 0
+
+      if (!shouldNotify) continue
+
+      const reminderKey = `saampark_renewal_sent_${sub.id}_${daysUntilExpiry}`
+      if (localStorage.getItem(reminderKey)) continue
+      localStorage.setItem(reminderKey, "1")
+
+      const urgency = daysUntilExpiry === 0 ? "🚨 EXPIRED TODAY" :
+                      daysUntilExpiry === 1 ? "⚠️ EXPIRES TOMORROW" :
+                      `⏰ Expires in ${daysUntilExpiry} days`
+
+      const subject = `[${urgency}] Renewal Required: ${sub.name || sub.projectName}`
+      const body = `
+Dear ${sub.clientName || "Client"},
+
+This is an automated renewal reminder from Saampark CRM.
+
+📋 Service: ${sub.name || sub.projectName}
+📅 Plan: ${sub.plan || sub.planType || "Service Plan"}
+🗓️ Start Date: ${sub.startDate || "—"}
+⏳ Expiry Date: ${sub.expiryDate}
+${daysUntilExpiry === 0 ? "🚨 Your service has EXPIRED today. Please renew immediately to avoid service interruption." :
+  `⚠️ Your service will expire in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? "s" : ""}. Please contact us to renew.`}
+
+To renew, please contact Saampark Technology:
+📧 info@saampark.com | 📞 +91 90462 32424
+
+Best regards,
+Saampark Technology & Research Pvt. Ltd.
+      `.trim()
+
+      // Notify client
+      if (sub.clientEmail) {
+        sendGenericReminderEmail(sub.clientEmail, subject, body).catch(() => {})
+      }
+
+      // Notify admin
+      if (adminEmail && adminEmail !== sub.clientEmail) {
+        const adminSubject = `[Admin Alert] ${urgency} – ${sub.name || sub.projectName} (${sub.clientName})`
+        const adminBody = `
+Admin Renewal Alert:
+
+Project/Service: ${sub.name || sub.projectName}
+Client: ${sub.clientName || "—"}
+Client Email: ${sub.clientEmail || "—"}
+Expiry Date: ${sub.expiryDate}
+Days Remaining: ${daysUntilExpiry}
+Plan: ${sub.plan || sub.planType || "—"}
+
+Please follow up with the client to renew this subscription.
+        `.trim()
+        sendGenericReminderEmail(adminEmail, adminSubject, adminBody).catch(() => {})
+      }
+
+      // Update sub status if expired
+      if (daysUntilExpiry === 0 || daysUntilExpiry < 0) {
+        sub.status = "Past Due"
+      } else if (daysUntilExpiry <= 30) {
+        sub.status = "Expiring Soon"
+      }
+    }
+
+    // Save updated statuses
+    await saveModuleDataToDB("subscriptions", subs, targetComp).catch(() => {})
+  } catch (err) {
+    console.warn("[RenewalChecker] Error:", err)
+  }
+}

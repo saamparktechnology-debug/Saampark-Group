@@ -257,6 +257,26 @@ export function generateCompanyEmployeeId(companyId?: string, existingUsers: Use
   return `${patternPrefix}${nextSeq}`;
 }
 
+export function generateClientUserId(existingUsers: UserItem[] = []): string {
+  const yearSuffix = String(new Date().getFullYear()).slice(-2);
+  const prefix = `CLI-${yearSuffix}`;
+  let maxSeq = 0;
+  const safeUsers = Array.isArray(existingUsers) ? existingUsers : [];
+  safeUsers.forEach(u => {
+    if (!u) return;
+    const rawEmp = String(u.employeeId || u.id || "").toUpperCase().trim();
+    if (rawEmp.startsWith(prefix)) {
+      const seqStr = rawEmp.slice(prefix.length);
+      const num = parseInt(seqStr, 10);
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num;
+      }
+    }
+  });
+  const nextSeq = String(maxSeq + 1).padStart(2, "0"); // e.g. CLI-2601
+  return `${prefix}${nextSeq}`;
+}
+
 // Helper: record a logged-in or newly created account into MySQL (Async version)
 export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegistration = false): Promise<UserItem | null> {
   const normalizedEmail = (user.email || "").toLowerCase().trim();
@@ -336,12 +356,18 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
     }
 
     // Build the account object safely preserving existing role and properties
+    const effectiveRole = isRootSuperAdminEmail(normalizedEmail) ? "Super Admin" : (user.role !== undefined ? user.role : (existing?.role || "Teams"));
+    const clientGeneratedId = effectiveRole === "Clients" ? generateClientUserId(currentAccounts) : null;
+    const finalEmployeeId = user.employeeId !== undefined && user.employeeId !== "" 
+      ? user.employeeId 
+      : (existing?.employeeId || (effectiveRole === "Clients" ? clientGeneratedId! : generateCompanyEmployeeId(effCompId, currentAccounts)));
+
     const mergedAccount: UserItem = {
-      id: user.id || existing?.id || `usr_${Date.now()}`,
+      id: user.id || existing?.id || (effectiveRole === "Clients" ? finalEmployeeId : `usr_${Date.now()}`),
       name: user.name !== undefined ? user.name : (existing?.name || "User Account"),
       email: normalizedEmail,
       username: user.username !== undefined ? (user.username ? user.username.toLowerCase().trim() : undefined) : existing?.username,
-      role: isRootSuperAdminEmail(normalizedEmail) ? "Super Admin" : (user.role !== undefined ? user.role : (existing?.role || "Teams")),
+      role: effectiveRole,
       companyId: effCompId,
       companyIds: user.companyIds !== undefined ? user.companyIds : (existing?.companyIds || (effCompId ? [effCompId] : ["tech"])),
       companyName: resolvedCompName,
@@ -351,12 +377,12 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
       avatarUrl: user.avatarUrl !== undefined ? user.avatarUrl : (existing?.avatarUrl || (user as any)?.avatar || existing?.avatar || undefined),
       avatar: (user as any)?.avatar !== undefined ? (user as any)?.avatar : (existing?.avatar || user.avatarUrl || existing?.avatarUrl || undefined),
       status: user.status !== undefined ? user.status : (existing?.status || "Active"),
-      department: user.department !== undefined ? user.department : (existing?.department || "General"),
+      department: user.department !== undefined ? user.department : (existing?.department || (effectiveRole === "Clients" ? "Client Portal" : "General")),
       phone: user.phone !== undefined ? user.phone : (existing?.phone || ""),
       password: (user.password && user.password.trim()) ? user.password.trim() : (existing?.password || "Password123"),
       lastLogin: user.lastLogin !== undefined ? user.lastLogin : (existing?.lastLogin || "Just now"),
       joinedDate: user.joinedDate !== undefined ? user.joinedDate : (existing?.joinedDate || new Date().toISOString().split("T")[0]),
-      employeeId: user.employeeId !== undefined && user.employeeId !== "" ? user.employeeId : (existing?.employeeId || generateCompanyEmployeeId(effCompId, currentAccounts)),
+      employeeId: finalEmployeeId,
       designation: user.designation !== undefined ? user.designation : existing?.designation,
       ctc: user.ctc !== undefined ? user.ctc : (existing as any)?.ctc,
       salary: user.salary !== undefined ? user.salary : (existing as any)?.salary,
@@ -1485,9 +1511,12 @@ export async function ensureClientUserAccount(params: {
       return found;
     }
 
-    // Auto-create client user
+    // Auto-create client user with CLI-XXXX ID format
+    const clientId = generateClientUserId(allUsers);
     const newUser = await recordUserAccountAsync(
       {
+        id: clientId,
+        employeeId: clientId,
         name: params.name?.trim() || "Client",
         email: cleanEmail,
         phone: params.phone?.trim() || "",

@@ -612,38 +612,68 @@ export default function ReportsMain() {
   }, [scopedSubscriptions, subscriptionSubFilter, subscriptionSearchQuery])
 
   // ── GST vs Non-GST Invoices Categorization & Metrics ──────────────────────
-  const gstInvoices = React.useMemo(() => {
-    return scopedInvoices.filter((i) => {
-      const rate = typeof i.gstRate === "number" ? i.gstRate : 0
-      const gstAmt = typeof i.gstAmount === "number" ? i.gstAmount : 0
-      const hasGstInClient = Boolean(clientMap[i.client.toLowerCase().trim()]?.gstNumber)
-      return rate > 0 || gstAmt > 0 || hasGstInClient
-    })
-  }, [scopedInvoices, clientMap])
+  const isInvoiceNonGst = React.useCallback((i: any) => {
+    if (!i) return false
+    const id = String(i.id || "").toUpperCase().trim()
+    const num = String(i.invoiceNumber || i.invoice_number || "").toUpperCase().trim()
+    if (id.startsWith("NGINV") || num.startsWith("NGINV")) return true
+    if (i.isNonGst === true || i.docScheme === "nongst") return true
+    if (i.gstRate !== undefined && i.gstRate !== null && Number(i.gstRate) === 0) return true
+    return false
+  }, [])
+
+  const parseAmountNum = React.useCallback((val: any) => {
+    if (typeof val === "number") return isNaN(val) ? 0 : val
+    if (!val) return 0
+    return parseInt(String(val).replace(/[^0-9]/g, ""), 10) || 0
+  }, [])
+
+  const resolveInvoiceDue = React.useCallback((i: any) => {
+    const rawDue = i.due ?? i.balanceDue ?? i.dueAmount
+    if (rawDue !== undefined && rawDue !== null && rawDue !== "") {
+      const parsed = parseAmountNum(rawDue)
+      if (parsed > 0) return parsed
+    }
+    if (i.status !== "Fully paid") {
+      const total = parseAmountNum(i.totalInvoiced)
+      const received = parseAmountNum(i.paymentReceived)
+      const diff = Math.max(0, total - received)
+      if (diff > 0) return diff
+    }
+    return 0
+  }, [parseAmountNum])
+
+  const isCashPayment = React.useCallback((i: any) => {
+    const method = String(i.paymentMethod || i.paymentMode || "").toLowerCase().trim()
+    return method.includes("cash")
+  }, [])
 
   const nonGstInvoices = React.useMemo(() => {
-    return scopedInvoices.filter((i) => {
-      const rate = typeof i.gstRate === "number" ? i.gstRate : 0
-      const gstAmt = typeof i.gstAmount === "number" ? i.gstAmount : 0
-      const hasGstInClient = Boolean(clientMap[i.client.toLowerCase().trim()]?.gstNumber)
-      return rate === 0 && gstAmt === 0 && !hasGstInClient
-    })
-  }, [scopedInvoices, clientMap])
+    return scopedInvoices.filter((i) => isInvoiceNonGst(i))
+  }, [scopedInvoices, isInvoiceNonGst])
+
+  const gstInvoices = React.useMemo(() => {
+    return scopedInvoices.filter((i) => !isInvoiceNonGst(i) && (
+      (typeof i.gstRate === "number" && i.gstRate > 0) ||
+      (typeof i.gstAmount === "number" && i.gstAmount > 0) ||
+      Boolean(clientMap[String(i.client || "").toLowerCase().trim()]?.gstNumber)
+    ))
+  }, [scopedInvoices, clientMap, isInvoiceNonGst])
 
   // Calculations: Total Invoices
   const totalBillsCount = scopedInvoices.length
   const totalInvoicedSum = scopedInvoices.reduce((sum, i) => {
-    return sum + (parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0)
+    return sum + parseAmountNum(i.totalInvoiced)
   }, 0)
 
   // Calculations: GST Bills
   const totalGstBillsCount = gstInvoices.length
   const totalGstInvoicedSum = gstInvoices.reduce((sum, i) => {
-    return sum + (parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0)
+    return sum + parseAmountNum(i.totalInvoiced)
   }, 0)
   const totalGstTaxAmountSum = gstInvoices.reduce((sum, i) => {
     if (typeof i.gstAmount === "number" && i.gstAmount > 0) return sum + i.gstAmount
-    const total = parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+    const total = parseAmountNum(i.totalInvoiced)
     const rate = i.gstRate || 18
     const base = Math.round(total / (1 + rate / 100))
     return sum + (total - base)
@@ -655,21 +685,29 @@ export default function ReportsMain() {
   // Calculations: Non-GST Bills
   const totalNonGstBillsCount = nonGstInvoices.length
   const totalNonGstInvoicedSum = nonGstInvoices.reduce((sum, i) => {
-    return sum + (parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0)
+    return sum + parseAmountNum(i.totalInvoiced)
   }, 0)
 
   // Calculations: Payments & Dues
   const totalCollectedSum = scopedInvoices.reduce((sum, i) => {
-    return sum + (parseInt((i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0)
+    return sum + parseAmountNum(i.paymentReceived)
   }, 0)
+  const cashCollectedSum = scopedInvoices.reduce((sum, i) => {
+    if (isCashPayment(i)) {
+      return sum + parseAmountNum(i.paymentReceived)
+    }
+    return sum
+  }, 0)
+  const onlineCollectedSum = Math.max(0, totalCollectedSum - cashCollectedSum)
+
   const totalDueSum = scopedInvoices.reduce((sum, i) => {
-    return sum + (parseInt((i.due || "0").replace(/[^0-9]/g, "")) || 0)
+    return sum + resolveInvoiceDue(i)
   }, 0)
   const paymentPendingCount = scopedInvoices.filter(
-    (i) => i.status === "Not paid" || i.status === "Partially paid" || i.status === "Payment Pending"
+    (i) => i.status === "Not paid" || i.status === "Partially paid" || i.status === "Payment Pending" || resolveInvoiceDue(i) > 0
   ).length
-  const fullyPaidCount = scopedInvoices.filter((i) => i.status === "Fully paid").length
-  const partiallyPaidCount = scopedInvoices.filter((i) => i.status === "Partially paid").length
+  const fullyPaidCount = scopedInvoices.filter((i) => i.status === "Fully paid" && resolveInvoiceDue(i) === 0).length
+  const partiallyPaidCount = scopedInvoices.filter((i) => i.status === "Partially paid" || (parseAmountNum(i.paymentReceived) > 0 && resolveInvoiceDue(i) > 0)).length
 
   // ── GST Slab Distribution (18%, 12%, 5%, 0%) ──────────────────────────────
   const gstSlabs = React.useMemo(() => {
@@ -681,8 +719,16 @@ export default function ReportsMain() {
     }
 
     scopedInvoices.forEach((i) => {
-      const rate = typeof i.gstRate === "number" ? i.gstRate : 0
-      const total = parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+      const total = parseAmountNum(i.totalInvoiced)
+      if (isInvoiceNonGst(i)) {
+        slabs[0].count += 1
+        slabs[0].base += total
+        slabs[0].tax += 0
+        slabs[0].total += total
+        return
+      }
+
+      const rate = typeof i.gstRate === "number" && i.gstRate > 0 ? i.gstRate : 18
       const tax = typeof i.gstAmount === "number" && i.gstAmount > 0 
         ? i.gstAmount 
         : rate > 0 ? Math.round(total - total / (1 + rate / 100)) : 0
@@ -697,25 +743,26 @@ export default function ReportsMain() {
     })
 
     return slabs
-  }, [scopedInvoices])
+  }, [scopedInvoices, isInvoiceNonGst, parseAmountNum])
 
   // ── Table Filtering & Search ──────────────────────────────────────────────
   const filteredTableInvoices = React.useMemo(() => {
     return scopedInvoices.filter((inv) => {
       // Sub-filter
       if (invoiceSubFilter === "gst") {
+        if (isInvoiceNonGst(inv)) return false
         const isGst = (typeof inv.gstRate === "number" && inv.gstRate > 0) || (typeof inv.gstAmount === "number" && inv.gstAmount > 0) || Boolean(clientMap[inv.client.toLowerCase().trim()]?.gstNumber)
         if (!isGst) return false
       } else if (invoiceSubFilter === "non_gst") {
-        const isGst = (typeof inv.gstRate === "number" && inv.gstRate > 0) || (typeof inv.gstAmount === "number" && inv.gstAmount > 0) || Boolean(clientMap[inv.client.toLowerCase().trim()]?.gstNumber)
-        if (isGst) return false
+        if (!isInvoiceNonGst(inv)) return false
       } else if (invoiceSubFilter === "due") {
-        const dueNum = parseInt((inv.due || "0").replace(/[^0-9]/g, "")) || 0
+        const dueNum = resolveInvoiceDue(inv)
         if (dueNum <= 0 && inv.status === "Fully paid") return false
+        return dueNum > 0
       } else if (invoiceSubFilter === "paid") {
-        if (inv.status !== "Fully paid") return false
+        if (inv.status !== "Fully paid" || resolveInvoiceDue(inv) > 0) return false
       } else if (invoiceSubFilter === "partially_paid") {
-        if (inv.status !== "Partially paid") return false
+        if (inv.status !== "Partially paid" && (parseAmountNum(inv.paymentReceived) === 0 || resolveInvoiceDue(inv) === 0)) return false
       }
 
       // Search Query
@@ -1255,15 +1302,21 @@ export default function ReportsMain() {
             {/* Card 5: Payments Received */}
             <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50/50 to-teal-50/20 dark:from-emerald-950/30 dark:to-teal-950/10 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs space-y-2">
               <div className="flex items-center justify-between text-xs text-emerald-700 dark:text-emerald-300 font-bold">
-                <span>Collected</span>
+                <span>Total Collected</span>
                 <TrendingUp size={16} className="text-emerald-600 dark:text-emerald-400" />
               </div>
               <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">
                 ₹{totalCollectedSum.toLocaleString("en-IN")}
               </p>
-              <div className="flex items-center justify-between text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold pt-0.5">
-                <span>{fullyPaidCount} Settled</span>
-                <span>{totalInvoicedSum > 0 ? `${Math.round((totalCollectedSum / totalInvoicedSum) * 100)}%` : "100%"}</span>
+              <div className="space-y-0.5 text-[10.5px] pt-0.5 border-t border-emerald-200/60 dark:border-emerald-800/40">
+                <div className="flex items-center justify-between text-emerald-800 dark:text-emerald-200 font-semibold">
+                  <span>💳 Online:</span>
+                  <span className="font-mono">₹{onlineCollectedSum.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex items-center justify-between text-emerald-800 dark:text-emerald-200 font-semibold">
+                  <span>💵 Cash:</span>
+                  <span className="font-mono">₹{cashCollectedSum.toLocaleString("en-IN")}</span>
+                </div>
               </div>
             </div>
 
@@ -1567,7 +1620,7 @@ export default function ReportsMain() {
 
                           {/* Due */}
                           <td className="py-3 px-3.5 text-right font-mono font-bold text-amber-600 dark:text-amber-400">
-                            {inv.due || "₹0"}
+                            {resolveInvoiceDue(inv) > 0 ? `₹${resolveInvoiceDue(inv).toLocaleString("en-IN")}` : "₹0"}
                           </td>
 
                           {/* Branch */}

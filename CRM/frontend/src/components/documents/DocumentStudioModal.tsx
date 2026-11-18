@@ -310,6 +310,9 @@ export function DocumentStudioModal({
     return initialData?.primaryCategory || initialData?.category || (initialData?.isMarketingRetainer ? "Digital Marketing" : "Website")
   })
   const [customPrimaryCategory, setCustomPrimaryCategory] = React.useState<string>("")
+  const [paymentMethod, setPaymentMethod] = React.useState<"Online" | "Cash">(
+    initialData?.paymentMethod || (initialData as any)?.paymentMode || "Online"
+  )
 
   // Payment Plan & Settlement Structure (Order: Full, Part (EMI), Advance, Subscription)
   const [paymentPlan, setPaymentPlan] = React.useState<"full" | "part" | "advance" | "subscription">(
@@ -896,7 +899,7 @@ export function DocumentStudioModal({
         const effectiveDesignation = clientDesignation === "Other" ? (customDesignation.trim() || "Client") : clientDesignation
         const effectiveProjectName = isMarketing
           ? (marketingPackage.planName ? `Digital Marketing Retainer (${marketingPackage.planName})` : "Digital Marketing Campaign")
-          : (items[0]?.serviceName?.trim() || effectiveCategory || "Client Project")
+          : (projectTitle.trim() || items[0]?.serviceName?.trim() || effectiveCategory || "Client Project")
 
         // Combined Project + Subscription Total
         // When subscription plan is active, contract total is added to netPayable (project deliverables)
@@ -1016,6 +1019,8 @@ export function DocumentStudioModal({
         total: effectiveDocTotal,
         paymentReceived: `₹${advancePaidNum.toLocaleString("en-IN")}`,
         due: `₹${effectiveDue.toLocaleString("en-IN")}`,
+        paymentMethod: paymentMethod,
+        paymentMode: paymentMethod,
         status: effectiveDue === 0 ? "Fully paid" : advancePaidNum > 0 ? "Partially paid" : "Not paid",
         companyId: companyId,
         branchId: branchId || undefined,
@@ -2406,6 +2411,34 @@ export function DocumentStudioModal({
                           }`}
                         >
                           4. 🗓️ Subscription
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Payment Mode Selector: Online vs Cash */}
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-3">
+                      <div>
+                        <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">Payment Mode</span>
+                        <span className="text-[10.5px] text-muted-foreground">Select whether payment is received Online or in Cash</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-zinc-200/70 dark:bg-zinc-900/80 p-1 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod("Online")}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            paymentMethod === "Online" ? "bg-teal-600 text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                          }`}
+                        >
+                          💳 Online (Bank / UPI)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod("Cash")}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            paymentMethod === "Cash" ? "bg-emerald-600 text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                          }`}
+                        >
+                          💵 Cash
                         </button>
                       </div>
                     </div>
@@ -4385,6 +4418,33 @@ export function DocumentStudioModal({
                       </select>
                     </div>
 
+                    {primaryCategory === "Custom" && (
+                      <div className="mt-2.5">
+                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Custom Category Name *</label>
+                        <Input
+                          value={customPrimaryCategory}
+                          onChange={e => setCustomPrimaryCategory(e.target.value)}
+                          placeholder="e.g. AI Consultation, Hardware Maintenance..."
+                          className="font-bold text-xs"
+                        />
+                      </div>
+                    )}
+
+                    {/* Dedicated Project Name field for Website Development & non-marketing services */}
+                    {primaryCategory !== "Digital Marketing" && (
+                      <div className="mt-3 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                        <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                          Project Name * <span className="text-[10px] font-normal text-muted-foreground">(Stored explicitly in Projects &amp; Invoices)</span>
+                        </label>
+                        <Input
+                          value={projectTitle}
+                          onChange={e => setProjectTitle(e.target.value)}
+                          placeholder="e.g. Corporate Web Portal, E-Commerce App, Mobile Application"
+                          className="font-bold text-xs bg-white dark:bg-zinc-900"
+                        />
+                      </div>
+                    )}
+
                     {primaryCategory === "Digital Marketing" ? (
                       <DigitalMarketingPackageBuilder
                         value={marketingPackage}
@@ -4458,42 +4518,44 @@ export function DocumentStudioModal({
                                   <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400">Preset / Custom</span>
                                 </div>
                                 <div className="space-y-1.5">
-                                  <select
-                                    value={
-                                      SERVICE_PRESETS.some(p => p.name.toLowerCase() === (item.serviceName || "").toLowerCase())
-                                        ? SERVICE_PRESETS.find(p => p.name.toLowerCase() === (item.serviceName || "").toLowerCase())?.name
-                                        : (item.serviceName ? "custom" : "")
-                                    }
-                                    onChange={(e) => {
-                                      const val = e.target.value
-                                      if (val === "custom") {
-                                        if (SERVICE_PRESETS.some(p => p.name === item.serviceName)) {
-                                          handleUpdateItem(item.id, "serviceName", "")
-                                        }
-                                      } else if (val) {
-                                        const preset = SERVICE_PRESETS.find(p => p.name === val)
-                                        if (preset) {
-                                          handleUpdateItem(item.id, "serviceName", preset.name)
-                                          if (preset.sac) handleUpdateItem(item.id, "sacCode", preset.sac)
-                                          if (preset.rate && (!item.rate || item.rate === 0)) handleUpdateItem(item.id, "rate", preset.rate)
-                                          if (preset.unit) handleUpdateItem(item.id, "unit", preset.unit)
-                                        }
+                                  {primaryCategory === "Digital Marketing" ? (
+                                    <select
+                                      value={
+                                        SERVICE_PRESETS.some(p => p.name.toLowerCase() === (item.serviceName || "").toLowerCase())
+                                          ? SERVICE_PRESETS.find(p => p.name.toLowerCase() === (item.serviceName || "").toLowerCase())?.name
+                                          : (item.serviceName ? "custom" : "")
                                       }
-                                    }}
-                                    className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-semibold text-zinc-800 dark:text-zinc-200 outline-none focus:border-teal-500 cursor-pointer"
-                                  >
-                                    <option value="" disabled>Select Preset or Custom...</option>
-                                    {SERVICE_PRESETS.map((preset) => (
-                                      <option key={preset.name} value={preset.name}>
-                                        {preset.name}
-                                      </option>
-                                    ))}
-                                    <option value="custom">✏️ Custom Service / Item</option>
-                                  </select>
+                                      onChange={(e) => {
+                                        const val = e.target.value
+                                        if (val === "custom") {
+                                          if (SERVICE_PRESETS.some(p => p.name === item.serviceName)) {
+                                            handleUpdateItem(item.id, "serviceName", "")
+                                          }
+                                        } else if (val) {
+                                          const preset = SERVICE_PRESETS.find(p => p.name === val)
+                                          if (preset) {
+                                            handleUpdateItem(item.id, "serviceName", preset.name)
+                                            if (preset.sac) handleUpdateItem(item.id, "sacCode", preset.sac)
+                                            if (preset.rate && (!item.rate || item.rate === 0)) handleUpdateItem(item.id, "rate", preset.rate)
+                                            if (preset.unit) handleUpdateItem(item.id, "unit", preset.unit)
+                                          }
+                                        }
+                                      }}
+                                      className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-semibold text-zinc-800 dark:text-zinc-200 outline-none focus:border-teal-500 cursor-pointer"
+                                    >
+                                      <option value="" disabled>Select Preset or Custom...</option>
+                                      {SERVICE_PRESETS.map((preset) => (
+                                        <option key={preset.name} value={preset.name}>
+                                          {preset.name}
+                                        </option>
+                                      ))}
+                                      <option value="custom">✏️ Custom Service / Item</option>
+                                    </select>
+                                  ) : null}
                                   <Input
                                     value={item.serviceName}
                                     onChange={e => handleUpdateItem(item.id, "serviceName", e.target.value)}
-                                    placeholder="Service name (or type custom item)..."
+                                    placeholder={primaryCategory === "Website" ? "e.g. Website Development (Corporate Portal)" : "Service name / deliverables..."}
                                     className="font-bold text-xs"
                                   />
                                 </div>
@@ -4518,6 +4580,7 @@ export function DocumentStudioModal({
                                 >
                                   <option value="Qty">Qty</option>
                                   <option value="Unit">Unit</option>
+                                  <option value="Project">Project</option>
                                   <option value="Module">Module</option>
                                   <option value="Sprint">Sprint</option>
                                   <option value="Weekly">Weekly</option>
@@ -4766,6 +4829,34 @@ export function DocumentStudioModal({
                           }`}
                         >
                           4. 🗓️ Subscription
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Payment Mode Selector: Online vs Cash */}
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-3">
+                      <div>
+                        <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">Payment Mode</span>
+                        <span className="text-[10.5px] text-muted-foreground">Select whether payment is received Online or in Cash</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-zinc-200/70 dark:bg-zinc-900/80 p-1 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod("Online")}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            paymentMethod === "Online" ? "bg-teal-600 text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                          }`}
+                        >
+                          💳 Online (Bank / UPI)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod("Cash")}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            paymentMethod === "Cash" ? "bg-emerald-600 text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                          }`}
+                        >
+                          💵 Cash
                         </button>
                       </div>
                     </div>
