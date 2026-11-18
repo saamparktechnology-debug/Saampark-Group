@@ -81,10 +81,7 @@ export function ProjectCompletionModal({
   const [autoSubscribe, setAutoSubscribe]         = React.useState<boolean>(true)
   const [notes, setNotes]                         = React.useState<string>("")
 
-  // Dual confirmation
-  const [checkDeliverables, setCheckDeliverables] = React.useState<boolean>(false)
-  const [checkCountdown, setCheckCountdown]         = React.useState<boolean>(false)
-  const [isSubmitting, setIsSubmitting]             = React.useState<boolean>(false)
+  const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false)
 
   // Fetch client email if missing
   React.useEffect(() => {
@@ -134,7 +131,7 @@ export function ProjectCompletionModal({
     }
   }, [isCustom, selectedPlan, isMarketing, firstPostLaunched, firstPostDate, customStartDate, customEndDate, customPlanName, todayStr])
 
-  const canConfirm = checkDeliverables && checkCountdown && !isSubmitting && (isCustom ? !!customEndDate : true)
+  const canConfirm = !isSubmitting && (isCustom ? !!customEndDate : true)
 
   const handleConfirm = async () => {
     if (!canConfirm) return
@@ -173,7 +170,7 @@ export function ProjectCompletionModal({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-full">
-                  DUAL CONFIRMATION GATEWAY
+                  PROJECT COMPLETION GATEWAY
                 </span>
                 <span className="text-[10px] font-bold text-white/80">SAAMPARK CRM</span>
               </div>
@@ -360,7 +357,7 @@ export function ProjectCompletionModal({
                 className="w-4 h-4 text-blue-600 rounded cursor-pointer" />
               <span className="flex items-center gap-1.5">
                 <Mail size={14} className="text-blue-600" />
-                <span>Send Official Project Completion &amp; Handover Email to Client</span>
+                <span>Send Project Completion &amp; Handover Email to Client</span>
               </span>
             </label>
             {notifyClient && (
@@ -369,34 +366,10 @@ export function ProjectCompletionModal({
                   placeholder="client@company.com"
                   className="w-full px-3 py-1.5 text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-medium outline-none focus:border-blue-500" />
                 <span className="text-[10px] text-zinc-400 block">
-                  The client will receive official completion sign-off, live credentials link, and countdown start confirmation.
+                  The client will receive completion sign-off, live credentials link, and countdown start confirmation.
                 </span>
               </div>
             )}
-          </div>
-
-          {/* Dual Confirmation */}
-          <div className="p-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border-2 border-amber-300 dark:border-amber-800 space-y-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span className="text-xs font-black text-amber-900 dark:text-amber-200 uppercase tracking-wide">
-                Dual Step Verification (Required)
-              </span>
-            </div>
-            <label className="flex items-start gap-2.5 cursor-pointer">
-              <input type="checkbox" checked={checkDeliverables} onChange={e => setCheckDeliverables(e.target.checked)}
-                className="w-4 h-4 mt-0.5 text-blue-600 rounded cursor-pointer" />
-              <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 leading-snug">
-                1. I confirm that all engineering milestones, deliverables, quality tests, and specifications have been 100% completed and fulfilled.
-              </span>
-            </label>
-            <label className="flex items-start gap-2.5 cursor-pointer">
-              <input type="checkbox" checked={checkCountdown} onChange={e => setCheckCountdown(e.target.checked)}
-                className="w-4 h-4 mt-0.5 text-blue-600 rounded cursor-pointer" />
-              <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 leading-snug">
-                2. I confirm launching the service countdown timeline and officially locking completion sign-off.
-              </span>
-            </label>
           </div>
         </div>
 

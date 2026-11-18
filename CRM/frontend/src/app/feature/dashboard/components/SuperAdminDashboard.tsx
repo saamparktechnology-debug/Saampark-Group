@@ -40,7 +40,7 @@ import { fetchModuleDataFromDB, filterGlobalDeletedItems } from "@/lib/storageSy
 import { Widget } from "./Widget"
 import { KPICard } from "./KPICard"
 import { DonutChart } from "./DonutChart"
-import { getUserAvatar } from "../../users/service/userService"
+import { getUserAvatar, getUsers } from "../../users/service/userService"
 import { taskService } from "../../tasks/service/taskService"
 import { getProjects } from "../../projects/service/projectService"
 import { getInvoices, InvoiceItem } from "../../sales/invoices/service/invoiceService"
@@ -184,7 +184,7 @@ export function SuperAdminDashboard() {
   const loadDashboardData = React.useCallback(async () => {
     try {
       const [uList, pList, invList, ordList, tList, expList, actList, tcList] = await Promise.all([
-        fetchModuleDataFromDB<any[]>("users", [], "all").catch(() => []),
+        getUsers("all").catch(() => []),
         getProjects("all").catch(() => []),
         getInvoices("all").catch(() => []),
         getOrders("all").catch(() => []),
@@ -365,11 +365,48 @@ export function SuperAdminDashboard() {
   // Total calculated metrics
   const totalCompaniesCount = targetCompanies.length
   const totalBranchesCount = targetBranches.length
-  const activeUsersCount = (dbUsers || []).filter(u => {
-    if (isSuperAdmin && (!activeCompanyId || activeCompanyId === "all")) return true
-    const userComp = u.companyId || u.company_id || u.company
-    return targetCompanies.some(c => isMatchingCompany(c, userComp))
-  }).length
+  const activeUsersCount = React.useMemo(() => {
+    let list = Array.isArray(dbUsers) ? dbUsers : []
+    const targetComp = activeCompanyId
+    const targetBranch = activeBranchId
+
+    if (targetComp && targetComp !== "all") {
+      list = list.filter((u) => {
+        const rawCompList = (u.companyIds && u.companyIds.length > 0)
+          ? u.companyIds
+          : (u.companyId ? [u.companyId] : ["tech"])
+        if (rawCompList.some((id: any) => String(id).toLowerCase().trim() === "all")) return true
+        return rawCompList.some((id: any) => {
+          const strId = String(id).toLowerCase().trim()
+          return strId === targetComp || isMatchingCompany({ id: strId, slug: strId } as any, targetComp)
+        })
+      })
+    }
+
+    if (targetBranch && targetBranch !== "all") {
+      const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+      const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
+      const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+      list = list.filter((u) => {
+        if (u.role === "Super Admin" || u.role === "Admin" || u.role === "Clients") return true
+        const uBranchIds = (u.branchIds && u.branchIds.length > 0)
+          ? u.branchIds.map(id => String(id).toLowerCase().trim())
+          : (u.branchId ? [String(u.branchId).toLowerCase().trim()] : [])
+        const uBranchName = String(u.branchName || "").toLowerCase().trim()
+        if (uBranchIds.includes("all") || uBranchIds.includes("head-office")) return true
+        if (uBranchIds.length === 0 && !uBranchName) return false
+        return (
+          uBranchIds.includes(targetBranchId) ||
+          (targetBranchName && uBranchIds.includes(targetBranchName)) ||
+          String(u.branchId || "").toLowerCase().trim() === targetBranchId ||
+          (targetBranchName && (uBranchName === targetBranchName || String(u.branchId || "").toLowerCase().trim() === targetBranchName))
+        )
+      })
+    }
+
+    return list.length
+  }, [dbUsers, activeCompanyId, activeBranchId, branches])
   const activeProjectsCount = (dbProjects || []).filter(p => {
     if (isSuperAdmin && (!activeCompanyId || activeCompanyId === "all")) return true
     return targetCompanies.some(c => isMatchingCompany(c, p.companyId))

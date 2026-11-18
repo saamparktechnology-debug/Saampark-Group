@@ -120,8 +120,9 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
   const url = `${baseUrl}${cleanEndpoint}`
 
+  const isMutation = Boolean(options.method && options.method.toUpperCase() !== 'GET')
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 8000)
+  const timeoutId = setTimeout(() => controller.abort(), 30000)
 
   try {
     const response = await fetch(url, {
@@ -160,6 +161,11 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
         }
       }
 
+      // If mutating database state, halt execution and raise error so UI never shows false success
+      if (isMutation) {
+        throw new Error(errorMessage)
+      }
+
       return { status: "error", message: errorMessage, data: null, error: true } as any
     }
 
@@ -178,7 +184,11 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
     return await response.json()
   } catch (error: any) {
     clearTimeout(timeoutId)
-    console.warn(`API Fast Fallback [${options.method || 'GET'} ${endpoint}]:`, error.name === 'AbortError' ? 'Backend request timed out (8s limit)' : (error.message || error))
+    const errorMsg = error.name === 'AbortError' ? 'Backend request timed out (30s limit)' : (error.message || 'Network / server error')
+    console.warn(`API Error [${options.method || 'GET'} ${endpoint}]:`, errorMsg)
+    if (isMutation) {
+      throw new Error(typeof errorMsg === 'string' ? errorMsg : 'Database persistence failed')
+    }
     return { status: "error", message: error.message || 'Network error', data: null, error: true } as any
   }
 }

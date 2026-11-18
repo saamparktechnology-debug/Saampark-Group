@@ -313,6 +313,82 @@ function getCompanyBranding(companyId, rawName = '') {
   };
 }
 
+
+function getEmailFooterHtml(brandOrName) {
+  const brandTitle = (typeof brandOrName === 'object' && brandOrName?.fullName)
+    ? brandOrName.fullName
+    : (typeof brandOrName === 'string' && brandOrName.trim() ? brandOrName.trim() : 'SAAMPARK Group');
+
+  return `
+        <!-- Universal Standard Footer -->
+        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
+          <p style="color: #9ca3af; font-size: 13px; font-weight: 700; margin: 0 0 6px;">${brandTitle}</p>
+          <p style="color: #9ca3af; font-size: 12px; margin: 0 0 6px;">
+            Help Line No- <a href="tel:+919046232424" style="color: #38bdf8; text-decoration: none;">+91 9046232424</a> / Land No- <a href="tel:+9103222464688" style="color: #38bdf8; text-decoration: none;">+91 03222-464688</a>
+          </p>
+          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 14px;">
+            🌐 <a href="https://www.saampark.com" target="_blank" style="color: #38bdf8; text-decoration: none;">www.saampark.com</a> &nbsp;|&nbsp; <a href="https://www.saamparktechnologyresearch.in" target="_blank" style="color: #38bdf8; text-decoration: none;">www.saamparktechnologyresearch.in</a>
+          </p>
+          
+          <!-- Social Media Icons (Facebook, Instagram, WhatsApp, LinkedIn, YouTube) -->
+          <div style="margin: 10px 0 14px; text-align: center;">
+            <a href="https://www.facebook.com/saamparktechnology" target="_blank" style="display: inline-block; margin: 0 6px;" title="Facebook">
+              <img src="https://cdn-icons-png.flaticon.com/512/733/733547.png" width="22" height="22" alt="Facebook" style="vertical-align: middle;" />
+            </a>
+            <a href="https://www.instagram.com/saamparktechnology" target="_blank" style="display: inline-block; margin: 0 6px;" title="Instagram">
+              <img src="https://cdn-icons-png.flaticon.com/512/2111/2111463.png" width="22" height="22" alt="Instagram" style="vertical-align: middle;" />
+            </a>
+            <a href="https://wa.me/919046232424" target="_blank" style="display: inline-block; margin: 0 6px;" title="WhatsApp">
+              <img src="https://cdn-icons-png.flaticon.com/512/733/733585.png" width="22" height="22" alt="WhatsApp" style="vertical-align: middle;" />
+            </a>
+            <a href="https://www.linkedin.com/company/saampark" target="_blank" style="display: inline-block; margin: 0 6px;" title="LinkedIn">
+              <img src="https://cdn-icons-png.flaticon.com/512/3536/3536505.png" width="22" height="22" alt="LinkedIn" style="vertical-align: middle;" />
+            </a>
+            <a href="https://www.youtube.com/@saampark" target="_blank" style="display: inline-block; margin: 0 6px;" title="YouTube">
+              <img src="https://cdn-icons-png.flaticon.com/512/1384/1384060.png" width="22" height="22" alt="YouTube" style="vertical-align: middle;" />
+            </a>
+          </div>
+
+          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        </div>
+  `;
+}
+
+async function resolveCompanyTaxDetails(companyId, overrides = {}) {
+  let gstin = overrides.companyGstin || overrides.gstin || '';
+  let cin = overrides.companyCin || overrides.cin || '';
+  let msme = overrides.companyMsme || overrides.msme || overrides.msme_reg || '';
+  let pan = overrides.companyPan || overrides.pan || '';
+  let address = overrides.companyAddress || overrides.address || '';
+
+  try {
+    const canonId = String(companyId || '').toLowerCase().trim();
+    const [compRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "companies"');
+    if (compRows.length > 0 && compRows[0].data_json) {
+      const companies = JSON.parse(compRows[0].data_json);
+      if (Array.isArray(companies)) {
+        const comp = companies.find(c => {
+          const cId = String(c.id || '').toLowerCase().trim();
+          const cSlug = String(c.slug || '').toLowerCase().trim();
+          const cNum = String(c.numeric_id || '').toLowerCase().trim();
+          return cId === canonId || cSlug === canonId || cNum === canonId || (canonId.includes('consult') && (cId.includes('consult') || cSlug.includes('consult')));
+        }) || companies[0];
+
+        if (comp) {
+          if (!gstin) gstin = comp.gstin || comp.gst_number || '';
+          if (!cin) cin = comp.cin || comp.cin_number || '';
+          if (!msme) msme = comp.msme_reg || comp.msme || comp.udyam || '';
+          if (!pan) pan = comp.pan || comp.pan_number || '';
+          if (!address) address = comp.address || '';
+        }
+      }
+    }
+  } catch {}
+
+  return { gstin, cin, msme, pan, address };
+}
+
+
 /**
  * Send OTP email for password reset (Uses Saampark Group Official Email)
  */
@@ -353,11 +429,7 @@ async function sendPasswordResetOTP(email, name = 'User', companyId = null) {
             </p>
           </div>
         </div>
-        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
-          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
-          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
-          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
-        </div>
+        ${getEmailFooterHtml(typeof brand !== "undefined" ? brand : (typeof companyName !== "undefined" ? companyName : "SAAMPARK Group"))}
       </div>
     </div>
   `;
@@ -410,11 +482,7 @@ async function sendEmailVerificationOTP(email, name = 'User', companyId = null) 
             Once verified, you will be able to access your personalized workspace.
           </p>
         </div>
-        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
-          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
-          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
-          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
-        </div>
+        ${getEmailFooterHtml(typeof brand !== "undefined" ? brand : (typeof companyName !== "undefined" ? companyName : "SAAMPARK Group"))}
       </div>
     </div>
   `;
@@ -441,7 +509,7 @@ async function sendAdminCreatedAccountEmail(email, name = 'Team Member', role = 
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 560px; margin: 0 auto; background: #0b1120; border-radius: 16px; overflow: hidden; border: 1px solid #1e293b; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);">
       <div style="background: linear-gradient(135deg, #0284c7, #0f766e); padding: 32px 40px; text-align: center;">
         <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">SAAMPARK CLIENT PORTAL</h1>
-        <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 13px; font-weight: 600;">Official Client Access &amp; Workspace</p>
+        <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 13px; font-weight: 600;">Client Access &amp; Workspace</p>
       </div>
       <div style="padding: 36px 40px; background: #0f172a;">
         <p style="color: #f1f5f9; font-size: 16px; margin: 0 0 12px;">Hello <strong>${name}</strong>,</p>
@@ -467,7 +535,7 @@ async function sendAdminCreatedAccountEmail(email, name = 'Team Member', role = 
           </p>
           <ul style="color: #94a3b8; font-size: 12.5px; margin: 0; padding-left: 18px; line-height: 1.6;">
             <li>View real-time progress on your active <strong>Projects &amp; Deliverables</strong>.</li>
-            <li>Review and download official <strong>Invoices, Quotations &amp; Estimates</strong>.</li>
+            <li>Review and download your <strong>Invoices, Quotations &amp; Estimates</strong>.</li>
             <li>Track commercial payment milestones, bank remittance details &amp; receipts.</li>
             <li>Access dedicated digital marketing analytics, live creatives &amp; performance reports.</li>
             <li>Raise priority support tickets and communicate directly with your project manager.</li>
@@ -576,9 +644,17 @@ async function sendInvoiceDetailsEmail({
   viewUrl = `https://crm.saampark.com/sales/invoices?view=${invoiceId}`,
   downloadUrl = null,
   companyId = null,
+  companyGstin = null,
+  companyCin = null,
+  companyMsme = null,
+  companyPan = null,
+  companyAddress = null,
+  clientGstin = null,
+  clientPan = null,
 }) {
   const { transporter, from } = await getEmailConfig(companyId);
   const brand = getCompanyBranding(companyId);
+  const taxDetails = await resolveCompanyTaxDetails(companyId, { companyGstin, companyCin, companyMsme, companyPan, companyAddress });
 
   const effectiveDownloadUrl = downloadUrl || (viewUrl.includes('?') ? `${viewUrl}&action=download` : `${viewUrl}?action=download`);
   const isNonGstBill = Boolean(isNonGst) || String(invoiceId || '').toUpperCase().startsWith('NGINV') || (gstRate !== null && Number(gstRate) === 0);
@@ -628,6 +704,30 @@ async function sendInvoiceDetailsEmail({
             Please find your ${isNonGstBill ? 'invoice' : 'tax invoice'} details for <strong style="color: #f9fafb;">${project}</strong> issued by <strong>${brand.fullName}</strong>.
           </p>
 
+          <!-- Company Legal & Tax Details -->
+          <div style="background-color: #1a2234; border: 1px solid #2d3b55; border-radius: 14px; padding: 18px 20px; margin-bottom: 20px; font-size: 12.5px; color: #cbd5e1; line-height: 1.6;">
+            <div style="font-weight: 800; color: #f8fafc; font-size: 14px; margin-bottom: 4px;">${brand.fullName}</div>
+            ${taxDetails.address ? `<div style="color: #94a3b8; font-size: 12px; margin-bottom: 8px;">📍 ${taxDetails.address}</div>` : ''}
+            <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; padding-top: 6px; border-top: 1px solid #26334d;">
+              ${(!isNonGstBill && taxDetails.gstin) ? `<span style="display: inline-block;"><strong style="color: #38bdf8;">GSTIN:</strong> <span style="font-family: ui-monospace, monospace; color: #ffffff;">${taxDetails.gstin}</span></span>` : ''}
+              ${taxDetails.cin ? `<span style="display: inline-block;"><strong style="color: #a78bfa;">CIN:</strong> <span style="font-family: ui-monospace, monospace; color: #ffffff;">${taxDetails.cin}</span></span>` : ''}
+              ${taxDetails.msme ? `<span style="display: inline-block;"><strong style="color: #34d399;">MSME:</strong> <span style="font-family: ui-monospace, monospace; color: #ffffff;">${taxDetails.msme}</span></span>` : ''}
+              ${taxDetails.pan ? `<span style="display: inline-block;"><strong style="color: #fbbf24;">PAN:</strong> <span style="font-family: ui-monospace, monospace; color: #ffffff;">${taxDetails.pan}</span></span>` : ''}
+            </div>
+          </div>
+
+          <!-- Company Legal & Tax Details -->
+          <div style="background-color: #1a2234; border: 1px solid #2d3b55; border-radius: 14px; padding: 18px 20px; margin-bottom: 20px; font-size: 12.5px; color: #cbd5e1; line-height: 1.6;">
+            <div style="font-weight: 800; color: #f8fafc; font-size: 14px; margin-bottom: 4px;">${brand.fullName}</div>
+            ${taxDetails.address ? `<div style="color: #94a3b8; font-size: 12px; margin-bottom: 8px;">📍 ${taxDetails.address}</div>` : ''}
+            <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; padding-top: 6px; border-top: 1px solid #26334d;">
+              ${(!isNonGstBill && taxDetails.gstin) ? `<span style="display: inline-block;"><strong style="color: #38bdf8;">GSTIN:</strong> <span style="font-family: ui-monospace, monospace; color: #ffffff;">${taxDetails.gstin}</span></span>` : ''}
+              ${taxDetails.cin ? `<span style="display: inline-block;"><strong style="color: #a78bfa;">CIN:</strong> <span style="font-family: ui-monospace, monospace; color: #ffffff;">${taxDetails.cin}</span></span>` : ''}
+              ${taxDetails.msme ? `<span style="display: inline-block;"><strong style="color: #34d399;">MSME:</strong> <span style="font-family: ui-monospace, monospace; color: #ffffff;">${taxDetails.msme}</span></span>` : ''}
+              ${taxDetails.pan ? `<span style="display: inline-block;"><strong style="color: #fbbf24;">PAN:</strong> <span style="font-family: ui-monospace, monospace; color: #ffffff;">${taxDetails.pan}</span></span>` : ''}
+            </div>
+          </div>
+
           <!-- Metadata Box -->
           <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 20px; margin-bottom: 24px;">
             <table style="width: 100%; font-size: 13px; color: #d1d5db; border-collapse: collapse;">
@@ -643,6 +743,18 @@ async function sendInvoiceDetailsEmail({
                 <td style="padding: 6px 0; color: #9ca3af;">Payment Due Date:</td>
                 <td style="padding: 6px 0; text-align: right; color: #fbbf24; font-weight: 600;">${dueDate || 'Immediate'}</td>
               </tr>
+              ${clientGstin ? `
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Client GSTIN:</td>
+                <td style="padding: 6px 0; text-align: right; color: #38bdf8; font-weight: 700; font-family: ui-monospace, monospace;">${clientGstin}</td>
+              </tr>
+              ` : ''}
+              ${clientPan ? `
+              <tr>
+                <td style="padding: 6px 0; color: #9ca3af;">Client PAN:</td>
+                <td style="padding: 6px 0; text-align: right; color: #fbbf24; font-weight: 700; font-family: ui-monospace, monospace;">${clientPan}</td>
+              </tr>
+              ` : ''}
             </table>
           </div>
 
@@ -703,36 +815,7 @@ async function sendInvoiceDetailsEmail({
         </div>
 
         <!-- Footer -->
-        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
-          <p style="color: #9ca3af; font-size: 13px; font-weight: 700; margin: 0 0 6px;">${brand.fullName}</p>
-          <p style="color: #9ca3af; font-size: 12px; margin: 0 0 6px;">
-            Help Line No: <a href="tel:+919046232424" style="color: #38bdf8; text-decoration: none;">+91 9046232424</a> &nbsp;|&nbsp; Land No: <a href="tel:+9103222464688" style="color: #38bdf8; text-decoration: none;">+91 03222-464688</a>
-          </p>
-          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 14px;">
-            🌐 <a href="https://www.saampark.com" target="_blank" style="color: #38bdf8; text-decoration: none;">www.saampark.com</a> &nbsp;|&nbsp; <a href="https://www.saamparktechnologyresearch.in" target="_blank" style="color: #38bdf8; text-decoration: none;">www.saamparktechnologyresearch.in</a>
-          </p>
-          
-          <!-- Social Media Icons (Facebook, Instagram, WhatsApp, LinkedIn, YouTube) -->
-          <div style="margin: 10px 0 14px; text-align: center;">
-            <a href="https://www.facebook.com/saamparktechnology" target="_blank" style="display: inline-block; margin: 0 6px;" title="Facebook">
-              <img src="https://cdn-icons-png.flaticon.com/512/733/733547.png" width="22" height="22" alt="Facebook" style="vertical-align: middle;" />
-            </a>
-            <a href="https://www.instagram.com/saamparktechnology" target="_blank" style="display: inline-block; margin: 0 6px;" title="Instagram">
-              <img src="https://cdn-icons-png.flaticon.com/512/2111/2111463.png" width="22" height="22" alt="Instagram" style="vertical-align: middle;" />
-            </a>
-            <a href="https://wa.me/919046232424" target="_blank" style="display: inline-block; margin: 0 6px;" title="WhatsApp">
-              <img src="https://cdn-icons-png.flaticon.com/512/733/733585.png" width="22" height="22" alt="WhatsApp" style="vertical-align: middle;" />
-            </a>
-            <a href="https://www.linkedin.com/company/saampark" target="_blank" style="display: inline-block; margin: 0 6px;" title="LinkedIn">
-              <img src="https://cdn-icons-png.flaticon.com/512/3536/3536505.png" width="22" height="22" alt="LinkedIn" style="vertical-align: middle;" />
-            </a>
-            <a href="https://www.youtube.com/@saampark" target="_blank" style="display: inline-block; margin: 0 6px;" title="YouTube">
-              <img src="https://cdn-icons-png.flaticon.com/512/1384/1384060.png" width="22" height="22" alt="YouTube" style="vertical-align: middle;" />
-            </a>
-          </div>
-
-          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
-        </div>
+        ${getEmailFooterHtml(typeof brand !== "undefined" ? brand : (typeof companyName !== "undefined" ? companyName : "SAAMPARK Group"))}
       </div>
     </div>
   `;
@@ -800,7 +883,7 @@ async function sendQuotationDetailsEmail({
           <div style="display: inline-block; padding: 4px 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 12px;">
             PROJECT PROPOSAL • ${brand.shortName}
           </div>
-          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Official Commercial Quotation</h1>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Commercial Quotation</h1>
           <p style="color: rgba(255,255,255,0.9); margin: 6px 0 0; font-size: 13px;">${brand.fullName}</p>
         </div>
 
@@ -808,7 +891,7 @@ async function sendQuotationDetailsEmail({
         <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb;">
           <p style="color: #f9fafb; font-size: 16px; font-weight: 600; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
           <p style="color: #9ca3af; font-size: 13.5px; line-height: 1.6; margin: 0 0 20px;">
-            We have prepared official Quotation <strong style="color: #38bdf8;">${displayNum}</strong> for your project requirements. Please review the commercial breakdown below and select your response:
+            We have prepared Quotation <strong style="color: #38bdf8;">${displayNum}</strong> for your project requirements. Please review the commercial breakdown below and select your response:
           </p>
 
           <!-- Metadata Box -->
@@ -871,7 +954,7 @@ async function sendQuotationDetailsEmail({
 
             <div style="border-top: 1px solid #374151; padding-top: 14px; margin-top: 14px;">
               <a href="${dUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 10px 22px; border-radius: 10px; font-weight: 700; font-size: 12px; margin: 4px; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.35);">
-                📥 Download Official PDF
+                📥 Download PDF
               </a>
               <a href="${vUrl}" style="display: inline-block; background: #374151; color: #f3f4f6; text-decoration: none; padding: 10px 22px; border-radius: 10px; font-weight: 600; font-size: 12px; margin: 4px;">
                 👁️ View Digital Portal
@@ -880,16 +963,12 @@ async function sendQuotationDetailsEmail({
           </div>
 
           <p style="color: #6b7280; font-size: 12px; text-align: center; margin: 0;">
-            Upon acceptance, this quotation initiates the official project onboarding and estimation.
+            Upon acceptance, this quotation initiates project onboarding and estimation.
           </p>
         </div>
 
         <!-- Footer -->
-        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
-          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
-          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
-          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
-        </div>
+        ${getEmailFooterHtml(typeof brand !== "undefined" ? brand : (typeof companyName !== "undefined" ? companyName : "SAAMPARK Group"))}
       </div>
     </div>
   `;
@@ -958,7 +1037,7 @@ async function sendEstimateDetailsEmail({
           <div style="display: inline-block; padding: 4px 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 12px;">
             PROJECT ESTIMATE • ${brand.shortName}
           </div>
-          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Official Project Cost Estimate</h1>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Project Cost Estimate</h1>
           <p style="color: rgba(255,255,255,0.9); margin: 6px 0 0; font-size: 13px;">${brand.fullName}</p>
         </div>
 
@@ -966,7 +1045,7 @@ async function sendEstimateDetailsEmail({
         <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb;">
           <p style="color: #f9fafb; font-size: 16px; font-weight: 600; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
           <p style="color: #9ca3af; font-size: 13.5px; line-height: 1.6; margin: 0 0 20px;">
-            Here is your official cost estimate <strong style="color: #38bdf8;">${displayNum}</strong> for <strong>${projectTitle}</strong>. Please review the itemized scope and choose your response:
+            Here is your cost estimate <strong style="color: #38bdf8;">${displayNum}</strong> for <strong>${projectTitle}</strong>. Please review the itemized scope and choose your response:
           </p>
 
           <!-- Metadata Box -->
@@ -1029,7 +1108,7 @@ async function sendEstimateDetailsEmail({
 
             <div style="border-top: 1px solid #374151; padding-top: 14px; margin-top: 14px;">
               <a href="${dUrl}" style="display: inline-block; background: #0284c7; color: #ffffff; text-decoration: none; padding: 10px 22px; border-radius: 10px; font-weight: 700; font-size: 12px; margin: 4px; box-shadow: 0 4px 10px rgba(2, 132, 199, 0.35);">
-                📥 Download Official PDF
+                📥 Download PDF
               </a>
               <a href="${vUrl}" style="display: inline-block; background: #374151; color: #f3f4f6; text-decoration: none; padding: 10px 22px; border-radius: 10px; font-weight: 600; font-size: 12px; margin: 4px;">
                 👁️ View Digital Portal
@@ -1038,16 +1117,12 @@ async function sendEstimateDetailsEmail({
           </div>
 
           <p style="color: #6b7280; font-size: 12px; text-align: center; margin: 0;">
-            Upon acceptance, this estimate can be immediately converted into an official tax invoice and deliverables schedule.
+            Upon acceptance, this estimate can be immediately converted into a tax invoice and deliverables schedule.
           </p>
         </div>
 
         <!-- Footer -->
-        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
-          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
-          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
-          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
-        </div>
+        ${getEmailFooterHtml(typeof brand !== "undefined" ? brand : (typeof companyName !== "undefined" ? companyName : "SAAMPARK Group"))}
       </div>
     </div>
   `;
@@ -1095,11 +1170,7 @@ async function sendPinResetOTP(email, name = 'User', companyId = null) {
             Never share this OTP with anyone. Management will never ask for your verification code.
           </p>
         </div>
-        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
-          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
-          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
-          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
-        </div>
+        ${getEmailFooterHtml(typeof brand !== "undefined" ? brand : (typeof companyName !== "undefined" ? companyName : "SAAMPARK Group"))}
       </div>
     </div>
   `;
@@ -1164,7 +1235,7 @@ async function sendProjectCompletionEmail({
                   ${countdownEndDate ? `<tr><td style="padding: 4px 0; color: #9ca3af;">Service Valid Until:</td><td style="padding: 4px 0; text-align: right; color: #fbbf24; font-weight: 700;">${countdownEndDate}</td></tr>` : ''}
                 </table>
                 <p style="color: #94a3b8; font-size: 12px; margin: 10px 0 0; line-height: 1.4;">
-                  ${countdownNotice || (isDigitalMarketing ? 'Note: For Digital Marketing Retainers, the campaign timeline starts strictly from the 1st live published post date.' : 'Your warranty and hosting timeline has officially started from today\'s completion sign-off.')}
+                  ${countdownNotice || (isDigitalMarketing ? 'Note: For Digital Marketing Retainers, the campaign timeline starts strictly from the 1st live published post date.' : 'Your warranty and hosting timeline has started from today\'s completion sign-off.')}
                 </p>
               </div>
             ` : ''}
@@ -1176,11 +1247,7 @@ async function sendProjectCompletionEmail({
             </a>
           </div>
         </div>
-        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
-          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
-          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
-          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
-        </div>
+        ${getEmailFooterHtml(typeof brand !== "undefined" ? brand : (typeof companyName !== "undefined" ? companyName : "SAAMPARK Group"))}
       </div>
     </div>
   `;
@@ -1236,11 +1303,7 @@ async function sendClientWelcomeEmail({
             </a>
           </div>
         </div>
-        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
-          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
-          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
-          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
-        </div>
+        ${getEmailFooterHtml(typeof brand !== "undefined" ? brand : (typeof companyName !== "undefined" ? companyName : "SAAMPARK Group"))}
       </div>
     </div>
   `;
@@ -1279,7 +1342,7 @@ async function sendPaymentReceiptEmail({
           <div style="display: inline-block; padding: 4px 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 9999px; font-size: 11px; font-weight: 700; color: #ffffff; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 12px;">
             PAYMENT SETTLEMENT • ${brand.shortName}
           </div>
-          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Official Payment Receipt</h1>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px;">Payment Receipt</h1>
           <p style="color: rgba(255,255,255,0.9); margin: 6px 0 0; font-size: 13px;">${isZeroDue ? 'FULL INVOICE SETTLEMENT' : 'PARTIAL SETTLEMENT RECORDED'}</p>
         </div>
         <div style="padding: 36px 40px; background-color: #111827; color: #e5e7eb;">
@@ -1323,11 +1386,7 @@ async function sendPaymentReceiptEmail({
             </a>
           </div>
         </div>
-        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
-          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
-          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
-          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
-        </div>
+        ${getEmailFooterHtml(typeof brand !== "undefined" ? brand : (typeof companyName !== "undefined" ? companyName : "SAAMPARK Group"))}
       </div>
     </div>
   `;
@@ -1394,11 +1453,7 @@ async function sendPaymentDueReminderEmail({
             </a>
           </div>
         </div>
-        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
-          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
-          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
-          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
-        </div>
+        ${getEmailFooterHtml(typeof brand !== "undefined" ? brand : (typeof companyName !== "undefined" ? companyName : "SAAMPARK Group"))}
       </div>
     </div>
   `;
@@ -1485,11 +1540,7 @@ async function sendRetainerExpiryEmail({
             </a>
           </div>
         </div>
-        <div style="padding: 24px 36px; background-color: #0b0f19; text-align: center; border-top: 1px solid #1f2937;">
-          <p style="color: #9ca3af; font-size: 12px; font-weight: 700; margin: 0 0 4px;">${brand.fullName}</p>
-          <p style="color: #6b7280; font-size: 11.5px; margin: 0 0 6px;">📞 ${brand.phone} | 🌐 ${brand.website}</p>
-          <p style="color: #4b5563; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
-        </div>
+        ${getEmailFooterHtml(typeof brand !== "undefined" ? brand : (typeof companyName !== "undefined" ? companyName : "SAAMPARK Group"))}
       </div>
     </div>
   `;
@@ -1554,7 +1605,7 @@ async function sendKycSuccessEmail({
       <div style="padding: 36px 40px; background: #16161e;">
         <p style="color: #e2e8f0; font-size: 16px; margin: 0 0 12px;">Dear <strong>${name}</strong>,</p>
         <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
-          Congratulations! Your Employee KYC verification documents and bank details have been officially reviewed and <strong style="color: #10b981;">APPROVED</strong> by ${verifiedBy}.
+          Congratulations! Your Employee KYC verification documents and bank details have been reviewed and <strong style="color: #10b981;">APPROVED</strong> by ${verifiedBy}.
         </p>
 
         <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 22px; margin-bottom: 24px;">

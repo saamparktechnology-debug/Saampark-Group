@@ -879,7 +879,7 @@ export function OfficialInvoiceDocument({
     : "https://crm.saampark.com"
   const publicInvoiceViewUrl = `${originUrl}/public/invoice?id=${encodeURIComponent(String(invoice.id || invoiceNumOrId))}`
   const invoiceVerificationQrUrl = React.useMemo(() => {
-    return getQrCodeDataUri(publicInvoiceViewUrl, 160) || `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(publicInvoiceViewUrl)}`
+    return getQrCodeDataUri(publicInvoiceViewUrl, 240, 4) || `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=4&ecc=M&data=${encodeURIComponent(publicInvoiceViewUrl)}`
   }, [publicInvoiceViewUrl])
 
   // Bottom Footer Text resolution (Customizable via Company Settings or Invoice Studio)
@@ -1495,19 +1495,30 @@ export function OfficialInvoiceDocument({
               className="font-black text-[10px] uppercase tracking-wider text-zinc-700"
             />
           </div>
-          <EditableText
-            value={invoice.primaryCategory || invoice.category || invoice.project || "Website"}
-            interactive={interactive}
-            className="font-bold text-xs sm:text-sm text-zinc-900 truncate block"
-          />
-          <p className="text-[9.5px] text-zinc-600 font-mono">
-            <EditableText value="Scheme:" interactive={interactive} className="font-bold font-sans mr-1" />
-            <EditableText value={isGstInvoice ? 'GST Tax Invoice' : 'Non-GST Direct Invoice'} interactive={interactive} />
-          </p>
-          <p className="text-[9.5px] text-zinc-600 truncate">
-            <EditableText value="Primary Category:" interactive={interactive} className="font-bold mr-1" />
-            <EditableText value={invoice.primaryCategory || invoice.category || "Website"} interactive={interactive} />
-          </p>
+          {(() => {
+            let cat = String(invoice.primaryCategory || invoice.category || invoice.project || "Website Development").trim();
+            if (cat === "Website") cat = "Website Development";
+            else if (cat === "Custom Software") cat = "Custom Software Application";
+            else if (cat === "Cloud Infrastructure") cat = "Cloud Infrastructure & Domain";
+            else if (cat === "Digital Marketing") cat = "Digital Marketing & Social Media Retainer";
+            return (
+              <>
+                <EditableText
+                  value={cat}
+                  interactive={interactive}
+                  className="font-bold text-xs sm:text-sm text-zinc-900 truncate block"
+                />
+                <p className="text-[9.5px] text-zinc-600 font-mono">
+                  <EditableText value="Scheme:" interactive={interactive} className="font-bold font-sans mr-1" />
+                  <EditableText value={isGstInvoice ? 'GST Tax Invoice' : 'Non-GST Direct Invoice'} interactive={interactive} />
+                </p>
+                <p className="text-[9.5px] text-zinc-600 truncate">
+                  <EditableText value="Primary Category:" interactive={interactive} className="font-bold mr-1" />
+                  <EditableText value={cat} interactive={interactive} />
+                </p>
+              </>
+            );
+          })()}
           {isSubBranchIssued ? (
             <p className="text-[9px] text-emerald-800 dark:text-emerald-300 truncate font-semibold">
               <EditableText value="Unit:" interactive={interactive} className="font-bold mr-1" />
@@ -1522,25 +1533,25 @@ export function OfficialInvoiceDocument({
         </div>
 
         {/* Official Scan & Verify QR Code beside Project Scope (Crisp Square) */}
-        <div className="shrink-0 text-center flex flex-col items-center bg-white p-1.5 border border-zinc-300 shadow-2xs rounded-none aspect-square">
+        <div className="shrink-0 text-center flex flex-col items-center justify-center bg-white p-1.5 border border-zinc-200 shadow-2xs rounded-lg aspect-square">
           <a 
             href={publicInvoiceViewUrl} 
             target="_blank" 
             rel="noopener noreferrer" 
             className="group block"
-            title="Scan or click to view public invoice online"
+            title="Scan or click to view invoice verification online"
           >
             <img 
               src={invoiceVerificationQrUrl} 
               alt={`QR ${invoiceNumOrId}`} 
-              className="w-14 h-14 aspect-square bg-white object-contain group-hover:scale-105 transition-transform" 
+              className="w-16 h-16 sm:w-18 sm:h-18 aspect-square bg-white object-contain group-hover:scale-105 transition-transform" 
               style={{ imageRendering: 'pixelated' }}
             />
           </a>
           <EditableText
             value="Scan & Verify"
             interactive={interactive}
-            className="text-[7px] font-mono font-bold text-zinc-700 mt-0.5 block uppercase tracking-tight"
+            className="text-[7.5px] font-mono font-bold text-zinc-700 mt-1 block uppercase tracking-tight"
           />
         </div>
       </div>

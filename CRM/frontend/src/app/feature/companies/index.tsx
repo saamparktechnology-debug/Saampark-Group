@@ -1056,9 +1056,8 @@ export default function CompaniesMain() {
 
       const isMatchBranch = (b: any, target: any) => {
         if (!b || !target) return false
-        if (String(b.id) === String(target.id)) return true
-        if (b.code && target.code && String(b.code).toUpperCase().trim() === String(target.code).toUpperCase().trim()) return true
-        if (b.name && target.name && String(b.name).toLowerCase().trim() === String(target.name).toLowerCase().trim()) return true
+        if (b.id !== undefined && target.id !== undefined && String(b.id) === String(target.id)) return true
+        if (b.numeric_id !== undefined && target.numeric_id !== undefined && String(b.numeric_id) === String(target.numeric_id)) return true
         return false
       }
 

@@ -39,72 +39,76 @@ export default function ReportsMain() {
   const isAdmin = user?.role === "Admin"
   const isTeamOrBranchAdmin = !isSuperAdmin && !isAdmin
 
-  // Allowed companies for current user (Super Admin has all; Admin has assigned)
-  const allowedCompanies = React.useMemo(() => {
-    if (isSuperAdmin) return companies
-    const userCompIds = (user?.companyIds && user.companyIds.length > 0)
-      ? user.companyIds
-      : [user?.companyId || "tech"]
-    return companies.filter((c) => userCompIds.some((id) => isMatchingCompany(c, id)))
-  }, [isSuperAdmin, companies, user])
-
-  // Active Company Selection
-  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(
-    activeCompanyId || (isSuperAdmin ? "all" : user?.companyId || "tech")
-  )
-
-  // Active Branches available for the selected company
-  const availableBranches = React.useMemo(() => {
-    if (!branches || !Array.isArray(branches)) return []
-    if (selectedCompanyId && selectedCompanyId !== "all") {
-      return branches.filter((b) => isMatchingCompany({ id: b.companyId, slug: b.companyId } as any, selectedCompanyId))
-    }
-    return branches
-  }, [branches, selectedCompanyId])
-
-  // User's default or assigned branch
+  // Active company and branch scopes are inherited directly from top navbar
+  const selectedCompanyId = activeCompanyId || (isSuperAdmin ? "all" : user?.companyId || "tech")
   const userAssignedBranchId = user?.branchId || ""
   const userAssignedBranchName = user?.branchName || ""
+  const selectedBranchId = activeBranchId || (isTeamOrBranchAdmin && userAssignedBranchId ? userAssignedBranchId : "all")
 
-  // Selected Branch state
-  const [selectedBranchId, setSelectedBranchId] = React.useState<string>(() => {
-    if (activeBranchId) return activeBranchId
-    if (isSuperAdmin) return "all"
-    if (userAssignedBranchId) return userAssignedBranchId
-    return "all"
-  })
+  // Current scope display labels for navbar sync badge
+  const activeCompanyObj = companies.find((c) => isMatchingCompany(c, selectedCompanyId))
+  const activeCompanyName = selectedCompanyId === "all" ? "All Companies (Consolidated)" : (activeCompanyObj?.brand_name || activeCompanyObj?.name || "Saampark Group")
+  const activeBranchObj = branches.find((b) => String(b.id) === String(selectedBranchId) || String(b.name).toLowerCase() === String(selectedBranchId).toLowerCase())
+  const activeBranchName = selectedBranchId === "all" ? "All Branches" : (activeBranchObj?.name || userAssignedBranchName || selectedBranchId)
 
-  // Auto-reset branch to "all" if selected branch is not in the newly available branches
-  React.useEffect(() => {
-    if (selectedBranchId !== "all" && !isTeamOrBranchAdmin) {
-      const isStillAvailable = availableBranches.some(b => 
-        String(b.id).toLowerCase().trim() === selectedBranchId.toLowerCase().trim() ||
-        String(b.name).toLowerCase().trim() === selectedBranchId.toLowerCase().trim()
-      )
-      if (!isStillAvailable) {
-        setSelectedBranchId("all")
+  // Time-wise Filter State
+  type TimeFilterOption = "all" | "30d" | "90d" | "6m" | "1y" | "fy" | "custom"
+  const [timeFilter, setTimeFilter] = React.useState<TimeFilterOption>("all")
+  const [customStartDate, setCustomStartDate] = React.useState<string>("")
+  const [customEndDate, setCustomEndDate] = React.useState<string>("")
+
+  const isWithinTimeRange = React.useCallback((dateVal?: string | null) => {
+    if (timeFilter === "all") return true
+    if (!dateVal) return true
+    
+    let itemDate: Date | null = null
+    if (typeof dateVal === "string") {
+      const dmyMatch = dateVal.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/)
+      if (dmyMatch) {
+        itemDate = new Date(Number(dmyMatch[3]), Number(dmyMatch[2]) - 1, Number(dmyMatch[1]))
+      } else {
+        itemDate = new Date(dateVal)
       }
+    } else if (dateVal instanceof Date) {
+      itemDate = dateVal
     }
-  }, [availableBranches, selectedBranchId, isTeamOrBranchAdmin])
+    
+    if (!itemDate || isNaN(itemDate.getTime())) return true
 
-  // Sync activeCompanyId & activeBranchId from auth store if changed
-  React.useEffect(() => {
-    if (activeCompanyId) {
-      if (isSuperAdmin) {
-        setSelectedCompanyId(activeCompanyId)
-      } else if (allowedCompanies.some(c => isMatchingCompany(c, activeCompanyId))) {
-        setSelectedCompanyId(activeCompanyId)
-      }
-    }
-  }, [activeCompanyId, isSuperAdmin, allowedCompanies])
+    const now = new Date()
+    const nowMs = now.getTime()
 
-  React.useEffect(() => {
-    if (activeBranchId) {
-      setSelectedBranchId(activeBranchId)
-    } else if (isSuperAdmin && !selectedBranchId) {
-      setSelectedBranchId("all")
+    if (timeFilter === "30d") {
+      const past30 = nowMs - 30 * 24 * 60 * 60 * 1000
+      return itemDate.getTime() >= past30
     }
-  }, [activeBranchId, isSuperAdmin])
+    if (timeFilter === "90d") {
+      const past90 = nowMs - 90 * 24 * 60 * 60 * 1000
+      return itemDate.getTime() >= past90
+    }
+    if (timeFilter === "6m") {
+      const past6m = nowMs - 180 * 24 * 60 * 60 * 1000
+      return itemDate.getTime() >= past6m
+    }
+    if (timeFilter === "1y") {
+      const past1y = nowMs - 365 * 24 * 60 * 60 * 1000
+      return itemDate.getTime() >= past1y
+    }
+    if (timeFilter === "fy") {
+      const curYear = now.getFullYear()
+      const curMonth = now.getMonth()
+      const fyStartYear = curMonth >= 3 ? curYear : curYear - 1
+      const fyStart = new Date(fyStartYear, 3, 1, 0, 0, 0).getTime()
+      const fyEnd = new Date(fyStartYear + 1, 2, 31, 23, 59, 59).getTime()
+      return itemDate.getTime() >= fyStart && itemDate.getTime() <= fyEnd
+    }
+    if (timeFilter === "custom") {
+      if (customStartDate && itemDate.getTime() < new Date(customStartDate).getTime()) return false
+      if (customEndDate && itemDate.getTime() > new Date(customEndDate + "T23:59:59").getTime()) return false
+      return true
+    }
+    return true
+  }, [timeFilter, customStartDate, customEndDate])
 
   const [activeTab, setActiveTab] = React.useState<ReportTab>("revenue")
   const [invoiceSubFilter, setInvoiceSubFilter] = React.useState<InvoiceFilterType>("all")
@@ -147,33 +151,11 @@ export default function ReportsMain() {
       const clientIdSet = new Set(cleanClients.map(c => String(c.id || "").toLowerCase().trim()).filter(Boolean))
       const clientEmailSet = new Set(cleanClients.map(c => (c.email || "").toLowerCase().trim()).filter(Boolean))
 
-      // Filter invoices: exclude deleted invoices, exclude invoices belonging to deleted clients or deleted projects
+      // Filter invoices: exclude deleted invoices (matches invoice section exactly)
       const baseInvoices = filterGlobalDeletedItems(invList || [], undefined, "invoices")
       const validInvoices = baseInvoices.filter(inv => {
         if (!inv || !inv.id) return false
         if (isGlobalItemDeleted(inv.id, undefined, "invoices")) return false
-
-        const cName = (inv.client || "").toLowerCase().trim()
-        const cId = (inv.clientId || "").toLowerCase().trim()
-        const cEmail = (inv.clientEmail || "").toLowerCase().trim()
-
-        // If client details are provided, ensure client is not deleted
-        if (cName && isGlobalItemDeleted(cName, undefined, "clients")) return false
-        if (cId && isGlobalItemDeleted(cId, undefined, "clients")) return false
-        if (cEmail && isGlobalItemDeleted(cEmail, undefined, "clients")) return false
-
-        // If client exists in record, verify client is still active in cleanClients list
-        if (cleanClients.length > 0 && (cName || cId || cEmail)) {
-          const clientMatches = (cName && clientNameSet.has(cName)) || (cId && clientIdSet.has(cId)) || (cEmail && clientEmailSet.has(cEmail))
-          if (!clientMatches) return false
-        }
-
-        // Check project link
-        const pTitle = (inv.project || "").toLowerCase().trim()
-        const pId = ((inv as any).projectId || "").toLowerCase().trim()
-        if (pTitle && isGlobalItemDeleted(pTitle, undefined, "projects")) return false
-        if (pId && isGlobalItemDeleted(pId, undefined, "projects")) return false
-
         return true
       })
 
@@ -357,25 +339,35 @@ export default function ReportsMain() {
       if (!itemMatchesCompany(inv.companyId, selectedCompanyId)) return false
 
       // 2. Strict Branch Scoping
-      const clientInfo = clientMap[(inv.client || "").toLowerCase().trim()]
-      if (!itemMatchesBranch(inv.branchId, inv.branchName, targetBranch, clientInfo?.branchId, clientInfo?.branchName)) {
-        return false
+      if (targetBranch && targetBranch !== "all") {
+        const clientInfo = clientMap[(inv.client || "").toLowerCase().trim()]
+        if (!itemMatchesBranch(inv.branchId, inv.branchName, targetBranch, clientInfo?.branchId, clientInfo?.branchName)) {
+          return false
+        }
       }
+
+      // 3. Time Filter Scoping
+      const invDate = inv.billDate || inv.date || (inv as any).created_at
+      if (!isWithinTimeRange(invDate)) return false
 
       return true
     })
-  }, [invoices, selectedCompanyId, targetBranch, itemMatchesCompany, itemMatchesBranch, clientMap])
+  }, [invoices, selectedCompanyId, targetBranch, itemMatchesCompany, itemMatchesBranch, clientMap, isWithinTimeRange])
 
   // ── Scoped Payments Filter ────────────────────────────────────────────────
   const scopedPayments = React.useMemo(() => {
     return payments.filter((p) => {
       if (!itemMatchesCompany(p.companyId, selectedCompanyId)) return false
-      if (!itemMatchesBranch(p.branchId || (p as any).branch_id, p.branchName || (p as any).branch_name, targetBranch)) {
-        return false
+      if (targetBranch && targetBranch !== "all") {
+        if (!itemMatchesBranch(p.branchId || (p as any).branch_id, p.branchName || (p as any).branch_name, targetBranch)) {
+          return false
+        }
       }
+      const payDate = (p as any).paymentDate || (p as any).date || (p as any).created_at
+      if (!isWithinTimeRange(payDate)) return false
       return true
     })
-  }, [payments, selectedCompanyId, targetBranch, itemMatchesCompany, itemMatchesBranch])
+  }, [payments, selectedCompanyId, targetBranch, itemMatchesCompany, itemMatchesBranch, isWithinTimeRange])
 
   // ── Scoped Leads Filter ───────────────────────────────────────────────────
   const scopedLeads = React.useMemo(() => {
@@ -648,17 +640,25 @@ export default function ReportsMain() {
     return method.includes("cash")
   }, [])
 
+  const isInvoiceGst = React.useCallback((i: any) => {
+    if (!i || isInvoiceNonGst(i)) return false
+    const id = String(i.id || "").toUpperCase().trim()
+    const num = String(i.invoiceNumber || i.invoice_number || "").toUpperCase().trim()
+    if (id.startsWith("INV") || num.startsWith("INV")) return true
+    if (i.docScheme === "gst" || i.isGst === true) return true
+    if (Number(i.gstRate) > 0 || Number(i.gstAmount) > 0 || Number(i.taxAmount) > 0) return true
+    if (Array.isArray(i.items) && i.items.some((it: any) => Number(it.gstRate) > 0 || Number(it.gstAmount) > 0)) return true
+    if (Boolean(clientMap[String(i.client || "").toLowerCase().trim()]?.gstNumber)) return true
+    return true
+  }, [isInvoiceNonGst, clientMap])
+
   const nonGstInvoices = React.useMemo(() => {
     return scopedInvoices.filter((i) => isInvoiceNonGst(i))
   }, [scopedInvoices, isInvoiceNonGst])
 
   const gstInvoices = React.useMemo(() => {
-    return scopedInvoices.filter((i) => !isInvoiceNonGst(i) && (
-      (typeof i.gstRate === "number" && i.gstRate > 0) ||
-      (typeof i.gstAmount === "number" && i.gstAmount > 0) ||
-      Boolean(clientMap[String(i.client || "").toLowerCase().trim()]?.gstNumber)
-    ))
-  }, [scopedInvoices, clientMap, isInvoiceNonGst])
+    return scopedInvoices.filter((i) => isInvoiceGst(i))
+  }, [scopedInvoices, isInvoiceGst])
 
   // Calculations: Total Invoices
   const totalBillsCount = scopedInvoices.length
@@ -750,9 +750,7 @@ export default function ReportsMain() {
     return scopedInvoices.filter((inv) => {
       // Sub-filter
       if (invoiceSubFilter === "gst") {
-        if (isInvoiceNonGst(inv)) return false
-        const isGst = (typeof inv.gstRate === "number" && inv.gstRate > 0) || (typeof inv.gstAmount === "number" && inv.gstAmount > 0) || Boolean(clientMap[inv.client.toLowerCase().trim()]?.gstNumber)
-        if (!isGst) return false
+        if (!isInvoiceGst(inv)) return false
       } else if (invoiceSubFilter === "non_gst") {
         if (!isInvoiceNonGst(inv)) return false
       } else if (invoiceSubFilter === "due") {
@@ -1133,62 +1131,71 @@ export default function ReportsMain() {
           </p>
         </div>
 
-        {/* Global Filter Controls: Company & Branch Scope */}
+        {/* Global Filter Controls: Navbar Scope Badge & Time-wise Filter */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Company Scope (Super Admin & multi-company Admin) */}
-          {(isSuperAdmin || allowedCompanies.length > 1) ? (
-            <div className="flex items-center bg-surface border border-border rounded-xl px-2.5 py-1.5 gap-1.5 text-xs font-semibold shadow-2xs">
-              <Building2 size={13} className="text-primary" />
-              <select
-                value={selectedCompanyId}
-                onChange={(e) => {
-                  setSelectedCompanyId(e.target.value)
-                  setSelectedBranchId("all")
-                }}
-                className="bg-transparent text-foreground focus:outline-hidden cursor-pointer font-bold"
-              >
-                {isSuperAdmin && <option value="all">🏢 All Companies (Consolidated)</option>}
-                {allowedCompanies.map((c) => (
-                  <option key={c.id || c.slug} value={c.slug || c.id}>
-                    🏢 {c.brand_name || c.name || c.division_name || "Company"}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary border border-primary/20 text-xs font-bold shadow-2xs">
+          {/* Active Navbar Scope Indicator Badge */}
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-semibold shadow-2xs">
+            <div className="flex items-center gap-1.5 text-primary font-bold">
               <Building2 size={13} />
-              <span>
-                {companies.find((c) => isMatchingCompany(c, selectedCompanyId))?.name || "Saampark Group"}
-              </span>
+              <span>{activeCompanyName}</span>
             </div>
-          )}
+            <span className="text-muted-foreground/40">•</span>
+            <div className="flex items-center gap-1.5 text-blue-500 font-medium">
+              <MapPin size={13} />
+              <span>{activeBranchName}</span>
+            </div>
+          </div>
 
-          {/* Branch Scope Dropdown (Super Admin & Admin with branch access) */}
-          {availableBranches.length > 0 && !isTeamOrBranchAdmin ? (
-            <div className="flex items-center bg-surface border border-border rounded-xl px-2.5 py-1.5 gap-1.5 text-xs font-semibold shadow-2xs">
-              <MapPin size={13} className="text-blue-500" />
-              <select
-                value={selectedBranchId}
-                onChange={(e) => setSelectedBranchId(e.target.value)}
-                className="bg-transparent text-foreground focus:outline-hidden cursor-pointer font-semibold"
-              >
-                <option value="all">📍 All Branches ({availableBranches.length})</option>
-                {availableBranches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} {b.city ? `(${b.city})` : ""}
-                  </option>
-                ))}
-              </select>
+          {/* Time-wise Filter Bar */}
+          <div className="flex items-center bg-surface border border-border rounded-xl p-1 gap-1 text-xs shadow-2xs overflow-x-auto">
+            <Clock size={13} className="text-muted-foreground ml-1.5 mr-0.5 shrink-0" />
+            {[
+              { id: "all", label: "All Time" },
+              { id: "30d", label: "1 Month" },
+              { id: "90d", label: "3 Months" },
+              { id: "6m", label: "6 Months" },
+              { id: "1y", label: "1 Year" },
+              { id: "fy", label: "FY" },
+              { id: "custom", label: "Custom" },
+            ].map((p) => {
+              const isSelected = timeFilter === p.id
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setTimeFilter(p.id as any)}
+                  className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
+                    isSelected
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Custom Date Range Inputs when 'custom' selected */}
+          {timeFilter === "custom" && (
+            <div className="flex items-center gap-1.5 bg-surface border border-border rounded-xl px-2.5 py-1 text-xs shadow-2xs">
+              <Calendar size={13} className="text-primary shrink-0" />
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="bg-transparent text-foreground text-xs focus:outline-none cursor-pointer"
+                title="Start Date"
+              />
+              <span className="text-muted-foreground text-xs font-bold">to</span>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="bg-transparent text-foreground text-xs focus:outline-none cursor-pointer"
+                title="End Date"
+              />
             </div>
-          ) : (
-            /* Branch Scoped Lock Badge for Branch Admin / Team Member */
-            (userAssignedBranchName || userAssignedBranchId) && (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold shadow-2xs">
-                <MapPin size={13} />
-                <span>Scoped Branch: {userAssignedBranchName || branchMap[userAssignedBranchId] || userAssignedBranchId}</span>
-              </div>
-            )
           )}
 
           {/* Export Action */}

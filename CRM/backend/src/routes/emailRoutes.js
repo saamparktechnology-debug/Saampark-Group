@@ -177,6 +177,13 @@ router.post('/send-invoice', async (req, res, next) => {
       downloadUrl,
       companyId,
       company_id,
+      companyGstin,
+      companyCin,
+      companyMsme,
+      companyPan,
+      companyAddress,
+      clientGstin,
+      clientPan,
     } = req.body;
     if (!to) {
       return res.status(400).json({ status: 'error', message: 'Recipient email is required' });
@@ -199,6 +206,13 @@ router.post('/send-invoice', async (req, res, next) => {
       viewUrl,
       downloadUrl,
       companyId: companyId || company_id || null,
+      companyGstin: companyGstin || req.body.gstin || null,
+      companyCin: companyCin || req.body.cin || null,
+      companyMsme: companyMsme || req.body.msme || null,
+      companyPan: companyPan || req.body.pan || null,
+      companyAddress: companyAddress || req.body.address || null,
+      clientGstin: clientGstin || null,
+      clientPan: clientPan || null,
     });
     res.status(200).json({ status: 'success', message: `Invoice email successfully sent to ${to}` });
   } catch (err) {

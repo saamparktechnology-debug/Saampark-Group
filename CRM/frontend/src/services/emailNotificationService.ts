@@ -85,6 +85,13 @@ export async function sendInvoiceDetailsEmailNotification(
       viewUrl: publicUrl,
       downloadUrl: publicUrl,
       companyId: (invoice as any).companyId || (invoice as any).company_id || undefined,
+      companyGstin: (invoice as any).companyGstin || (invoice as any).companyGst || (invoice as any).gstin || undefined,
+      companyCin: (invoice as any).companyCin || (invoice as any).cin || undefined,
+      companyMsme: (invoice as any).companyMsme || (invoice as any).msme || undefined,
+      companyPan: (invoice as any).companyPan || (invoice as any).pan || undefined,
+      companyAddress: (invoice as any).companyAddress || (invoice as any).address || undefined,
+      clientGstin: (invoice as any).clientGstin || (invoice as any).clientGst || (invoice as any).customerGstin || undefined,
+      clientPan: (invoice as any).clientPan || (invoice as any).customerPan || undefined,
     })
     return { success: true, message: `Invoice email successfully delivered to ${recipient}` }
   } catch (err: any) {
@@ -578,7 +585,7 @@ export async function sendKycStatusEmailNotification({
     ? "🎉 KYC Verification Successful!" 
     : "⚠️ Action Required: KYC Documents Update Required"
   const msg = isVerified 
-    ? `Congratulations! Your Employee KYC verification has been officially approved by ${verifiedBy || "Management"}. Full CRM workspace access is now unlocked.`
+    ? `Congratulations! Your Employee KYC verification has been approved by ${verifiedBy || "Management"}. Full CRM workspace access is now unlocked.`
     : `Your submitted KYC documents require update. Reason: "${rejectionReason || "Documents need correction"}". Please sign in and re-upload.`
 
   // 1. In-App Notification
@@ -668,7 +675,7 @@ export async function sendMarketingFirstPostEmailNotification(params: {
       <div style="padding: 32px 36px; background: #16161e;">
         <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px;">Dear <strong>${params.clientName}</strong>,</p>
         <p style="color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 0 0 20px;">
-          We are excited to inform you that the <strong>1st creative deliverable</strong> for your marketing package <strong style="color: #38bdf8;">${params.campaignName}</strong> has been officially published and launched!
+          We are excited to inform you that the <strong>1st creative deliverable</strong> for your marketing package <strong style="color: #38bdf8;">${params.campaignName}</strong> has been published and launched!
         </p>
         <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
           <table style="width: 100%; font-size: 13px; color: #cbd5e1; border-collapse: collapse;">

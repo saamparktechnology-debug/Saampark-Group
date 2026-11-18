@@ -324,20 +324,12 @@ const branchModel = {
         fields.push('updated_at = NOW()');
       }
 
-      const whereConditions = ['id = ?', 'code = ?'];
-      const sqlParams = [...values, strId, strId];
+      const whereConditions = ['id = ?'];
+      const sqlParams = [...values, strId];
 
       if (numId) {
         whereConditions.push('id = ?');
         sqlParams.push(numId);
-      }
-      if (targetCode && targetCode !== strId) {
-        whereConditions.push('code = ?');
-        sqlParams.push(targetCode);
-      }
-      if (targetName) {
-        whereConditions.push('name = ?');
-        sqlParams.push(targetName);
       }
 
       let updatedRows = 0;
@@ -372,9 +364,6 @@ const branchModel = {
               const bCode = String(b.code || '').toLowerCase().trim();
               const bName = String(b.name || '').toLowerCase().trim();
               const isMatch = bId === strId.toLowerCase() ||
-                              (targetCode && bCode === targetCode.toLowerCase()) ||
-                              (targetCode && bId === targetCode.toLowerCase()) ||
-                              (targetName && bName === targetName.toLowerCase()) ||
                               (numId && String(b.numeric_id || bId).replace(/\D/g, '') === String(numId));
               if (isMatch) {
                 matched = true;

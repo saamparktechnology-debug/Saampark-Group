@@ -895,7 +895,7 @@ export function DocumentStudioModal({
     setIsSubmitting(true)
     try {
       await executeWithFeedback(async () => {
-        const effectiveCategory = isMarketing ? "Digital Marketing" : (primaryCategory === "Custom" ? (customPrimaryCategory.trim() || "Custom") : primaryCategory)
+        const effectiveCategory = primaryCategory === "Custom" ? (customPrimaryCategory.trim() || "Custom / Other Services") : (primaryCategory.includes("Digital Marketing") ? primaryCategory : (isMarketing ? "Digital Marketing & Social Media Retainer" : (primaryCategory || "Website Development")))
         const effectiveDesignation = clientDesignation === "Other" ? (customDesignation.trim() || "Client") : clientDesignation
         const effectiveProjectName = isMarketing
           ? (marketingPackage.planName ? `Digital Marketing Retainer (${marketingPackage.planName})` : "Digital Marketing Campaign")
@@ -3060,7 +3060,7 @@ export function DocumentStudioModal({
                           onChange={e => {
                             const cat = e.target.value
                             setPrimaryCategory(cat)
-                            if (cat === "Digital Marketing") {
+                            if (cat.includes("Digital Marketing")) {
                               const defaultPkg = createDefaultMarketingPackage("Package 02 - Grow")
                               setMarketingPackage(defaultPkg)
                               if (!projectTitle || projectTitle === "Commercial Project Proposal" || projectTitle === "Enterprise Cloud ERP Implementation") {
@@ -3304,7 +3304,7 @@ export function DocumentStudioModal({
               {/* Step 2: Scope of Work & Deliverables */}
               {currentStep === 2 && (
                 <div className="space-y-5">
-                  {primaryCategory === "Digital Marketing" && (
+                  {primaryCategory.includes("Digital Marketing") && (
                     <div className="p-4 rounded-2xl border border-purple-200 dark:border-purple-800 bg-purple-50/40 dark:bg-purple-950/20 space-y-3">
                       <div className="flex items-center justify-between border-b border-purple-200 dark:border-purple-800 pb-2">
                         <span className="font-extrabold text-purple-950 dark:text-purple-200 text-xs flex items-center gap-1.5">
@@ -3457,7 +3457,7 @@ export function DocumentStudioModal({
                         onChange={e => {
                           const cat = e.target.value
                           setPrimaryCategory(cat)
-                          if (cat === "Digital Marketing") {
+                          if (cat.includes("Digital Marketing")) {
                             const defaultPkg = createDefaultMarketingPackage("Package 02 - Grow")
                             setMarketingPackage(defaultPkg)
                             setItems([{
@@ -3497,16 +3497,16 @@ export function DocumentStudioModal({
                         }}
                         className="px-3.5 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500"
                       >
-                        <option value="Website">Website Development</option>
-                        <option value="Custom Software">Custom Software Application</option>
+                        <option value="Website Development">Website Development</option>
+                        <option value="Custom Software Application">Custom Software Application</option>
                         <option value="Android / iOS Mobile App">Android / iOS Mobile App</option>
-                        <option value="Cloud Infrastructure">Cloud Infrastructure & Domain</option>
-                        <option value="Digital Marketing">Digital Marketing & Social Media Retainer</option>
+                        <option value="Cloud Infrastructure & Domain">Cloud Infrastructure & Domain</option>
+                        <option value="Digital Marketing & Social Media Retainer">Digital Marketing & Social Media Retainer</option>
                         <option value="Custom">Custom / Other Services</option>
                       </select>
                     </div>
 
-                    {primaryCategory === "Digital Marketing" && (
+                    {primaryCategory.includes("Digital Marketing") && (
                       <DigitalMarketingPackageBuilder
                         value={marketingPackage}
                         clientName={clientName}
@@ -3562,11 +3562,11 @@ export function DocumentStudioModal({
                           <div className="sm:col-span-6">
                             <div className="flex items-center justify-between mb-0.5">
                               <label className="block text-[10px] font-bold text-zinc-500">Service / Component Description *</label>
-                              {primaryCategory !== "Digital Marketing" && (
+                              {!primaryCategory.includes("Digital Marketing") && (
                                 <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400">Preset / Custom</span>
                               )}
                             </div>
-                            {primaryCategory !== "Digital Marketing" ? (
+                            {!primaryCategory.includes("Digital Marketing") ? (
                               <div className="space-y-1">
                                 <select
                                   value={
@@ -3618,7 +3618,7 @@ export function DocumentStudioModal({
                           <div className="sm:col-span-2">
                             <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Unit</label>
                             <Input
-                              value={item.unit || (primaryCategory === "Digital Marketing" ? "Month" : "Project")}
+                              value={item.unit || (primaryCategory.includes("Digital Marketing") ? "Month" : "Project")}
                               onChange={e => handleUpdateItem(item.id, "unit", e.target.value)}
                               placeholder="Project / Month"
                             />
@@ -4377,7 +4377,7 @@ export function DocumentStudioModal({
                         onChange={e => {
                           const cat = e.target.value
                           setPrimaryCategory(cat)
-                          if (cat === "Digital Marketing") {
+                          if (cat.includes("Digital Marketing")) {
                             const defaultPkg = createDefaultMarketingPackage("Package 02 - Grow")
                             setMarketingPackage(defaultPkg)
                             setItems([{
@@ -4409,11 +4409,11 @@ export function DocumentStudioModal({
                         }}
                         className="px-3.5 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 shadow-2xs cursor-pointer focus:ring-2 focus:ring-teal-500"
                       >
-                        <option value="Website">Website Development</option>
-                        <option value="Custom Software">Custom Software Application</option>
+                        <option value="Website Development">Website Development</option>
+                        <option value="Custom Software Application">Custom Software Application</option>
                         <option value="Android / iOS Mobile App">Android / iOS Mobile App</option>
-                        <option value="Cloud Infrastructure">Cloud Infrastructure & Domain</option>
-                        <option value="Digital Marketing">Digital Marketing & Social Media Retainer</option>
+                        <option value="Cloud Infrastructure & Domain">Cloud Infrastructure & Domain</option>
+                        <option value="Digital Marketing & Social Media Retainer">Digital Marketing & Social Media Retainer</option>
                         <option value="Custom">Custom / Other Services</option>
                       </select>
                     </div>
@@ -4431,7 +4431,7 @@ export function DocumentStudioModal({
                     )}
 
                     {/* Dedicated Project Name field for Website Development & non-marketing services */}
-                    {primaryCategory !== "Digital Marketing" && (
+                    {!primaryCategory.includes("Digital Marketing") && (
                       <div className="mt-3 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
                         <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
                           Project Name * <span className="text-[10px] font-normal text-muted-foreground">(Stored explicitly in Projects &amp; Invoices)</span>
@@ -4445,7 +4445,7 @@ export function DocumentStudioModal({
                       </div>
                     )}
 
-                    {primaryCategory === "Digital Marketing" ? (
+                    {primaryCategory.includes("Digital Marketing") ? (
                       <DigitalMarketingPackageBuilder
                         value={marketingPackage}
                         clientName={clientName}
@@ -4518,7 +4518,7 @@ export function DocumentStudioModal({
                                   <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400">Preset / Custom</span>
                                 </div>
                                 <div className="space-y-1.5">
-                                  {primaryCategory === "Digital Marketing" ? (
+                                  {primaryCategory.includes("Digital Marketing") ? (
                                     <select
                                       value={
                                         SERVICE_PRESETS.some(p => p.name.toLowerCase() === (item.serviceName || "").toLowerCase())
