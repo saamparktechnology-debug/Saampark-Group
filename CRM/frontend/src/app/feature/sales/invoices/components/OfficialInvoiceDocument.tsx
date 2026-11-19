@@ -442,6 +442,22 @@ export function OfficialInvoiceDocument({
     ? String(resolvedDivisionName)
     : (activeCompany?.division_name || "")).toUpperCase()
 
+  const cleanHeaderBrandName = React.useMemo(() => {
+    return (headerBrandName || "SAAMPARK")
+      .split("\n")
+      .map((l: string) => l.replace(/[^\S\r\n]+/g, " ").trim())
+      .filter(Boolean)
+      .join("\n")
+  }, [headerBrandName])
+
+  const cleanHeaderSecondaryLine = React.useMemo(() => {
+    return (headerSecondaryLine || "")
+      .split("\n")
+      .map((l: string) => l.replace(/[^\S\r\n]+/g, " ").trim())
+      .filter(Boolean)
+      .join("\n")
+  }, [headerSecondaryLine])
+
   // Helper to validate non-empty string fields (strictly ignores empty, null, and placeholder text)
   const isValidField = (val?: string | null): boolean => {
     if (!val) return false
@@ -1022,11 +1038,11 @@ export function OfficialInvoiceDocument({
           <div className="flex items-center justify-center gap-0.5 flex-wrap">
             <EditableText
               as="h1"
-              value={headerBrandName}
+              value={cleanHeaderBrandName}
               onChange={(val) => onFieldChange?.("brand_name", val)}
               interactive={interactive}
               fieldKey="brand_name"
-              className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-widest sm:tracking-[0.2em] leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs whitespace-pre-wrap break-words print:whitespace-pre-wrap"
+              className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-widest sm:tracking-[0.2em] leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs whitespace-pre-line break-words print:whitespace-pre-line"
             />
             {resolvedTrademarkSymbol && resolvedTrademarkSymbol !== "none" ? (
               resolvedTrademarkSymbol === "TM" || resolvedTrademarkSymbol === "™" ? (
@@ -1048,16 +1064,16 @@ export function OfficialInvoiceDocument({
           </div>
 
           {/* Secondary Line (Header Line 2): Cleanly renders when provided, stays blank when cleared */}
-          {(headerSecondaryLine || interactive) ? (
+          {(cleanHeaderSecondaryLine || interactive) ? (
             <div className="max-w-[480px] mx-auto text-center w-full">
               <EditableText
                 as="h2"
-                value={headerSecondaryLine}
+                value={cleanHeaderSecondaryLine}
                 onChange={(val) => onFieldChange?.("division_name", val)}
                 interactive={interactive}
                 fieldKey="division_name"
                 placeholder="CORPORATE SUBTITLE / DIVISION (OPTIONAL)"
-                className="text-xs sm:text-sm md:text-[14px] font-black tracking-wider text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center whitespace-pre-wrap break-words print:text-[13px] print:whitespace-pre-wrap"
+                className="text-xs sm:text-sm md:text-[14px] font-black tracking-wider text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center whitespace-pre-line break-words print:text-[13px] print:whitespace-pre-line"
               />
             </div>
           ) : null}
@@ -1533,7 +1549,7 @@ export function OfficialInvoiceDocument({
         </div>
 
         {/* Official Scan & Verify QR Code beside Project Scope (Crisp Square) */}
-        <div className="shrink-0 text-center flex flex-col items-center justify-center bg-white p-1.5 border border-zinc-200 shadow-2xs rounded-lg aspect-square">
+        <div className="shrink-0 text-center flex flex-col items-center justify-center bg-white p-2 border border-zinc-200 shadow-2xs rounded-xl aspect-square">
           <a 
             href={publicInvoiceViewUrl} 
             target="_blank" 
@@ -1544,14 +1560,14 @@ export function OfficialInvoiceDocument({
             <img 
               src={invoiceVerificationQrUrl} 
               alt={`QR ${invoiceNumOrId}`} 
-              className="w-16 h-16 sm:w-18 sm:h-18 aspect-square bg-white object-contain group-hover:scale-105 transition-transform" 
+              className="w-20 h-20 sm:w-22 sm:h-22 print:w-[26mm] print:h-[26mm] aspect-square bg-white object-contain group-hover:scale-105 transition-transform" 
               style={{ imageRendering: 'pixelated' }}
             />
           </a>
           <EditableText
             value="Scan & Verify"
             interactive={interactive}
-            className="text-[7.5px] font-mono font-bold text-zinc-700 mt-1 block uppercase tracking-tight"
+            className="text-[8px] font-mono font-bold text-zinc-700 mt-1 block uppercase tracking-tight"
           />
         </div>
       </div>
@@ -1702,11 +1718,11 @@ export function OfficialInvoiceDocument({
                 {/* Left side of card: UPI QR Code & Instant Scan (only if QR exists) */}
                 {hasQr && (
                   <div className={`${(hasAnyBankInfo || hasUpiDetails) ? "col-span-4" : "w-full"} flex flex-col items-center justify-center text-center space-y-1`}>
-                    <div className="bg-white p-1 rounded-none border border-zinc-300 shadow-2xs shrink-0 aspect-square">
+                    <div className="bg-white p-1.5 rounded-none border border-zinc-300 shadow-2xs shrink-0 aspect-square">
                       <img 
                         src={customPaymentQrUrl || undefined} 
                         alt="UPI Payment QR Code" 
-                        className="w-16 h-16 aspect-square object-contain" 
+                        className="w-20 h-20 print:w-[26mm] print:h-[26mm] aspect-square object-contain" 
                         style={{ imageRendering: 'pixelated' }}
                       />
                     </div>

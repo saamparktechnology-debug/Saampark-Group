@@ -716,18 +716,6 @@ async function sendInvoiceDetailsEmail({
             </div>
           </div>
 
-          <!-- Company Legal & Tax Details -->
-          <div style="background-color: #1a2234; border: 1px solid #2d3b55; border-radius: 14px; padding: 18px 20px; margin-bottom: 20px; font-size: 12.5px; color: #cbd5e1; line-height: 1.6;">
-            <div style="font-weight: 800; color: #f8fafc; font-size: 14px; margin-bottom: 4px;">${brand.fullName}</div>
-            ${taxDetails.address ? `<div style="color: #94a3b8; font-size: 12px; margin-bottom: 8px;">📍 ${taxDetails.address}</div>` : ''}
-            <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; padding-top: 6px; border-top: 1px solid #26334d;">
-              ${(!isNonGstBill && taxDetails.gstin) ? `<span style="display: inline-block;"><strong style="color: #38bdf8;">GSTIN:</strong> <span style="font-family: ui-monospace, monospace; color: #ffffff;">${taxDetails.gstin}</span></span>` : ''}
-              ${taxDetails.cin ? `<span style="display: inline-block;"><strong style="color: #a78bfa;">CIN:</strong> <span style="font-family: ui-monospace, monospace; color: #ffffff;">${taxDetails.cin}</span></span>` : ''}
-              ${taxDetails.msme ? `<span style="display: inline-block;"><strong style="color: #34d399;">MSME:</strong> <span style="font-family: ui-monospace, monospace; color: #ffffff;">${taxDetails.msme}</span></span>` : ''}
-              ${taxDetails.pan ? `<span style="display: inline-block;"><strong style="color: #fbbf24;">PAN:</strong> <span style="font-family: ui-monospace, monospace; color: #ffffff;">${taxDetails.pan}</span></span>` : ''}
-            </div>
-          </div>
-
           <!-- Metadata Box -->
           <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 20px; margin-bottom: 24px;">
             <table style="width: 100%; font-size: 13px; color: #d1d5db; border-collapse: collapse;">
