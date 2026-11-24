@@ -13,6 +13,8 @@
   padding-top: var(--size-4);
   padding-inline: 24px;
   width: 100%;
+  min-width: 0;
+  overflow-x: clip;
 }
 
 @media (max-width: 768px) {
@@ -23,6 +25,7 @@
 
 .main {
   width: 100%;
+  min-width: 0;
 }
 
 /* ── Animated Hero Landing Stage ── */

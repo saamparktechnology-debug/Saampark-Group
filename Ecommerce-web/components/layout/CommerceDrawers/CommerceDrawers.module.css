@@ -13,27 +13,38 @@
   right: 12px;
   bottom: 12px;
   width: min(410px, calc(100vw - 24px));
-  background: rgba(255, 255, 255, 0.84);
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
-  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(36px) saturate(210%);
+  -webkit-backdrop-filter: blur(36px) saturate(210%);
+  border-radius: 30px;
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.85),
-    -16px 0 48px rgba(0, 0, 0, 0.18);
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.35),
+    -16px 0 48px rgba(0, 0, 0, 0.22);
   z-index: 1001;
   display: flex;
   flex-direction: column;
   transform: translateX(calc(100% + 24px));
   transition: transform var(--duration-normal) var(--ease-standard);
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.65);
 }
 
 :global([data-theme="dark"]) .drawer {
-  background: rgba(15, 23, 42, 0.82);
-  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(30, 31, 34, 0.8);
+  border-color: rgba(217, 218, 220, 0.18);
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
     -16px 0 48px rgba(0, 0, 0, 0.65);
+}
+
+@media (max-width: 640px) {
+  .drawer {
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: calc(100vw - 16px);
+    border-radius: 26px;
+  }
 }
 
 .drawer.open {

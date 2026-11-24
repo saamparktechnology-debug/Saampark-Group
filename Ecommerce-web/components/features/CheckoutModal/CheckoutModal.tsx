@@ -19,6 +19,10 @@ import {
   UserCheck,
   ArrowRight,
   Loader2,
+  Minus,
+  Plus,
+  LogIn,
+  Globe,
 } from 'lucide-react';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useOrderStore, PlacedOrder } from '@/lib/store/orderStore';
@@ -54,8 +58,8 @@ const FALLBACK_COUPONS: Record<string, number> = {
 };
 
 export function CheckoutModal() {
-  const { cart, clearCart } = useCommerceStore();
-  const { user, setAuthenticatedUser } = useAuthStore();
+  const { cart, clearCart, updateQuantity } = useCommerceStore();
+  const { user, setAuthenticatedUser, openAuthModal } = useAuthStore();
   const {
     checkoutOpen,
     closeCheckout,
@@ -77,6 +81,7 @@ export function CheckoutModal() {
     gstNumber: '',
     panNumber: '',
     urgency: 'Standard',
+    projectReference: '',
     notes: '',
   });
 
@@ -189,12 +194,38 @@ export function CheckoutModal() {
     setTimeout(() => setCopied(false), 3000);
   };
 
+  const step1Done =
+    formData.clientName.trim().length > 1 &&
+    formData.email.trim().includes('@') &&
+    formData.phone.trim().length >= 8;
+  const step2Done =
+    formData.address.trim().length > 3 &&
+    formData.city.trim().length > 1 &&
+    formData.pincode.trim().length >= 5;
+  const gstValid = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(
+    formData.gstNumber.trim()
+  );
+  const panValid = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.panNumber.trim());
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) {
+      openAuthModal('Please sign in or register an account before placing your order.');
+      return;
+    }
     if (!formData.clientName.trim() || !formData.email.trim() || !formData.phone.trim()) {
       alert('Please fill in your full name, email address, and phone number.');
       return;
     }
+
+    const mergedNotes = [
+      formData.projectReference.trim()
+        ? `Reference / Domain: ${formData.projectReference.trim()}`
+        : '',
+      formData.notes.trim(),
+    ]
+      .filter(Boolean)
+      .join(' | ');
 
     setIsSubmitting(true);
     try {
@@ -210,7 +241,7 @@ export function CheckoutModal() {
         gstNumber: formData.gstNumber.trim(),
         panNumber: formData.panNumber.trim(),
         urgency: formData.urgency,
-        notes: formData.notes.trim(),
+        notes: mergedNotes,
         companyId: companyScope,
         items: orderItems,
         subtotal,
@@ -394,6 +425,29 @@ export function CheckoutModal() {
               </div>
             </div>
           </div>
+        ) : !user ? (
+          <div className={styles.body}>
+            <div className={styles.authGateCard}>
+              <div className={styles.authGateIcon}>
+                <Lock size={26} />
+              </div>
+              <h3>Sign In or Register to Place Order</h3>
+              <p>
+                Official orders, GST tax invoices, and Client Portal credentials are linked directly
+                to your verified Saampark email account via OTP.
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  closeCheckout();
+                  openAuthModal('Sign in or register via Saampark Email OTP to complete checkout.');
+                }}
+              >
+                <LogIn size={16} /> Sign In / Register with Email OTP
+              </button>
+            </div>
+          </div>
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'contents' }}>
             <div className={styles.body}>
@@ -412,40 +466,50 @@ export function CheckoutModal() {
                 </span>
               </div>
 
-              {user && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '8px 12px',
-                    borderRadius: '12px',
-                    background: 'rgba(16, 185, 129, 0.1)',
-                    border: '1px solid rgba(16, 185, 129, 0.25)',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: '#10b981',
-                    marginBottom: '12px',
-                  }}
-                >
-                  <UserCheck size={15} />
-                  <span>Auto-filled from your verified client profile ({user.email})</span>
-                </div>
-              )}
+              <div className={styles.profileSyncBar}>
+                <UserCheck size={15} />
+                <span>Verified client session synced ({user.email})</span>
+              </div>
 
               {/* Order Summary & Promo Box */}
               <div className={styles.summaryBox}>
-                <div className={styles.sectionTitle}>
-                  <ShoppingBag size={14} /> Selected Packages ({orderItems.length})
+                <div className={styles.sectionHeader}>
+                  <div className={styles.sectionTitle} style={{ marginBottom: 0 }}>
+                    <ShoppingBag size={14} /> Selected Packages ({orderItems.length})
+                  </div>
+                  <span className={styles.stepPill}>{companyScope === 'tech' ? 'STR Division' : 'SCS Division'}</span>
                 </div>
                 {orderItems.map((item, idx) => (
                   <div key={idx} className={styles.summaryItem}>
-                    <div>
+                    <div style={{ minWidth: 0, flex: 1, paddingRight: 10 }}>
                       <div className={styles.summaryItemName}>{item.name}</div>
                       <div className={styles.fieldHelp}>Delivery SLA: {item.deliveryDays}</div>
                     </div>
-                    <div className={styles.summaryItemPrice}>
-                      ₹{(item.price * item.qty).toLocaleString('en-IN')}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                      {!activeDirectService && (
+                        <div className={styles.qtyControl}>
+                          <button
+                            type="button"
+                            className={styles.qtyBtn}
+                            onClick={() => updateQuantity(item.serviceId, Math.max(1, item.qty - 1))}
+                            aria-label="Decrease quantity"
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <span className={styles.qtyVal}>{item.qty}</span>
+                          <button
+                            type="button"
+                            className={styles.qtyBtn}
+                            onClick={() => updateQuantity(item.serviceId, item.qty + 1)}
+                            aria-label="Increase quantity"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+                      )}
+                      <div className={styles.summaryItemPrice}>
+                        ₹{(item.price * item.qty).toLocaleString('en-IN')}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -458,28 +522,20 @@ export function CheckoutModal() {
                       placeholder="Have a Promo Code? (e.g. TECH20)"
                       value={couponInput}
                       onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                      style={{
-                        width: '100%',
-                        padding: '8px 10px',
-                        borderRadius: '10px',
-                        fontSize: '12px',
-                        border: '1px solid var(--color-border-default)',
-                        background: 'var(--color-bg-surface)',
-                        color: 'var(--color-text-primary)',
-                      }}
+                      className={styles.promoInput}
                     />
                   </div>
                   <button
                     type="button"
                     onClick={handleApplyCoupon}
                     className="btn btn-secondary btn-sm"
-                    style={{ height: '34px', padding: '0 14px', fontSize: '12px' }}
+                    style={{ height: '36px', padding: '0 14px', fontSize: '12px' }}
                   >
                     <Tag size={12} /> Apply
                   </button>
                 </div>
                 {couponError && (
-                  <div style={{ fontSize: '11px', color: '#ef4444', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--color-error)', marginBottom: '4px' }}>
                     {couponError}
                   </div>
                 )}
@@ -505,9 +561,14 @@ export function CheckoutModal() {
               </div>
 
               {/* Client & Business Details */}
-              <div className={styles.section}>
-                <div className={styles.sectionTitle}>
-                  <Building2 size={14} /> 1. Client &amp; Business Information
+              <div className={styles.sectionCard}>
+                <div className={styles.sectionHeader}>
+                  <div className={styles.sectionTitle} style={{ marginBottom: 0 }}>
+                    <Building2 size={14} /> 1. Client &amp; Business Profile
+                  </div>
+                  <span className={`${styles.stepPill} ${step1Done ? styles.stepPillDone : ''}`}>
+                    {step1Done ? <><Check size={11} /> Ready</> : 'Required'}
+                  </span>
                 </div>
                 <div className={styles.grid2}>
                   <div className={styles.field}>
@@ -534,7 +595,7 @@ export function CheckoutModal() {
                 </div>
 
                 <div className={styles.grid2}>
-                  <div className={styles.field}>
+                  <div className={styles.field} style={{ marginBottom: 0 }}>
                     <label>Email Address *</label>
                     <input
                       required
@@ -545,10 +606,10 @@ export function CheckoutModal() {
                       onChange={handleChange}
                     />
                     <span className={styles.fieldHelp}>
-                      Tax invoice &amp; CRM Client Portal login link to this email.
+                      Tax invoice &amp; CRM Client Portal credentials sync to this email.
                     </span>
                   </div>
-                  <div className={styles.field}>
+                  <div className={styles.field} style={{ marginBottom: 0 }}>
                     <label>WhatsApp / Phone Number *</label>
                     <input
                       required
@@ -563,9 +624,14 @@ export function CheckoutModal() {
               </div>
 
               {/* Billing Address Details */}
-              <div className={styles.section}>
-                <div className={styles.sectionTitle}>
-                  <MapPin size={14} /> 2. Billing &amp; Tax Invoice Details
+              <div className={styles.sectionCard}>
+                <div className={styles.sectionHeader}>
+                  <div className={styles.sectionTitle} style={{ marginBottom: 0 }}>
+                    <MapPin size={14} /> 2. Billing &amp; Tax Invoice Details
+                  </div>
+                  <span className={`${styles.stepPill} ${step2Done ? styles.stepPillDone : ''}`}>
+                    {step2Done ? <><Check size={11} /> Ready</> : 'Required'}
+                  </span>
                 </div>
                 <div className={styles.field}>
                   <label>Full Street Address *</label>
@@ -618,8 +684,15 @@ export function CheckoutModal() {
                 </div>
 
                 <div className={styles.grid2}>
-                  <div className={styles.field}>
-                    <label>GSTIN (Optional - B2B Credit)</label>
+                  <div className={styles.field} style={{ marginBottom: 0 }}>
+                    <label>
+                      GSTIN (Optional - B2B Credit){' '}
+                      {formData.gstNumber && (
+                        <span className={gstValid ? styles.validTag : styles.hintTag}>
+                          {gstValid ? 'Valid GSTIN' : '15-char format'}
+                        </span>
+                      )}
+                    </label>
                     <input
                       type="text"
                       name="gstNumber"
@@ -629,8 +702,15 @@ export function CheckoutModal() {
                       onChange={handleChange}
                     />
                   </div>
-                  <div className={styles.field}>
-                    <label>PAN Number (Optional)</label>
+                  <div className={styles.field} style={{ marginBottom: 0 }}>
+                    <label>
+                      PAN Number (Optional){' '}
+                      {formData.panNumber && (
+                        <span className={panValid ? styles.validTag : styles.hintTag}>
+                          {panValid ? 'Valid PAN' : '10-char format'}
+                        </span>
+                      )}
+                    </label>
                     <input
                       type="text"
                       name="panNumber"
@@ -643,21 +723,39 @@ export function CheckoutModal() {
                 </div>
               </div>
 
-              {/* Urgency & Project Scope */}
-              <div className={styles.grid2}>
-                <div className={styles.field}>
-                  <label>Delivery Priority</label>
-                  <select name="urgency" value={formData.urgency} onChange={handleChange}>
-                    <option value="Standard">Standard SLA Schedule</option>
-                    <option value="Priority">Priority Express Kickoff</option>
-                  </select>
+              {/* Project Kickoff Brief */}
+              <div className={styles.sectionCard} style={{ marginBottom: 0 }}>
+                <div className={styles.sectionHeader}>
+                  <div className={styles.sectionTitle} style={{ marginBottom: 0 }}>
+                    <Globe size={14} /> 3. Project Brief &amp; Delivery Priority
+                  </div>
+                  <span className={styles.stepPill}>Fast Kickoff</span>
                 </div>
-                <div className={styles.field}>
-                  <label>Project Notes &amp; References</label>
-                  <input
-                    type="text"
+                <div className={styles.grid2}>
+                  <div className={styles.field} style={{ marginBottom: 0 }}>
+                    <label>Delivery Priority</label>
+                    <select name="urgency" value={formData.urgency} onChange={handleChange}>
+                      <option value="Standard">Standard SLA Schedule</option>
+                      <option value="Priority">Priority Express Kickoff</option>
+                    </select>
+                  </div>
+                  <div className={styles.field} style={{ marginBottom: 0 }}>
+                    <label>Existing Domain / Reference URL</label>
+                    <input
+                      type="text"
+                      name="projectReference"
+                      placeholder="https://example.com or Figma link"
+                      value={formData.projectReference}
+                      onChange={handleChange}
+                    />
+                  </div>
+                </div>
+                <div className={styles.field} style={{ marginTop: 10, marginBottom: 0 }}>
+                  <label>Project Notes &amp; Scope Instructions</label>
+                  <textarea
+                    rows={2}
                     name="notes"
-                    placeholder="Brand preferences, timeline, links..."
+                    placeholder="Brand preferences, preferred launch date, special deliverables..."
                     value={formData.notes}
                     onChange={handleChange}
                   />

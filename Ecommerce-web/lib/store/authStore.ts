@@ -17,9 +17,12 @@ export interface ClientUser {
 interface AuthState {
   user: ClientUser | null;
   authModalOpen: boolean;
+  authPromptMessage: string | null;
+  pendingAuthAction: (() => void) | null;
 
-  openAuthModal: () => void;
+  openAuthModal: (message?: string | null) => void;
   closeAuthModal: () => void;
+  requireAuth: (action: () => void, message?: string) => boolean;
   login: (email: string, name?: string, phone?: string) => void;
   setAuthenticatedUser: (userData: ClientUser) => void;
   updateProfile: (partial: Partial<ClientUser>) => void;
@@ -40,12 +43,32 @@ export const useAuthStore = create<AuthState>((set, get) => {
   return {
     user: getStoredUser(),
     authModalOpen: false,
+    authPromptMessage: null,
+    pendingAuthAction: null,
 
-    openAuthModal: () => set({ authModalOpen: true }),
-    closeAuthModal: () => set({ authModalOpen: false }),
+    openAuthModal: (message = null) =>
+      set({ authModalOpen: true, authPromptMessage: message }),
+
+    closeAuthModal: () =>
+      set({ authModalOpen: false, authPromptMessage: null, pendingAuthAction: null }),
+
+    requireAuth: (action, message = 'Please sign in or register with your email to add items to your cart and place orders.') => {
+      const currentUser = get().user;
+      if (currentUser) {
+        action();
+        return true;
+      }
+      set({
+        authModalOpen: true,
+        authPromptMessage: message,
+        pendingAuthAction: action,
+      });
+      return false;
+    },
 
     login: (email, name, phone) => {
       const existing = get().user;
+      const pending = get().pendingAuthAction;
       const user: ClientUser = {
         ...(existing || {}),
         name: name || existing?.name || email.split('@')[0],
@@ -55,10 +78,14 @@ export const useAuthStore = create<AuthState>((set, get) => {
       if (typeof window !== 'undefined') {
         localStorage.setItem('saampark_user', JSON.stringify(user));
       }
-      set({ user, authModalOpen: false });
+      set({ user, authModalOpen: false, authPromptMessage: null, pendingAuthAction: null });
+      if (pending) {
+        setTimeout(() => pending(), 50);
+      }
     },
 
     setAuthenticatedUser: (userData) => {
+      const pending = get().pendingAuthAction;
       const normalized: ClientUser = {
         ...userData,
         email: userData.email.toLowerCase().trim(),
@@ -66,7 +93,15 @@ export const useAuthStore = create<AuthState>((set, get) => {
       if (typeof window !== 'undefined') {
         localStorage.setItem('saampark_user', JSON.stringify(normalized));
       }
-      set({ user: normalized, authModalOpen: false });
+      set({
+        user: normalized,
+        authModalOpen: false,
+        authPromptMessage: null,
+        pendingAuthAction: null,
+      });
+      if (pending) {
+        setTimeout(() => pending(), 50);
+      }
     },
 
     updateProfile: (partial) => {
@@ -83,7 +118,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('saampark_user');
       }
-      set({ user: null });
+      set({ user: null, pendingAuthAction: null, authPromptMessage: null });
     },
   };
 });

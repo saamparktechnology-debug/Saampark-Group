@@ -130,6 +130,8 @@ export interface Service {
   features: string[];
   notIncluded?: string[];
   startingPrice: number | null;
+  discountPrice?: number | null;
+  originalPrice?: number | null;
   priceType: PriceType;
   deliveryDays: number | null;
   isPopular: boolean;
@@ -140,6 +142,9 @@ export interface Service {
   href: string;
   icon: string; // lucide icon name
   image?: string;
+  galleryImages?: string[];
+  technologiesUsed?: string[];
+  faqs?: { question: string; answer: string }[];
 }
 
 // ─────────────────────────────────────────

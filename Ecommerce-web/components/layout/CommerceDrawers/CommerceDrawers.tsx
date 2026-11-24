@@ -6,6 +6,7 @@ import { X, Trash2, ShoppingBag, Bookmark, ArrowRight, MessageCircle, ShieldChec
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
 import { useOrderStore } from '@/lib/store/orderStore';
+import { useAuthStore } from '@/lib/store/authStore';
 import { allServices, getServiceById } from '@/lib/data/services';
 import styles from './CommerceDrawers.module.css';
 
@@ -24,6 +25,7 @@ export function CommerceDrawers() {
   } = useUIStore();
 
   const { openCheckout } = useOrderStore();
+  const { requireAuth } = useAuthStore();
 
   const anyOpen = cartOpen || wishlistOpen || compareOpen;
 
@@ -106,12 +108,14 @@ export function CommerceDrawers() {
             <button
               className="btn btn-primary"
               onClick={() => {
-                closeCart();
-                openCheckout();
+                requireAuth(() => {
+                  closeCart();
+                  openCheckout();
+                }, 'Please sign in or create an account before proceeding to checkout.');
               }}
               style={{ width: '100%', justifyContent: 'center', marginBottom: 8, gap: 6, fontWeight: 700 }}
             >
-              <ShoppingBag size={18} /> Proceed to Official Checkout →
+              <ShoppingBag size={18} /> Proceed to Official Checkout
             </button>
 
             <button

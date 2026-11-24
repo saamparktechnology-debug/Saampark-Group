@@ -51,6 +51,7 @@ import {
 } from '@/lib/data/services';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
+import { useAuthStore } from '@/lib/store/authStore';
 import { PromoCarousel } from '../PromoCarousel/PromoCarousel';
 import { CategoryCoverflow } from '../CategoryCoverflow/CategoryCoverflow';
 import { SkeletonLoader } from '@/components/ui/SkeletonLoader/SkeletonLoader';
@@ -275,6 +276,7 @@ function MarketplaceContent() {
 
   const { wishlistIds, toggleWishlist, compareIds, toggleCompare, addToCart, cart } = useCommerceStore();
   const { openCart, openCompare } = useUIStore();
+  const { requireAuth } = useAuthStore();
 
   // Read search param from URL if available
   useEffect(() => {
@@ -397,18 +399,20 @@ function MarketplaceContent() {
   const handleAddToCart = (e: React.MouseEvent, svc: Service) => {
     e.preventDefault();
     e.stopPropagation();
-    const isInCart = cart.some(c => c.serviceId === svc.id);
-    if (isInCart) {
+    requireAuth(() => {
+      const isInCart = useCommerceStore.getState().cart.some(c => c.serviceId === svc.id);
+      if (isInCart) {
+        openCart();
+        return;
+      }
+      addToCart({
+        serviceId: svc.id,
+        serviceName: svc.name,
+        price: svc.startingPrice,
+        quantity: 1,
+      });
       openCart();
-      return;
-    }
-    addToCart({
-      serviceId: svc.id,
-      serviceName: svc.name,
-      price: svc.startingPrice,
-      quantity: 1,
-    });
-    openCart();
+    }, `Sign in or register with your email to add "${svc.name}" to your cart.`);
   };
 
   const handleHeroSelectDivision = (division: 'technology' | 'consultancy' | 'all') => {

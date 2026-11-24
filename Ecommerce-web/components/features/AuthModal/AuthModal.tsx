@@ -5,6 +5,9 @@ import {
   X,
   Lock,
   Mail,
+  User,
+  Phone,
+  Building2,
   CheckCircle2,
   ArrowRight,
   KeyRound,
@@ -17,10 +20,15 @@ import { useOrderStore } from '@/lib/store/orderStore';
 import styles from './AuthModal.module.css';
 
 export function AuthModal() {
-  const { authModalOpen, closeAuthModal, setAuthenticatedUser } = useAuthStore();
+  const { authModalOpen, authPromptMessage, closeAuthModal, setAuthenticatedUser } = useAuthStore();
   const { mergeOrders } = useOrderStore();
 
-  const [method, setMethod] = useState<'otp' | 'password'>('otp');
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [loginMethod, setLoginMethod] = useState<'otp' | 'password'>('otp');
+
+  const [name, setName] = useState('');
+  const [businessName, setBusinessName] = useState('');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -32,40 +40,66 @@ export function AuthModal() {
 
   if (!authModalOpen) return null;
 
+  const resetOtp = () => {
+    setOtpSent(false);
+    setOtpCode('');
+    setError(null);
+  };
+
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !email.includes('@')) {
       setError('Please enter a valid email address.');
       return;
     }
+    if (mode === 'register' && (!name.trim() || !phone.trim())) {
+      setError('Please enter your full name and phone number before requesting OTP.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       const res = await fetch('/api/auth/client', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'otp', email: email.trim() }),
+        body: JSON.stringify({
+          action: 'otp',
+          purpose: mode,
+          name: name.trim(),
+          email: email.trim(),
+        }),
       });
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.message || 'Could not send verification code.');
+        throw new Error(json.message || 'Could not send verification OTP.');
       }
       setOtpSent(true);
     } catch (err: any) {
-      setError(err.message || 'Failed to send code.');
+      setError(err.message || 'Failed to send verification code.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLoginSubmit = async (e: React.FormEvent) => {
+  const handleAuthenticate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
       const payload =
-        method === 'otp'
+        mode === 'register'
+          ? {
+              action: 'login',
+              name: name.trim(),
+              businessName: businessName.trim(),
+              phone: phone.trim(),
+              email: email.trim(),
+              password: password || 'Client@123',
+              otp: otpCode.trim(),
+            }
+          : loginMethod === 'otp'
           ? { action: 'login', email: email.trim(), otp: otpCode.trim() }
           : { action: 'login', email: email.trim(), password };
 
@@ -91,107 +125,189 @@ export function AuthModal() {
       setTimeout(() => {
         setAuthenticatedUser(
           userProfile || {
-            name: email.split('@')[0],
+            name: name.trim() || email.split('@')[0],
+            businessName: businessName.trim(),
             email: email.trim(),
-            phone: '',
+            phone: phone.trim(),
           }
         );
         setSuccess(false);
         setOtpSent(false);
         setOtpCode('');
         setPassword('');
-      }, 700);
+      }, 650);
     } catch (err: any) {
-      setError(err.message || 'Sign-in failed. Please verify your details.');
+      setError(err.message || 'Verification failed. Please verify your details.');
     } finally {
       setLoading(false);
     }
   };
 
+  const needsOtpFirst = mode === 'register' || loginMethod === 'otp';
+
   return (
     <div className={styles.overlay} onClick={closeAuthModal}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <button className={styles.closeBtn} onClick={closeAuthModal} aria-label="Close modal">
+        <button type="button" className={styles.closeBtn} onClick={closeAuthModal} aria-label="Close modal">
           <X size={20} />
         </button>
 
         {success ? (
           <div className={styles.successScreen}>
             <CheckCircle2 size={48} className={styles.successIcon} />
-            <h3>Authenticated Successfully</h3>
-            <p>Syncing your orders, invoices, and billing profile...</p>
+            <h3>{mode === 'register' ? 'Account Verified & Created' : 'Signed In Successfully'}</h3>
+            <p>Continuing to your cart and order details...</p>
           </div>
         ) : (
           <>
+            {/* Top Mode Switcher: Sign In vs Create Account */}
             <div className={styles.tabs}>
               <button
                 type="button"
-                className={`${styles.tabBtn} ${method === 'otp' ? styles.activeTab : ''}`}
+                className={`${styles.tabBtn} ${mode === 'login' ? styles.activeTab : ''}`}
                 onClick={() => {
-                  setMethod('otp');
-                  setError(null);
+                  setMode('login');
+                  resetOtp();
                 }}
               >
-                Email Code (OTP)
+                Sign In
               </button>
               <button
                 type="button"
-                className={`${styles.tabBtn} ${method === 'password' ? styles.activeTab : ''}`}
+                className={`${styles.tabBtn} ${mode === 'register' ? styles.activeTab : ''}`}
                 onClick={() => {
-                  setMethod('password');
-                  setError(null);
+                  setMode('register');
+                  resetOtp();
                 }}
               >
-                Email &amp; Password
+                Register Account
               </button>
             </div>
 
+            {authPromptMessage && (
+              <div className={styles.promptBanner}>
+                <ShieldCheck size={15} style={{ flexShrink: 0 }} />
+                <span>{authPromptMessage}</span>
+              </div>
+            )}
+
             <form
-              onSubmit={method === 'otp' && !otpSent ? handleSendOtp : handleLoginSubmit}
+              onSubmit={needsOtpFirst && !otpSent ? handleSendOtp : handleAuthenticate}
               className={styles.form}
             >
-              <h2 className={styles.title}>Client Account &amp; Order Hub</h2>
+              <h2 className={styles.title}>
+                {mode === 'register' ? 'Create Your Client Account' : 'Access Saampark Client Portal'}
+              </h2>
               <p className={styles.subtitle}>
-                {method === 'otp'
-                  ? 'Sign in with a 6-digit verification code sent directly to your email.'
-                  : 'Sign in with your CRM Client Portal email and password (default: Client@123).'}
+                {mode === 'register'
+                  ? 'Register once with Saampark Group email OTP verification to order services and manage GST invoices.'
+                  : loginMethod === 'otp'
+                  ? 'Enter your email to receive a 6-digit verification OTP from Saampark Group.'
+                  : 'Sign in with your email and portal password.'}
               </p>
 
+              {mode === 'login' && (
+                <div className={styles.methodSwitchRow}>
+                  <button
+                    type="button"
+                    className={`${styles.methodPill} ${loginMethod === 'otp' ? styles.methodPillActive : ''}`}
+                    onClick={() => {
+                      setLoginMethod('otp');
+                      resetOtp();
+                    }}
+                  >
+                    Email OTP (Recommended)
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.methodPill} ${loginMethod === 'password' ? styles.methodPillActive : ''}`}
+                    onClick={() => {
+                      setLoginMethod('password');
+                      resetOtp();
+                    }}
+                  >
+                    Password
+                  </button>
+                </div>
+              )}
+
               {error && (
-                <div
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: '12px',
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    border: '1px solid rgba(239, 68, 68, 0.25)',
-                    color: '#ef4444',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                  }}
-                >
+                <div className={styles.errorBanner}>
                   <AlertCircle size={15} style={{ flexShrink: 0 }} />
                   <span>{error}</span>
                 </div>
               )}
 
               <div className={styles.fields}>
+                {mode === 'register' && (
+                  <>
+                    <div className={styles.inputWrap}>
+                      <User size={16} className={styles.fieldIcon} />
+                      <input
+                        required
+                        type="text"
+                        placeholder="Full Name *"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        disabled={otpSent}
+                        className={styles.input}
+                      />
+                    </div>
+                    <div className={styles.inputWrap}>
+                      <Building2 size={16} className={styles.fieldIcon} />
+                      <input
+                        type="text"
+                        placeholder="Company / Brand Name (Optional)"
+                        value={businessName}
+                        onChange={(e) => setBusinessName(e.target.value)}
+                        disabled={otpSent}
+                        className={styles.input}
+                      />
+                    </div>
+                    <div className={styles.inputWrap}>
+                      <Phone size={16} className={styles.fieldIcon} />
+                      <input
+                        required
+                        type="tel"
+                        placeholder="WhatsApp / Mobile Number *"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        disabled={otpSent}
+                        className={styles.input}
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div className={styles.inputWrap}>
                   <Mail size={16} className={styles.fieldIcon} />
                   <input
                     required
                     type="email"
-                    name="email"
-                    placeholder="Client Email Address"
+                    placeholder="Email Address *"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    disabled={method === 'otp' && otpSent}
+                    disabled={needsOtpFirst && otpSent}
                     className={styles.input}
                   />
                 </div>
 
-                {method === 'otp' && otpSent && (
+                {(mode === 'register' || loginMethod === 'password') && (
+                  <div className={styles.inputWrap}>
+                    <Lock size={16} className={styles.fieldIcon} />
+                    <input
+                      required={mode === 'login' && loginMethod === 'password'}
+                      type="password"
+                      placeholder={mode === 'register' ? 'Create Password (Optional)' : 'Account Password *'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={mode === 'register' && otpSent}
+                      className={styles.input}
+                    />
+                  </div>
+                )}
+
+                {needsOtpFirst && otpSent && (
                   <>
                     <div className={styles.inputWrap}>
                       <KeyRound size={16} className={styles.fieldIcon} />
@@ -200,41 +316,19 @@ export function AuthModal() {
                         type="text"
                         inputMode="numeric"
                         maxLength={6}
-                        placeholder="Enter 6-Digit Email Code"
+                        placeholder="Enter 6-Digit Email OTP *"
                         value={otpCode}
                         onChange={(e) => setOtpCode(e.target.value)}
                         className={styles.input}
                       />
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--color-text-secondary)' }}>
-                      <span>Code sent to {email}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOtpSent(false);
-                          setOtpCode('');
-                        }}
-                        style={{ background: 'none', border: 'none', color: '#2563eb', fontWeight: 600, cursor: 'pointer' }}
-                      >
+                    <div className={styles.otpMetaRow}>
+                      <span>Sent to {email}</span>
+                      <button type="button" onClick={resetOtp} className={styles.changeEmailBtn}>
                         Change Email
                       </button>
                     </div>
                   </>
-                )}
-
-                {method === 'password' && (
-                  <div className={styles.inputWrap}>
-                    <Lock size={16} className={styles.fieldIcon} />
-                    <input
-                      required
-                      type="password"
-                      name="password"
-                      placeholder="Portal Password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className={styles.input}
-                    />
-                  </div>
                 )}
               </div>
 
@@ -242,34 +336,24 @@ export function AuthModal() {
                 {loading ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
-                    <span>Verifying...</span>
+                    <span>Please wait...</span>
                   </>
-                ) : method === 'otp' && !otpSent ? (
+                ) : needsOtpFirst && !otpSent ? (
                   <>
-                    <span>Send Verification Code</span>
+                    <span>Send OTP via Email</span>
                     <ArrowRight size={17} />
                   </>
                 ) : (
                   <>
-                    <span>Access My Orders &amp; Profile</span>
+                    <span>{mode === 'register' ? 'Verify OTP & Register' : 'Verify & Sign In'}</span>
                     <ArrowRight size={17} />
                   </>
                 )}
               </button>
 
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  fontSize: '11px',
-                  color: 'var(--color-text-tertiary)',
-                  marginTop: '4px',
-                }}
-              >
+              <div className={styles.footerBadge}>
                 <ShieldCheck size={13} />
-                <span>Synced with Saampark CRM Client Portal</span>
+                <span>Verified via Saampark Group Official Mail Server</span>
               </div>
             </form>
           </>

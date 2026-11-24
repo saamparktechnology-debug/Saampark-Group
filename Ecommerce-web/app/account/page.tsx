@@ -141,7 +141,7 @@ function AccountHubContent() {
               Sign in using your email address (OTP or CRM Password) to view your complete order history, live project status, official GST invoices, and saved billing vault.
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center' }}>
-              <button type="button" onClick={openAuthModal} className="btn btn-primary btn-lg">
+              <button type="button" onClick={() => openAuthModal()} className="btn btn-primary btn-lg">
                 Sign In with Email
                 <ArrowRight size={16} />
               </button>

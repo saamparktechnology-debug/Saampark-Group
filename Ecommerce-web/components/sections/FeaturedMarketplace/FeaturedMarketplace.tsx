@@ -7,6 +7,7 @@ import { ArrowRight, Bookmark, Eye, MessageCircle, ShoppingBag, Star, Check } fr
 import { featuredServices, type Service } from '@/lib/data/services';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
+import { useAuthStore } from '@/lib/store/authStore';
 import styles from './FeaturedMarketplace.module.css';
 
 function formatPrice(svc: Service) {
@@ -28,23 +29,26 @@ function waMessage(svc: Service) {
 function ServiceCard({ svc }: { svc: Service }) {
   const { wishlistIds, toggleWishlist, addToCart, cart } = useCommerceStore();
   const { openCart } = useUIStore();
+  const { requireAuth } = useAuthStore();
   
   const isWishlisted = wishlistIds.includes(svc.id);
   const isInCart = cart.some(c => c.serviceId === svc.id);
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (isInCart) {
+    requireAuth(() => {
+      if (isInCart) {
+        openCart();
+        return;
+      }
+      addToCart({
+        serviceId: svc.id,
+        serviceName: svc.name,
+        price: svc.startingPrice,
+        quantity: 1
+      });
       openCart();
-      return;
-    }
-    addToCart({
-      serviceId: svc.id,
-      serviceName: svc.name,
-      price: svc.startingPrice,
-      quantity: 1
-    });
-    openCart();
+    }, `Sign in or register to add "${svc.name}" to your bag.`);
   };
 
   return (
