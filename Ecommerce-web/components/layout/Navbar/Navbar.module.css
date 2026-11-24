@@ -217,6 +217,34 @@
   border-radius: var(--radius-lg) !important;
 }
 
+.trackBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px !important;
+  padding: 0 var(--size-3) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--color-border-subtle);
+  background: transparent;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.trackBtn:hover {
+  color: var(--color-brand);
+  background: var(--color-brand-subtle);
+  border-color: var(--color-brand);
+}
+
+@media (max-width: 640px) {
+  .trackText {
+    display: none;
+  }
+}
+
 @media (max-width: 768px) {
   .quoteCTA {
     display: none !important;

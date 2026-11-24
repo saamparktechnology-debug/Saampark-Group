@@ -2,9 +2,10 @@
 
 import React, { useEffect } from 'react';
 import Link from 'next/link';
-import { X, Trash2, ShoppingBag, Bookmark, ArrowRight, MessageCircle } from 'lucide-react';
+import { X, Trash2, ShoppingBag, Bookmark, ArrowRight, MessageCircle, ShieldCheck } from 'lucide-react';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
+import { useOrderStore } from '@/lib/store/orderStore';
 import { allServices, getServiceById } from '@/lib/data/services';
 import styles from './CommerceDrawers.module.css';
 
@@ -21,6 +22,8 @@ export function CommerceDrawers() {
     compareOpen, closeCompare,
     closeAll
   } = useUIStore();
+
+  const { openCheckout } = useOrderStore();
 
   const anyOpen = cartOpen || wishlistOpen || compareOpen;
 
@@ -44,8 +47,6 @@ export function CommerceDrawers() {
       msg += `\nEstimated Total: ₹${cartTotal.toLocaleString('en-IN')}\n`;
     }
     msg += `\nPlease guide me on the next steps.`;
-    
-    // Send to STR for tech, SCS for consultancy (just route to STR if mixed)
     window.open(`https://wa.me/919091518567?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
@@ -101,10 +102,31 @@ export function CommerceDrawers() {
                 {cartHasQuote && (cartTotal > 0 ? ' + Quotes' : 'To be quoted')}
               </span>
             </div>
-            <button className="btn btn-primary" onClick={handleCheckoutWA} style={{ width: '100%', justifyContent: 'center' }}>
-              <MessageCircle size={18} /> Checkout via WhatsApp
+
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                closeCart();
+                openCheckout();
+              }}
+              style={{ width: '100%', justifyContent: 'center', marginBottom: 8, gap: 6, fontWeight: 700 }}
+            >
+              <ShoppingBag size={18} /> Proceed to Official Checkout →
             </button>
-            <button className="btn btn-ghost btn-sm" onClick={clearCart} style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}>
+
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={handleCheckoutWA}
+              style={{ width: '100%', justifyContent: 'center', marginBottom: 8 }}
+            >
+              <MessageCircle size={16} /> Fast Booking via WhatsApp
+            </button>
+
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={clearCart}
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
               Clear Cart
             </button>
           </div>
@@ -134,56 +156,9 @@ export function CommerceDrawers() {
                       {svc.startingPrice ? `Starting at ₹${svc.startingPrice.toLocaleString('en-IN')}` : 'Custom Quote'}
                     </div>
                   </div>
-                  <div className={styles.itemActions}>
-                    <Link href={svc.href} className="btn btn-primary btn-sm" onClick={closeWishlist}>
-                      View
-                    </Link>
-                    <button className={styles.removeBtn} onClick={() => toggleWishlist(svc.id)}>
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Compare Drawer (Bottom Slide-up) ── */}
-      <div className={`${styles.compareDrawer} ${compareOpen ? styles.compareOpen : ''}`}>
-        <div className={styles.compareHeader}>
-          <h3>Compare Services ({compareIds.length}/3)</h3>
-          <div className={styles.compareHeaderActions}>
-            <button className="btn btn-ghost btn-sm" onClick={clearCompare}>Clear</button>
-            <button className="btn btn-icon btn-ghost" onClick={closeCompare}><X size={20} /></button>
-          </div>
-        </div>
-        
-        <div className={styles.compareBody}>
-          {compareServices.length === 0 ? (
-            <div className={styles.empty} style={{ padding: '20px 0' }}>
-              <p>Select up to 3 services to compare.</p>
-            </div>
-          ) : (
-            <div className={styles.compareGrid}>
-              {compareServices.map(svc => svc && (
-                <div key={svc.id} className={styles.compareCard}>
-                  <button className={styles.compareRemove} onClick={() => toggleCompare(svc.id)}>
-                    <X size={14} />
+                  <button className={styles.removeBtn} onClick={() => toggleWishlist(svc.id)}>
+                    <Trash2 size={16} />
                   </button>
-                  <div className={styles.compareName}>{svc.name}</div>
-                  <div className={styles.comparePrice}>
-                    {svc.startingPrice ? `₹${svc.startingPrice.toLocaleString('en-IN')}` : 'Quote'}
-                  </div>
-                  <Link href={svc.href} className="btn btn-primary btn-sm" style={{ marginTop: 'auto' }} onClick={closeCompare}>
-                    View
-                  </Link>
-                </div>
-              ))}
-              {Array.from({ length: 3 - compareServices.length }).map((_, i) => (
-                <div key={i} className={styles.compareCardEmpty}>
-                  <div className={styles.compareEmptyPlus}>+</div>
-                  <div>Add Service</div>
                 </div>
               ))}
             </div>

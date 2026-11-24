@@ -124,36 +124,57 @@
   }
   .entityDesc,
   .entityDescSCS {
-    font-size: 0.82rem;
-    line-height: 1.4;
-    margin-bottom: 0.75rem;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
+  font-family: var(--font-body, inherit);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #38241D !important;
+  font-weight: 500;
+  margin-bottom: 1.75rem;
+  position: relative;
+  z-index: 2;
+}
   .specChipsWrap {
     gap: 5px;
     margin-bottom: 1rem;
   }
   .specChip,
   .specChipSCS {
-    font-size: 9.5px;
-    padding: 3px 8px;
-  }
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #FFFFFF !important;
+  border: 1.5px solid rgba(235, 65, 44, 0.45) !important;
+  color: #2D1A16 !important;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 6px rgba(235, 65, 44, 0.12);
+}
   .metricsBar,
   .metricsBarSCS {
-    padding: 8px 12px;
-    margin-bottom: 1rem;
-  }
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.25rem;
+  border-radius: 16px;
+  background: #FFFFFF !important;
+  border: 1.5px solid rgba(235, 65, 44, 0.4) !important;
+  margin-bottom: 2rem;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 4px 14px rgba(235, 65, 44, 0.15);
+}
   .metricValue,
   .metricValueSCS {
     font-size: 1rem;
   }
   .metricLabel,
   .metricLabelSCS {
-    font-size: 9px;
-  }
+  font-size: 11px;
+  color: #38241D !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
   .ctaButtonSTR,
   .ctaButtonSCS {
     height: 42px !important;
@@ -187,10 +208,10 @@
 
 /* STR Portal: Elegant Off-White & Sage in Light, Gray & Silver in Dark */
 .strCard {
-  background: linear-gradient(145deg, #FFFFFF 0%, #F7F5EF 60%, #EFEBE0 100%);
-  border: 1.5px solid rgba(156, 175, 136, 0.45);
-  box-shadow: 0 20px 50px -15px rgba(156, 175, 136, 0.25), inset 0 2px 2px #FFFFFF;
-  color: #1F241D;
+  background: linear-gradient(145deg, #F0F5EC 0%, #E3EDE0 55%, #D4E2CD 100%);
+  border: 2px solid #9CAF88;
+  box-shadow: 0 18px 45px -12px rgba(156, 175, 136, 0.35), inset 0 2px 2px #FFFFFF;
+  color: #152212;
 }
 
 [data-theme="dark"] .strCard {
@@ -238,10 +259,10 @@
 
 /* SCS Portal: Warm Ivory White & Sage & Tomato Red */
 .scsCard {
-  background: linear-gradient(145deg, #FFFFFF 0%, #F7F5EF 60%, #EFEBE0 100%);
-  border: 1.5px solid rgba(156, 175, 136, 0.45);
-  box-shadow: 0 20px 50px -15px rgba(156, 175, 136, 0.25), inset 0 2px 2px #FFFFFF;
-  color: #1F241D;
+  background: linear-gradient(145deg, #FFF7F2 0%, #FDEEE4 55%, #FBE1D2 100%);
+  border: 2px solid rgba(235, 65, 44, 0.4);
+  box-shadow: 0 18px 45px -12px rgba(235, 65, 44, 0.22), inset 0 2px 2px #FFFFFF;
+  color: #2D1A16;
 }
 
 [data-theme="dark"] .scsCard {
@@ -490,7 +511,8 @@
   font-family: var(--font-body, inherit);
   font-size: 0.95rem;
   line-height: 1.6;
-  color: #94A3B8;
+  color: #243520 !important;
+  font-weight: 500;
   margin-bottom: 1.75rem;
   position: relative;
   z-index: 2;
@@ -524,11 +546,12 @@
   padding: 5px 12px;
   border-radius: 8px;
   font-size: 11px;
-  font-weight: 600;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #E2E8F0;
+  font-weight: 700;
+  background: #FFFFFF !important;
+  border: 1.5px solid #9CAF88 !important;
+  color: #152212 !important;
   letter-spacing: 0.02em;
+  box-shadow: 0 2px 6px rgba(156, 175, 136, 0.2);
 }
 
 .specChipSCS {
@@ -555,11 +578,12 @@
   justify-content: space-between;
   padding: 1.1rem 1.25rem;
   border-radius: 16px;
-  background: rgba(156, 175, 136, 0.12);
-  border: 1px solid rgba(156, 175, 136, 0.3);
+  background: #FFFFFF !important;
+  border: 1.5px solid #9CAF88 !important;
   margin-bottom: 2rem;
   position: relative;
   z-index: 2;
+  box-shadow: 0 4px 14px rgba(156, 175, 136, 0.2);
 }
 
 [data-theme="dark"] .metricsBar {
@@ -587,11 +611,11 @@
 }
 
 .metricLabel {
-  font-size: 10px;
-  font-weight: 600;
-  color: #4A5546;
-  letter-spacing: 0.05em;
+  font-size: 11px;
+  color: #243520 !important;
+  font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 [data-theme="dark"] .metricLabel {

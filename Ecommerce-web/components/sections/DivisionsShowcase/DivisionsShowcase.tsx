@@ -88,7 +88,7 @@ export function DivisionsShowcase({ onSelectDivision }: DivisionsShowcaseProps) 
 
             {/* Architecture Highlights */}
             <div className={styles.specChipsWrap}>
-              <span className={styles.specChip}>Next.js 16 (Turbopack)</span>
+              <span className={styles.specChip}>Full-Stack Architecture</span>
               <span className={styles.specChip}>Flutter Hybrid iOS/Android</span>
               <span className={styles.specChip}>Cloud ERP &amp; Billing</span>
               <span className={styles.specChip}>Agentic LLM Pipelines</span>

@@ -216,7 +216,7 @@ export function FeaturedShowcase3D({ onQuickView }: FeaturedShowcase3DProps) {
                 {/* Floating 3D Spec Pills */}
                 <div className={styles.floatingTag}>
                   <Zap size={13} className={styles.zapIcon} />
-                  <span>{isSTR ? 'Next.js 16 • Turbopack Core' : 'ROAS 4.8x • Meta Ads Engine'}</span>
+                  <span>{isSTR ? 'Enterprise Engineering Core' :  'ROAS 4.8x • Meta Ads Engine'}</span>
                 </div>
               </div>
             </div>

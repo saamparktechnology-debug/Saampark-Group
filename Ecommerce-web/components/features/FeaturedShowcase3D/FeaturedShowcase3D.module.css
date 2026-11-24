@@ -171,17 +171,24 @@
     margin-bottom: 0.5rem !important;
   }
   .serviceDesc {
-    font-size: 0.85rem !important;
-    line-height: 1.4 !important;
-    margin-bottom: 0.75rem !important;
-  }
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: #243520 !important;
+  font-weight: 500;
+  margin-bottom: 2rem;
+}
   .deliverablesList {
     gap: 6px !important;
     margin-bottom: 0.75rem !important;
   }
   .deliverableItem {
-    font-size: 11px !important;
-  }
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  color: #152212 !important;
+  font-weight: 700;
+}
   .thumbnailContainer {
     height: 130px !important;
   }
@@ -204,8 +211,15 @@
     margin-bottom: 0.65rem !important;
   }
   .telemetryCard {
-    padding: 4px 6px !important;
-  }
+  background: #FFFFFF !important;
+  border: 1.5px solid #9CAF88 !important;
+  padding: 12px 14px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 4px 12px rgba(156, 175, 136, 0.15);
+}
   .telemetryVal {
     font-size: 11px !important;
   }
@@ -245,14 +259,18 @@
 }
 
 /* Light Mode: Elegant Off-White & Sage */
-.strTheme,
+.strTheme {
+  background: linear-gradient(145deg, #F0F5EC 0%, #E3EDE0 55%, #D4E2CD 100%);
+  border: 2px solid #9CAF88;
+  box-shadow: 0 20px 50px -15px rgba(156, 175, 136, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.8);
+  color: #152212;
+}
+
 .scsTheme {
-  background: linear-gradient(145deg, #FFFFFF 0%, #F7F5EF 60%, #EFEAE0 100%);
-  border: 1.5px solid rgba(156, 175, 136, 0.45);
-  box-shadow: 
-    0 20px 50px -15px rgba(156, 175, 136, 0.25),
-    inset 0 1px 1px rgba(255, 255, 255, 0.8);
-  color: #1F241D;
+  background: linear-gradient(145deg, #FFF7F2 0%, #FDEEE4 55%, #FBE1D2 100%);
+  border: 2px solid rgba(235, 65, 44, 0.4);
+  box-shadow: 0 20px 50px -15px rgba(235, 65, 44, 0.22), inset 0 1px 1px rgba(255, 255, 255, 0.8);
+  color: #2D1A16;
 }
 
 [data-theme="dark"] .strTheme,

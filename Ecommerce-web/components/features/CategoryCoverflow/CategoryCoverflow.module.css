@@ -1,6 +1,7 @@
 .coverflowContainer {
   padding: 0.5rem 0.5rem 1.25rem 0.5rem;
-  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -75,20 +76,23 @@
   justify-content: center;
   width: 100%;
   max-width: 100%;
-  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
   position: relative;
-  min-height: 310px;
+  min-height: 330px;
+  padding: 16px 0;
 }
 
 .slider {
   position: relative;
   flex: 1;
-  height: 295px;
+  height: 300px;
   display: flex;
   align-items: center;
   justify-content: center;
   perspective: 1200px;
   transform-style: preserve-3d;
+  overflow: visible;
 }
 
 /* 3D Card Stage - Sleek Compact Size */
@@ -469,7 +473,9 @@
   .coverflowContainer {
     padding: 0 0 0.5rem 0;
     max-width: 100%;
-    margin: 1rem 0;
+    margin: 0.5rem 0;
+    overflow-x: clip;
+    overflow-y: visible;
   }
 
   .title {
@@ -477,13 +483,13 @@
   }
 
   .card {
-    width: 175px;
-    height: 240px;
+    width: 165px;
+    height: 235px;
     border-radius: 16px;
   }
   
   .imageWrap {
-    height: 85px;
+    height: 80px;
   }
   
   .navBtn {
@@ -491,11 +497,15 @@
   }
   
   .carouselWrapper {
-    min-height: 250px;
+    min-height: 280px;
+    padding: 16px 0;
+    overflow-x: clip;
+    overflow-y: visible;
   }
 
   .slider {
-    height: 250px;
+    height: 260px;
+    overflow: visible;
   }
 
   .pagination {
@@ -515,19 +525,23 @@
 
 @media (max-width: 480px) {
   .card {
-    width: 165px;
-    height: 230px;
+    width: 155px;
+    height: 225px;
   }
 
   .imageWrap {
-    height: 80px;
+    height: 75px;
   }
 
   .carouselWrapper {
-    min-height: 240px;
+    min-height: 270px;
+    padding: 14px 0;
+    overflow-x: clip;
+    overflow-y: visible;
   }
 
   .slider {
-    height: 240px;
+    height: 250px;
+    overflow: visible;
   }
 }

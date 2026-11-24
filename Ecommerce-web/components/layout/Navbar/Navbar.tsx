@@ -7,12 +7,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Globe, Smartphone, Layers, Database, ShoppingCart,
   Share2, Megaphone, Search, MapPin, Video, Briefcase,
-  Sun, Moon, ShoppingBag, Bookmark, User, Sparkles, MessageCircle
+  Sun, Moon, ShoppingBag, Bookmark, User, Sparkles, MessageCircle, PackageSearch
 } from 'lucide-react';
 import { CONTACT } from '@/lib/data/services';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useOrderStore } from '@/lib/store/orderStore';
 import styles from './Navbar.module.css';
 
 // ── Nav Link Data ──────────────────────────────────
@@ -76,6 +77,7 @@ function NavbarContent() {
   const { cart, wishlistIds } = useCommerceStore();
   const { openCart, openWishlist } = useUIStore();
   const { user, logout, openAuthModal } = useAuthStore();
+  const { openTracking, myOrders } = useOrderStore();
 
   // Scroll detection
   useEffect(() => {
@@ -169,6 +171,17 @@ function NavbarContent() {
               {cart.length > 0 && <span className={styles.badge}>{cart.length}</span>}
             </button>
 
+            {/* Track Order CTA */}
+            <button 
+              onClick={() => openTracking()} 
+              className={`btn btn-ghost btn-sm ${styles.trackBtn}`} 
+              aria-label="Track Order"
+              title="Track live order status & invoices"
+            >
+              <PackageSearch size={16} />
+              <span className={styles.trackText}>Track Order</span>
+            </button>
+
             {/* Get Quote CTA */}
             <Link href="/contact" className={`btn btn-primary btn-sm ${styles.quoteCTA}`}>
               Get Quote
@@ -219,19 +232,42 @@ function NavbarContent() {
                     
                     {/* Left Column: E-Commerce Session */}
                     <div className={styles.dropdownCol}>
-                      <div className={styles.colTitle}>Account & Activity</div>
-                      <Link href="/" className={styles.dropLink} onClick={() => setProfileOpen(false)}>
-                        🛍️ Active Orders
-                      </Link>
+                      <div className={styles.colTitle}>Account & Orders</div>
+                      <button 
+                        className={styles.dropLinkBtn} 
+                        onClick={() => { setProfileOpen(false); openTracking(); }}
+                      >
+                        📦 Live Order Tracking
+                      </button>
+                      <a 
+                        href="https://crm2.saampark.com/login" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className={styles.dropLink}
+                        onClick={() => setProfileOpen(false)}
+                        style={{ color: 'var(--color-brand)', fontWeight: 600 }}
+                      >
+                        🔑 CRM Client Portal ↗
+                      </a>
                       <button 
                         className={styles.dropLinkBtn} 
                         onClick={() => { setProfileOpen(false); openWishlist(); }}
                       >
                         ❤️ Saved Wishlist ({wishlistIds.length})
                       </button>
-                      <Link href="/" className={styles.dropLink} onClick={() => setProfileOpen(false)}>
-                        🔄 Compare History
-                      </Link>
+
+                      {myOrders && myOrders.length > 0 && (
+                        <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--color-bg-sunken)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-subtle)' }}>
+                          <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', fontWeight: 700 }}>Recent Order</div>
+                          <button 
+                            onClick={() => { setProfileOpen(false); openTracking(myOrders[0].orderNumber); }}
+                            style={{ background: 'none', border: 'none', padding: '2px 0 0', cursor: 'pointer', textAlign: 'left', display: 'flex', flexDirection: 'column' }}
+                          >
+                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-brand)' }}>{myOrders[0].orderNumber}</span>
+                            <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Status: <strong>{myOrders[0].status}</strong></span>
+                          </button>
+                        </div>
+                      )}
                       
                       <div className={styles.colTitle} style={{ marginTop: 16 }}>Services Portal</div>
                       <Link href="/" className={styles.dropLink} onClick={() => setProfileOpen(false)}>

@@ -11,6 +11,7 @@ import {
 import { type Service, CONTACT } from '@/lib/data/services';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
+import { useOrderStore } from '@/lib/store/orderStore';
 import styles from './ServiceDetail.module.css';
 
 // 5 to 10 curated showcase screenshots/images per category
@@ -101,6 +102,7 @@ export function ServiceDetail({ service }: Props) {
 
   const { cart, addToCart, wishlistIds, toggleWishlist } = useCommerceStore();
   const { openCart } = useUIStore();
+  const { openCheckout } = useOrderStore();
 
   const screenshots = getPortfolioImages(service.category);
   const isWishlisted = wishlistIds.includes(service.id);
@@ -240,7 +242,15 @@ export function ServiceDetail({ service }: Props) {
               {/* Action Buttons */}
               <div className={styles.actionBtns}>
                 <button 
-                  className={`btn btn-primary btn-lg ${styles.cartBtn}`} 
+                  className={`btn btn-primary btn-lg ${styles.instantBtn}`} 
+                  onClick={() => openCheckout(service)}
+                  style={{ background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)', color: '#fff', border: 'none' }}
+                >
+                  <Zap size={18} fill="#fff" /> Instant Order & Invoice
+                </button>
+
+                <button 
+                  className={`btn btn-secondary btn-lg ${styles.cartBtn}`} 
                   onClick={handleAddToCart}
                 >
                   {isInCart ? 'View in Cart' : 'Add to Cart'} <ShoppingBag size={18} />
@@ -250,7 +260,7 @@ export function ServiceDetail({ service }: Props) {
                   className={`btn btn-secondary btn-lg ${styles.waBtn}`} 
                   onClick={handleWA}
                 >
-                  <MessageCircle size={18} /> WhatsApp Inquiry
+                  <MessageCircle size={18} /> WhatsApp
                 </button>
 
                 <button 
@@ -531,7 +541,14 @@ export function ServiceDetail({ service }: Props) {
             <div className={styles.stickyPrice}>{formatPrice(service.startingPrice)}</div>
           </div>
           <div className={styles.stickyActions}>
-            <button className="btn btn-primary btn-sm" onClick={handleAddToCart}>
+            <button 
+              className="btn btn-primary btn-sm" 
+              onClick={() => openCheckout(service)}
+              style={{ background: '#2563EB', color: '#fff' }}
+            >
+              <Zap size={14} fill="#fff" /> Instant Order
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={handleAddToCart}>
               {isInCart ? 'View Cart' : 'Add to Cart'} <ShoppingBag size={14} />
             </button>
           </div>

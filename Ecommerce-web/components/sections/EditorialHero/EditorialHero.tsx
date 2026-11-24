@@ -165,10 +165,7 @@ export function EditorialHero({ onSelectDivision }: EditorialHeroProps) {
               <div className={styles.ambientDeviceGlow} />
 
               {/* Floating Top Badge */}
-              <div className={styles.floatingPulsePill}>
-                <span className={styles.pulseDot} />
-                <span>{activeTab === 'str' ? '⚡ Next.js 16 + Flutter Engine • Live' : '📈 4.8x ROAS Performance Ads • Verified'}</span>
-              </div>
+              {/* Floating Pulse Pill Removed per user request */}
 
               {/* Tab Selector on Device */}
               <div className={styles.deviceTabBar}>
@@ -178,7 +175,7 @@ export function EditorialHero({ onSelectDivision }: EditorialHeroProps) {
                   onClick={() => setActiveTab('str')}
                 >
                   <Cpu size={14} />
-                  <span>Saampark Technology (STR)</span>
+                  <span>Technology (STR)</span>
                 </button>
                 <button
                   type="button"
@@ -186,7 +183,7 @@ export function EditorialHero({ onSelectDivision }: EditorialHeroProps) {
                   onClick={() => setActiveTab('scs')}
                 >
                   <TrendingUp size={14} />
-                  <span>Saampark Consultancy (SCS)</span>
+                  <span>Consultancy (SCS)</span>
                 </button>
               </div>
 
@@ -264,7 +261,7 @@ export function EditorialHero({ onSelectDivision }: EditorialHeroProps) {
 
                           <div className={styles.floatingPreviewTag}>
                             <Zap size={13} className={styles.tagIcon} />
-                            <span>Next.js 16 • Turbopack Core</span>
+                            <span>Cloud Architecture • 99.98% SLA</span>
                           </div>
                         </>
                       )}

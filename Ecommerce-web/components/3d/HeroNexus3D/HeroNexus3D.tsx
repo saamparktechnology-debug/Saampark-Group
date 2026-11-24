@@ -399,33 +399,6 @@ export function HeroNexus3D({ activeDivision = 'str' }: HeroNexus3DProps) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       aria-label="Saampark 3D Digital Nexus World"
-    >
-      {/* 3D Telemetry HUD Overlay */}
-      <div className={styles.hudOverlay}>
-        <div className={styles.hudTop}>
-          <div className={styles.hudBadge}>
-            <span className={styles.hudPulseDot} />
-            <span>SAAMPARK 3D WEBGL CORE</span>
-          </div>
-          <span className={styles.hudHint}>
-            {isHovered ? 'Drag / Tilt Active' : 'Hover to Interact 3D'}
-          </span>
-        </div>
-
-        <div className={styles.hudBottom}>
-          <div className={styles.nodeLegend}>
-            <div className={styles.legendItem}>
-              <span className={styles.legendDotSTR} />
-              <span>STR (21 Nodes)</span>
-            </div>
-            <div className={styles.legendItem}>
-              <span className={styles.legendDotSCS} />
-              <span>SCS (18 Nodes)</span>
-            </div>
-          </div>
-          <span className={styles.fpsBadge}>60-120 FPS</span>
-        </div>
-      </div>
-    </div>
+    />
   );
 }

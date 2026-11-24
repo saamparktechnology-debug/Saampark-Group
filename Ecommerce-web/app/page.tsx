@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function HomePage() {
   return (
-    <div style={{ paddingTop: 'calc(var(--nav-height) + 28px)' }}>
+    <div style={{ paddingTop: 'calc(var(--nav-height, 56px) + 8px)' }}>
       <PromoRibbon />
       <MarketplaceHome />
     </div>
