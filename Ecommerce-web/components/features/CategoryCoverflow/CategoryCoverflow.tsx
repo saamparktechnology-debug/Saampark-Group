@@ -39,8 +39,8 @@ const CATEGORIES = [
     tag: 'Cloud ERP & Portals',
     description: 'Tailored enterprise software, CRM, and billing systems.',
     image: '/assets/images/services/res-stock-equity.png',
-    accent: '#2563EB',
-    glowColor: 'rgba(37, 99, 235, 0.4)',
+    accent: '#9CAF88',
+    glowColor: 'rgba(156, 175, 136, 0.4)',
   },
   {
     id: 'digital-marketing',

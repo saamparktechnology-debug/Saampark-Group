@@ -200,20 +200,21 @@
 .catalogSectionHeader {
   text-align: center;
   margin-top: 14px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  scroll-margin-top: 80px;
 }
 
 .catalogBadge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: linear-gradient(135deg, var(--color-brand-subtle) 0%, rgba(30, 144, 255, 0.12) 100%);
-  color: var(--color-brand);
-  border: 1px solid rgba(235, 65, 44, 0.25);
+  background: rgba(156, 175, 136, 0.15);
+  color: #EB412C;
+  border: 1px solid rgba(156, 175, 136, 0.35);
   padding: 6px 14px;
   border-radius: var(--radius-full);
   font-size: 11px;
@@ -222,9 +223,15 @@
   text-transform: uppercase;
 }
 
+[data-theme="dark"] .catalogBadge {
+  background: rgba(255, 201, 60, 0.12);
+  color: #FFC93C;
+  border-color: rgba(255, 201, 60, 0.3);
+}
+
 .catalogTitle {
   font-family: var(--font-display);
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 800;
   color: var(--color-text-primary);
   line-height: 1.2;
@@ -232,23 +239,128 @@
 }
 
 .catalogSubtitle {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--color-text-secondary);
-  max-width: 600px;
+  max-width: 580px;
   line-height: 1.5;
   margin: 0;
 }
 
-/* ── 2. Centered Controls Bar (3D Liquid Glass Dock) ── */
+@media (max-width: 640px) {
+  .catalogSectionHeader {
+    margin-top: 8px;
+    margin-bottom: 12px;
+  }
+  .catalogTitle {
+    font-size: 1.35rem;
+  }
+  .catalogSubtitle {
+    font-size: 12px;
+    padding: 0 10px;
+  }
+}
+
+/* ── Unified Segmented Division Controller ── */
 .controlsSection {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: 34px;
+  margin-bottom: 18px;
   width: 100%;
-  position: relative;
-  z-index: 60;
-  perspective: 1000px;
+}
+
+.divisionSegmentWrap {
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-bg-sunken);
+  border: 1.5px solid var(--palette-sage-green);
+  border-radius: var(--radius-full);
+  padding: 4px;
+  gap: 4px;
+  box-shadow: 0 4px 16px rgba(156, 175, 136, 0.15);
+  max-width: 100%;
+}
+
+[data-theme="dark"] .divisionSegmentWrap {
+  background: #1E1F22;
+  border-color: #2B2D31;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.segmentBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  white-space: nowrap;
+}
+
+.segmentBtn:hover {
+  color: var(--color-text-primary);
+  background: rgba(156, 175, 136, 0.12);
+}
+
+[data-theme="dark"] .segmentBtn:hover {
+  background: rgba(217, 218, 220, 0.08);
+}
+
+.segmentBtnActive {
+  background: #EB412C !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 14px rgba(235, 65, 44, 0.35);
+}
+
+[data-theme="dark"] .segmentBtnActive {
+  background: #FFC93C !important;
+  color: #1E1F22 !important;
+  box-shadow: 0 4px 14px rgba(255, 201, 60, 0.35);
+}
+
+.segmentBadge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.08);
+  color: inherit;
+}
+
+.segmentBtnActive .segmentBadge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #FFFFFF;
+}
+
+[data-theme="dark"] .segmentBtnActive .segmentBadge {
+  background: rgba(0, 0, 0, 0.18);
+  color: #1E1F22;
+}
+
+@media (max-width: 640px) {
+  .divisionSegmentWrap {
+    width: 100%;
+    justify-content: space-between;
+    padding: 3px;
+    gap: 2px;
+  }
+  .segmentBtn {
+    flex: 1;
+    justify-content: center;
+    padding: 7px 8px;
+    font-size: 11px;
+    gap: 4px;
+  }
+  .segmentBadge {
+    font-size: 9.5px;
+    padding: 1px 4px;
+  }
 }
 
 .controlsCenteredWrapper {
@@ -316,7 +428,7 @@
 }
 
 [data-theme="dark"] .controlBtn {
-  background: linear-gradient(135deg, rgba(14, 25, 45, 0.75) 0%, rgba(9, 15, 28, 0.85) 100%);
+  background: linear-gradient(135deg, rgba(43, 45, 49, 0.75) 0%, rgba(30, 31, 34, 0.85) 100%);
   border: 1.5px solid rgba(255, 255, 255, 0.14);
   box-shadow: 
     0 12px 32px -6px rgba(0, 0, 0, 0.6),
@@ -334,7 +446,7 @@
 }
 
 [data-theme="dark"] .controlBtn:hover {
-  background: linear-gradient(135deg, rgba(19, 34, 60, 0.85) 0%, rgba(12, 22, 38, 0.92) 100%);
+  background: linear-gradient(135deg, rgba(43, 45, 49, 0.85) 0%, rgba(12, 22, 38, 0.92) 100%);
   border-color: var(--color-brand);
   box-shadow: 
     0 18px 42px -6px rgba(235, 65, 44, 0.28),
@@ -469,7 +581,7 @@
 }
 
 [data-theme="dark"] .groupDropdownMenu {
-  background: linear-gradient(180deg, rgba(14, 25, 45, 0.94) 0%, rgba(7, 13, 24, 0.96) 100%);
+  background: linear-gradient(180deg, rgba(43, 45, 49, 0.94) 0%, rgba(7, 13, 24, 0.96) 100%);
   border: 1.5px solid rgba(255, 255, 255, 0.15);
   box-shadow: 
     0 24px 60px -10px rgba(0, 0, 0, 0.75),
@@ -571,7 +683,7 @@
 }
 
 [data-theme="dark"] .megaExplorerPopover {
-  background: linear-gradient(180deg, rgba(14, 25, 45, 0.95) 0%, rgba(8, 14, 25, 0.98) 100%);
+  background: linear-gradient(180deg, rgba(43, 45, 49, 0.95) 0%, rgba(8, 14, 25, 0.98) 100%);
   border: 1.5px solid rgba(255, 255, 255, 0.14);
   box-shadow: 
     0 30px 80px -15px rgba(0, 0, 0, 0.8),
@@ -894,7 +1006,7 @@
 }
 
 [data-theme="dark"] .chipBtn {
-  background: linear-gradient(135deg, rgba(14, 25, 45, 0.72) 0%, rgba(9, 15, 28, 0.82) 100%);
+  background: #2B2D31;
   border-color: rgba(255, 255, 255, 0.1);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
 }
@@ -969,7 +1081,7 @@
 }
 
 [data-theme="dark"] .resultsBar {
-  background: linear-gradient(135deg, rgba(14, 25, 45, 0.72) 0%, rgba(9, 15, 28, 0.82) 100%);
+  background: linear-gradient(135deg, rgba(43, 45, 49, 0.72) 0%, rgba(30, 31, 34, 0.82) 100%);
   border: 1.5px solid rgba(255, 255, 255, 0.12);
   box-shadow: 
     0 12px 32px -8px rgba(0, 0, 0, 0.55),
@@ -1690,7 +1802,7 @@
 }
 
 [data-theme="dark"] .wishBtn {
-  background: rgba(14, 25, 45, 0.85);
+  background: rgba(43, 45, 49, 0.85);
   border-color: rgba(255, 255, 255, 0.2);
   color: #CBD5E1;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.25);
@@ -1733,7 +1845,7 @@
 }
 
 [data-theme="dark"] .quickViewBtn {
-  background: rgba(14, 25, 45, 0.92);
+  background: rgba(43, 45, 49, 0.92);
   border-color: var(--color-brand);
   color: white;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.25);
@@ -1978,7 +2090,7 @@
 }
 
 [data-theme="dark"] .emptyState {
-  background: linear-gradient(145deg, rgba(14, 25, 45, 0.75) 0%, rgba(8, 14, 25, 0.85) 100%);
+  background: linear-gradient(145deg, rgba(43, 45, 49, 0.75) 0%, rgba(8, 14, 25, 0.85) 100%);
   border-color: rgba(255, 255, 255, 0.15);
   box-shadow: 0 12px 35px -8px rgba(0, 0, 0, 0.6);
 }
@@ -2124,7 +2236,7 @@
 }
 
 [data-theme="dark"] .telemetryStrip {
-  background: linear-gradient(135deg, rgba(14, 25, 45, 0.72) 0%, rgba(9, 15, 28, 0.85) 100%);
+  background: linear-gradient(135deg, rgba(43, 45, 49, 0.72) 0%, rgba(30, 31, 34, 0.85) 100%);
   border-color: rgba(255, 201, 60, 0.2);
   color: #94A3B8;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);

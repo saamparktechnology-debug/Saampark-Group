@@ -139,7 +139,7 @@ function CategorySectionBlock({
         <div className={styles.catHeaderLeft}>
           <span
             className={styles.catGroupTag}
-            style={{ color: group.id === 'technology' ? 'var(--color-electric-blue)' : 'var(--palette-tomato-red)' }}
+            style={{ color: group.id === 'technology' ? 'var(--palette-sage-green, #9CAF88)' : 'var(--palette-tomato-red, #EB412C)' }}
           >
             {group.name.toUpperCase()}
           </span>
@@ -383,8 +383,8 @@ function MarketplaceContent() {
     const originalPrice = getOriginalPrice(svc.startingPrice);
     const cardGlow =
       svc.group === 'technology'
-        ? 'rgba(37, 99, 235, 0.5)'
-        : 'rgba(235, 65, 44, 0.5)';
+        ? 'rgba(156, 175, 136, 0.45)'
+        : 'rgba(235, 65, 44, 0.45)';
 
     const techBadge =
       svc.group === 'technology'
@@ -459,7 +459,7 @@ function MarketplaceContent() {
               style={{
                 background:
                   svc.group === 'technology'
-                    ? 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)'
+                    ? 'linear-gradient(135deg, #9CAF88 0%, #7E916C 100%)'
                     : 'linear-gradient(135deg, #EB412C 0%, #C22F1D 100%)',
               }}
             >
@@ -589,27 +589,17 @@ function MarketplaceContent() {
           <DivisionsShowcase onSelectDivision={handleHeroSelectDivision} />
 
           {/* ────────────────────────────────────────────────────────
-              6. SECTION HEADER (Cinematic Technical Telemetry HUD)
+              6. SECTION HEADER & DIVISION CONTROLLER (Clean, Unslopped)
              ──────────────────────────────────────────────────────── */}
           <div id="marketplace-catalog" className={styles.catalogSectionHeader}>
-            <div className={styles.telemetryHUD}>
-              <span className={styles.catalogBadge}>
-                <Sparkles size={13} /> LIVE PRODUCT &amp; SERVICES ENGINE
-              </span>
-              <div className={styles.telemetryStrip}>
-                <span className={styles.telemetryItem}><span className={styles.telemetryDot} /> 39 NODES ACTIVE</span>
-                <span className={styles.telemetryDivider}>|</span>
-                <span className={styles.telemetryItem}>⚡ 99.98% SLA</span>
-                <span className={styles.telemetryDivider}>|</span>
-                <span className={styles.telemetryItem}>🛡️ ISO 9001:2015</span>
-                <span className={styles.telemetryDivider}>|</span>
-                <span className={styles.telemetryItem}>★ 4.9/5 CSAT</span>
-              </div>
+            <div className={styles.catalogBadge}>
+              <Sparkles size={13} />
+              <span>OFFICIAL CATALOG • {totalServicesCount} VERIFIED SOLUTIONS</span>
             </div>
 
-            <h1 className={styles.catalogTitle}>Explore Verified Engineering &amp; Strategic Solutions</h1>
+            <h2 className={styles.catalogTitle}>Browse Solutions &amp; Services</h2>
             <p className={styles.catalogSubtitle}>
-              Tailored architecture, production-ready codebases, verified compliance &amp; performance growth
+              ISO 9001:2015 verified software architecture, marketing operations &amp; business consulting.
             </p>
           </div>
 

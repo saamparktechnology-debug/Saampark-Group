@@ -131,8 +131,21 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #2563EB;
-  box-shadow: 0 0 6px #2563EB;
+  background: #9CAF88;
+  box-shadow: 0 0 6px #9CAF88;
+}
+
+[data-theme="dark"] .legendDotSTR {
+  background: #D9DADC;
+  box-shadow: 0 0 6px #D9DADC;
+}
+
+@media (max-width: 640px) {
+  .canvasContainer {
+    min-height: 140px !important;
+    height: 140px !important;
+    border-radius: 14px;
+  }
 }
 
 .legendDotSCS {

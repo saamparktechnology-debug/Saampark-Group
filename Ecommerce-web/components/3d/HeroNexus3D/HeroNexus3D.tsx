@@ -51,17 +51,19 @@ export function HeroNexus3D({ activeDivision = 'str' }: HeroNexus3DProps) {
     dirLight.position.set(4, 5, 6);
     scene.add(dirLight);
 
-    const bluePointLight = new THREE.PointLight(0x2563eb, 3, 10);
-    bluePointLight.position.set(-1.8, 0.5, 2);
-    scene.add(bluePointLight);
+    const strColorHex = isDark ? 0xd9dadc : 0x9caf88; // Silver in dark, Sage in light
+    const scsColorHex = isDark ? 0xffc93c : 0xeb412c; // Yellow in dark, Tomato Red in light
 
-    const scsColorHex = isDark ? 0xffc93c : 0xeb412c;
+    const strPointLight = new THREE.PointLight(strColorHex, isDark ? 2.5 : 2.0, 10);
+    strPointLight.position.set(-1.8, 0.5, 2);
+    scene.add(strPointLight);
+
     const scsPointLight = new THREE.PointLight(scsColorHex, 3, 10);
     scsPointLight.position.set(1.8, 0.5, 2);
     scene.add(scsPointLight);
 
     // ─────────────────────────────────────────────────────────────
-    // A. STR ENGINEERING CORE (Left Architecture: Blue / Cyan)
+    // A. STR ENGINEERING CORE (Left Architecture: Sage/Silver in Light, Silver in Dark)
     // ─────────────────────────────────────────────────────────────
     const strGroup = new THREE.Group();
     strGroup.position.set(-1.45, 0, 0);
@@ -69,10 +71,10 @@ export function HeroNexus3D({ activeDivision = 'str' }: HeroNexus3DProps) {
     // 1. Outer Icosahedron Wireframe
     const icoGeom = new THREE.IcosahedronGeometry(0.85, 1);
     const icoWireMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
+      color: strColorHex,
       wireframe: true,
       transparent: true,
-      opacity: isDark ? 0.6 : 0.45,
+      opacity: isDark ? 0.6 : 0.5,
     });
     const strWireframe = new THREE.Mesh(icoGeom, icoWireMat);
     strGroup.add(strWireframe);
@@ -80,7 +82,7 @@ export function HeroNexus3D({ activeDivision = 'str' }: HeroNexus3DProps) {
     // 2. Inner Crystal Polyhedron
     const innerGeom = new THREE.DodecahedronGeometry(0.55, 0);
     const innerMat = new THREE.MeshPhysicalMaterial({
-      color: 0x2563eb,
+      color: isDark ? 0x2b2d31 : 0x9caf88,
       metalness: 0.85,
       roughness: 0.15,
       clearcoat: 1.0,
@@ -93,7 +95,7 @@ export function HeroNexus3D({ activeDivision = 'str' }: HeroNexus3DProps) {
     // 3. Dual Orbital Rings
     const ringGeom1 = new THREE.TorusGeometry(1.15, 0.02, 16, 64);
     const ringMat1 = new THREE.MeshBasicMaterial({
-      color: 0x2563eb,
+      color: strColorHex,
       transparent: true,
       opacity: 0.6,
     });
@@ -103,9 +105,9 @@ export function HeroNexus3D({ activeDivision = 'str' }: HeroNexus3DProps) {
 
     const ringGeom2 = new THREE.TorusGeometry(1.3, 0.015, 16, 64);
     const ringMat2 = new THREE.MeshBasicMaterial({
-      color: 0x06b6d4,
+      color: 0x10b981, // Lime neon touchup
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.45,
     });
     const strRing2 = new THREE.Mesh(ringGeom2, ringMat2);
     strRing2.rotation.y = Math.PI / 4;
@@ -169,7 +171,7 @@ export function HeroNexus3D({ activeDivision = 'str' }: HeroNexus3DProps) {
     const curve1 = new THREE.CatmullRomCurve3(curvePoints1);
     const curveGeom1 = new THREE.TubeGeometry(curve1, 40, 0.015, 8, false);
     const curveMat1 = new THREE.MeshBasicMaterial({
-      color: 0x60a5fa,
+      color: strColorHex,
       transparent: true,
       opacity: 0.45,
     });
@@ -211,9 +213,9 @@ export function HeroNexus3D({ activeDivision = 'str' }: HeroNexus3DProps) {
     for (let i = 0; i < nodeCount; i++) {
       const isTechNode = i < 21; // 21 STR services, 18 SCS services
       const mat = new THREE.MeshBasicMaterial({
-        color: isTechNode ? 0x38bdf8 : scsColorHex,
+        color: isTechNode ? strColorHex : scsColorHex,
         transparent: true,
-        opacity: 0.8,
+        opacity: 0.85,
       });
 
       const nodeMesh = new THREE.Mesh(nodeGeom, mat);

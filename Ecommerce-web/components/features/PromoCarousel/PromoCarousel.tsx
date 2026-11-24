@@ -71,8 +71,8 @@ const SLIDES: Slide[] = [
     badgeIcon: Smartphone,
     href: '/technology/app-development/hybrid',
     image: '/assets/images/hybrid-app.jpg',
-    accent: '#2563EB',
-    glowColor: 'rgba(37, 99, 235, 0.45)',
+    accent: '#9CAF88',
+    glowColor: 'rgba(156, 175, 136, 0.45)',
   },
 ];
 
