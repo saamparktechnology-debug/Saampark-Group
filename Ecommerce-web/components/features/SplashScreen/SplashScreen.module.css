@@ -39,7 +39,7 @@
   border: 1px solid rgba(0, 212, 200, 0.25);
   border-radius: 28px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6),
-              0 0 40px rgba(0, 180, 166, 0.15),
+              0 0 40px var(--color-brand-subtle),
               inset 0 1px 0 rgba(255, 255, 255, 0.1);
   max-width: 440px;
   width: 90%;
@@ -84,7 +84,7 @@
 
 .ringProgress {
   fill: none;
-  stroke: #00D4C8;
+  stroke: #FFC93C;
   stroke-width: 4;
   stroke-linecap: round;
   stroke-dasharray: 465;
@@ -116,7 +116,7 @@
 @keyframes logoPulse {
   0% {
     transform: scale(0.98);
-    filter: drop-shadow(0 0 12px rgba(0, 180, 166, 0.4));
+    filter: drop-shadow(0 0 12px rgba(235, 65, 44, 0.4));
   }
   100% {
     transform: scale(1.03);
@@ -135,7 +135,7 @@
   font-size: 24px;
   font-weight: 800;
   letter-spacing: 0.12em;
-  background: linear-gradient(135deg, #FFFFFF 0%, #E2F8F6 50%, #00D4C8 100%);
+  background: linear-gradient(135deg, #FFFFFF 0%, #E2F8F6 50%, #FFC93C 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin: 0 0 6px 0;
@@ -170,7 +170,7 @@
 
 .progressBarFill {
   height: 100%;
-  background: linear-gradient(90deg, #00B4A6 0%, #00D4C8 50%, #A5F3FC 100%);
+  background: linear-gradient(90deg, #EB412C 0%, #FFC93C 50%, #A5F3FC 100%);
   border-radius: 99px;
   transition: width 80ms linear;
   box-shadow: 0 0 12px rgba(0, 212, 200, 0.9);
@@ -186,7 +186,7 @@
 .isoBadge {
   font-size: 11px;
   font-weight: 600;
-  color: #00D4C8;
+  color: #FFC93C;
   background: rgba(0, 212, 200, 0.12);
   padding: 3px 8px;
   border-radius: 6px;

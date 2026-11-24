@@ -86,15 +86,7 @@ export const SERVICE_GROUPS: GroupMetadata[] = [
     shortName: 'Technology',
     description: 'Web development, mobile apps, custom software systems, AI automation, maintenance, and hosting',
     icon: 'Globe',
-    color: '#00B4A6',
-  },
-  {
-    id: 'research',
-    name: 'Saampark Research',
-    shortName: 'Research',
-    description: 'Online related services, trading, management research, and stock market analysis',
-    icon: 'LineChart',
-    color: '#8B5CF6',
+    color: '#2563EB',
   },
   {
     id: 'consultancy',
@@ -102,7 +94,7 @@ export const SERVICE_GROUPS: GroupMetadata[] = [
     shortName: 'Consultancy',
     description: 'Graphic design, AI video, digital marketing, loans, insurance, education, and legal',
     icon: 'Briefcase',
-    color: '#4CAF50',
+    color: '#EB412C',
   },
 ];
 
@@ -114,12 +106,6 @@ export const SERVICE_CATEGORIES: CategoryMetadata[] = [
   { id: 'ai-services', group: 'technology', name: 'AI Services', capacity: '5+', icon: 'Bot' },
   { id: 'maintenance-services', group: 'technology', name: 'Maintenance Services', capacity: '10+', icon: 'Wrench' },
   { id: 'hosting-services', group: 'technology', name: 'Hosting & Server Services', capacity: '10+', icon: 'Server' },
-
-  // ── Research ──
-  { id: 'online-related-services', group: 'research', name: 'Online Related Services', capacity: '10+', icon: 'Search' },
-  { id: 'trading-related-services', group: 'research', name: 'Trading Related Services', capacity: '10+', icon: 'TrendingUp' },
-  { id: 'management-related-services', group: 'research', name: 'Management Related Services', capacity: '10+', icon: 'PieChart' },
-  { id: 'stock-market', group: 'research', name: 'Stock Market', capacity: 'Expandable', icon: 'BarChart3' },
 
   // ── Consultancy ──
   { id: 'graphic-design', group: 'consultancy', name: 'Graphic Design', capacity: 'Expandable', icon: 'Palette' },
@@ -186,7 +172,7 @@ export const strServices: Service[] = [
     isPopular: false,
     isFeatured: true,
     badge: '⚡ Special Offer',
-    color: '#00B4A6',
+    color: '#2563EB',
     slug: 'one-page-website',
     href: '/technology/web-development/one-page-website',
     icon: 'Globe', image: '/assets/images/services/str_web_onepage.png',
@@ -394,7 +380,7 @@ export const strServices: Service[] = [
     features: ['Student Portal', 'Fee Management', 'Attendance', 'Timetable', 'Result Management'],
     startingPrice: null, priceType: 'on-request', deliveryDays: null,
     isPopular: true, isFeatured: false,
-    color: '#8B5CF6', slug: 'school-management', href: '/technology/specialized/school-management', icon: 'GraduationCap',
+    color: '#2563EB', slug: 'school-management', href: '/technology/specialized/school-management', icon: 'GraduationCap',
   },
   {
     id: 'str-spec-elearning',
@@ -405,7 +391,7 @@ export const strServices: Service[] = [
     features: ['Course Management', 'Video Streaming', 'Quiz System', 'Certificate', 'Payment'],
     startingPrice: null, priceType: 'on-request', deliveryDays: null,
     isPopular: false, isFeatured: false,
-    color: '#EC4899', slug: 'elearning-platform', href: '/technology/specialized/elearning', icon: 'BookOpen',
+    color: '#2563EB', slug: 'elearning-platform', href: '/technology/specialized/elearning', icon: 'BookOpen',
   },
   {
     id: 'str-spec-realestate',
@@ -450,7 +436,7 @@ export const strServices: Service[] = [
     features: ['Lead Management', 'Client Tracking', 'Follow-up Reminders', 'Sales Pipeline', 'Analytics'],
     startingPrice: null, priceType: 'on-request', deliveryDays: null,
     isPopular: false, isFeatured: false,
-    color: '#00B4A6', slug: 'crm-software', href: '/technology/software/crm', icon: 'Users',
+    color: '#2563EB', slug: 'crm-software', href: '/technology/software/crm', icon: 'Users',
   },
 
   // ── Maintenance Services (2) ──────────────────
@@ -463,7 +449,7 @@ export const strServices: Service[] = [
     features: ['Regular Backups', 'Security Patching', 'Uptime Monitoring', 'Content Updates', 'Bug Fixing', 'Speed Optimization'],
     startingPrice: 999, priceType: 'monthly', deliveryDays: null,
     isPopular: true, isFeatured: true, badge: '🛠️ AMC Managed',
-    color: '#00B4A6', slug: 'website-maintenance', href: '/technology/web-development/one-page-website', icon: 'Wrench',
+    color: '#2563EB', slug: 'website-maintenance', href: '/technology/web-development/one-page-website', icon: 'Wrench',
   },
   {
     id: 'str-maint-app',
@@ -691,10 +677,10 @@ export const scsServices: Service[] = [
     icon: 'Search',
   },
 
-  // ── Online Related Services (3 under Saampark Research) ───────────────
+  // ── Google Business Profile (3 under Saampark Consultancy) ──────────
   {
     id: 'scs-gbp-basic',
-    group: 'research', primaryCategory: 'online-related-services',
+    group: 'consultancy', primaryCategory: 'digital-marketing',
     entity: 'scs',
     category: 'google-business', sector: 'seo-local',
     name: 'GBP — Basic Management',
@@ -718,7 +704,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-gbp-regular',
-    group: 'research', primaryCategory: 'online-related-services',
+    group: 'consultancy', primaryCategory: 'digital-marketing',
     entity: 'scs',
     category: 'google-business', sector: 'seo-local',
     name: 'GBP — Regular & SEO',
@@ -745,7 +731,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-gbp-advanced',
-    group: 'research', primaryCategory: 'online-related-services',
+    group: 'consultancy', primaryCategory: 'digital-marketing',
     entity: 'scs',
     category: 'google-business', sector: 'seo-local',
     name: 'GBP — Advanced Local SEO',
@@ -785,7 +771,7 @@ export const scsServices: Service[] = [
     deliveryDays: 2,
     isPopular: false,
     isFeatured: false,
-    color: '#8B5CF6',
+    color: '#EB412C',
     slug: 'simple-video',
     href: '/consultancy/video-ai/simple-video',
     icon: 'Video',
@@ -842,7 +828,7 @@ export const scsServices: Service[] = [
     deliveryDays: 3,
     isPopular: false,
     isFeatured: false,
-    color: '#00B4A6',
+    color: '#EB412C',
     slug: 'motion-ai-video',
     href: '/consultancy/video-ai/motion-ai-video',
     icon: 'Sparkles',
@@ -862,7 +848,7 @@ export const scsServices: Service[] = [
     isPopular: true,
     isFeatured: true,
     badge: '🤖 AI-Powered',
-    color: '#8B5CF6',
+    color: '#EB412C',
     slug: 'full-ai-video',
     href: '/consultancy/video-ai/full-ai-video',
     icon: 'Sparkles',
@@ -1093,10 +1079,10 @@ export const CONTACT = {
 // PROMOTIONAL RIBBON ITEMS
 // ─────────────────────────────────────────
 export const PROMO_ITEMS = [
-  { label: '⚡ One Page Website', value: 'Starting ₹1,999', href: '/technology/web-development/one-page-website', color: '#00B4A6' },
+  { label: '⚡ One Page Website', value: 'Starting ₹1,999', href: '/technology/web-development/one-page-website', color: '#2563EB' },
   { label: '🔥 Social Media Management', value: 'Just ₹499/month', href: '/consultancy/digital-marketing/social-media', color: '#1877F2' },
   { label: '📱 Dynamic Website', value: 'Starting ₹11,999', href: '/technology/web-development/dynamic-website', color: '#F4511E' },
-  { label: '🤖 Full AI Video', value: 'Starting ₹1,499', href: '/consultancy/video-ai/full-ai-video', color: '#8B5CF6' },
+  { label: '🤖 Full AI Video', value: 'Starting ₹1,499', href: '/consultancy/video-ai/full-ai-video', color: '#EB412C' },
   { label: '📢 Meta Ads Weekly', value: 'Starting ₹600', href: '/consultancy/ads-management/meta-ads', color: '#0866FF' },
   { label: '🛒 E-Commerce Website', value: 'Starting ₹21,999', href: '/technology/web-development/ecommerce-website', color: '#4CAF50' },
   { label: '🔍 Google Ads Monthly', value: 'Starting ₹3,500', href: '/consultancy/ads-management/google-ads', color: '#4285F4' },

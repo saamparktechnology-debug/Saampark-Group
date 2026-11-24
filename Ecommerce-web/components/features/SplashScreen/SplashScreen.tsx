@@ -52,7 +52,7 @@ export function SplashScreen({ onComplete }: Props) {
       const cx = width / 2;
       const cy = height / 2;
       const glowGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.max(width, height) * 0.45);
-      glowGrad.addColorStop(0, 'rgba(0, 180, 166, 0.18)');
+      glowGrad.addColorStop(0, 'rgba(235, 65, 44, 0.18)');
       glowGrad.addColorStop(0.5, 'rgba(0, 212, 200, 0.05)');
       glowGrad.addColorStop(1, 'rgba(6, 11, 19, 0)');
       ctx.fillStyle = glowGrad;
@@ -67,7 +67,8 @@ export function SplashScreen({ onComplete }: Props) {
         if (n.x < 0 || n.x > width) n.vx *= -1;
         if (n.y < 0 || n.y > height) n.vy *= -1;
 
-        ctx.fillStyle = `rgba(0, 212, 200, ${n.alpha})`;
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        ctx.fillStyle = isDark ? `rgba(255, 201, 60, ${n.alpha})` : `rgba(235, 65, 44, ${n.alpha})`;
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
         ctx.fill();
@@ -77,7 +78,9 @@ export function SplashScreen({ onComplete }: Props) {
           const n2 = nodes[j];
           const dist = Math.hypot(n.x - n2.x, n.y - n2.y);
           if (dist < 120) {
-            ctx.strokeStyle = `rgba(0, 180, 166, ${0.15 * (1 - dist / 120)})`;
+            ctx.strokeStyle = isDark
+              ? `rgba(255, 201, 60, ${0.15 * (1 - dist / 120)})`
+              : `rgba(156, 175, 136, ${0.25 * (1 - dist / 120)})`;
             ctx.lineWidth = 0.8;
             ctx.beginPath();
             ctx.moveTo(n.x, n.y);

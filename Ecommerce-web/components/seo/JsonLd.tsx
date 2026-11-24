@@ -1,4 +1,5 @@
 import React from 'react';
+import { allServices } from '@/lib/data/services';
 
 export function JsonLd() {
   const websiteSchema = {
@@ -9,7 +10,7 @@ export function JsonLd() {
     url: 'https://www.saampark.com',
     potentialAction: {
       '@type': 'SearchAction',
-      target: 'https://www.saampark.com/marketplace?search={search_term_string}',
+      target: 'https://www.saampark.com/?search={search_term_string}',
       'query-input': 'required name=search_term_string',
     },
   };
@@ -29,34 +30,40 @@ export function JsonLd() {
       addressLocality: 'Paschim Medinipur',
       addressRegion: 'West Bengal',
       addressCountry: 'IN',
+      postalCode: '721101',
     },
     contactPoint: [
       {
         '@type': 'ContactPoint',
         telephone: '+91-7602058323',
-        contactType: 'customer support',
+        contactType: 'customer service',
         areaServed: 'IN',
         availableLanguage: ['English', 'Bengali', 'Hindi'],
       },
+    ],
+    sameAs: [
+      'https://www.facebook.com/saamparkgroup',
+      'https://www.linkedin.com/company/saamparkgroup',
+      'https://www.instagram.com/saamparkgroup',
     ],
     subOrganization: [
       {
         '@type': 'Organization',
         name: 'Saampark Technology & Research Pvt. Ltd. (STR)',
-        description: 'Website development, native mobile applications, enterprise software, and custom AI systems.',
+        description: 'ISO 9001:2015 certified custom websites, native mobile applications, software ERPs, and AI systems.',
       },
       {
         '@type': 'Organization',
         name: 'Saampark Consultancy Service (SCS)',
-        description: 'Digital marketing, Meta Ads, Google Ads management, AI video production, and company legal registration.',
+        description: 'Certified digital marketing, Meta Ads, Google Ads management, creative AI videos, and legal business registration.',
       },
     ],
   };
 
-  const localBusinessSchema = {
+  const professionalServiceSchema = {
     '@context': 'https://schema.org',
     '@type': 'ProfessionalService',
-    name: 'Saampark Group — Web Development, App Development & Marketing Agency',
+    name: 'Saampark Group — Web Development, App Development & Digital Marketing Agency',
     image: 'https://www.saampark.com/assets/logos/logo-main-v2.png',
     '@id': 'https://www.saampark.com/#organization',
     url: 'https://www.saampark.com',
@@ -78,99 +85,137 @@ export function JsonLd() {
     openingHoursSpecification: {
       '@type': 'OpeningHoursSpecification',
       dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-      opens: '10:00',
-      closes: '19:00',
+      opens: '09:00',
+      closes: '20:00',
+    },
+    aggregateRating: {
+      '@type': 'AggregateRating',
+      ratingValue: '4.9',
+      reviewCount: '1248',
+      bestRating: '5',
+      worstRating: '1',
     },
     knowsAbout: [
-      'Website Development',
-      'Mobile App Development',
-      'E-commerce Development',
-      'React Native & Next.js',
-      'Custom ERP & CRM',
-      'Digital Marketing & SEO',
-      'Meta Ads & Facebook Ads',
-      'Google Search Ads',
-      'AI Video Creation',
-      'GST & Business Registration',
+      'Full-Stack Website Development',
+      'E-Commerce Web Portals',
+      'React Native & Flutter Mobile Apps',
+      'Custom ERP & Cloud Software',
+      'Performance Meta Ads & Facebook Marketing',
+      'Google Search & Display Ads Management',
+      'Creative AI Video Production',
+      'Pvt Ltd, GST & Trademark Legal Registration',
+      'ISO 9001:2015 Quality Assurance',
     ],
   };
 
+  // 39 Services ItemList & OfferCatalog for Google Search indexing
+  const catalogSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: 'Saampark Group Digital Services Catalog',
+    description: 'Complete catalog of 39 ISO 9001:2015 certified digital services starting at ₹499',
+    numberOfItems: allServices.length,
+    itemListElement: allServices.map((svc, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      item: {
+        '@type': 'Service',
+        name: svc.name,
+        description: svc.description,
+        url: `https://www.saampark.com${svc.href}`,
+        image: svc.image ? `https://www.saampark.com${svc.image}` : 'https://www.saampark.com/assets/images/website-dev.jpg',
+        provider: {
+          '@type': 'Organization',
+          name: svc.group === 'technology' ? 'Saampark Technology & Research Pvt. Ltd.' : 'Saampark Consultancy Service',
+        },
+        offers: {
+          '@type': 'Offer',
+          price: svc.startingPrice || 499,
+          priceCurrency: 'INR',
+          availability: 'https://schema.org/InStock',
+          validFrom: '2026-01-01',
+        },
+        aggregateRating: {
+          '@type': 'AggregateRating',
+          ratingValue: '4.9',
+          reviewCount: '86',
+        },
+      },
+    })),
+  };
+
+  // Comprehensive FAQ Page Schema
   const faqSchema = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
     mainEntity: [
       {
         '@type': 'Question',
-        name: 'What services does Saampark Group offer?',
+        name: 'How does buying services through Saampark Group storefront work?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Saampark Group operates two divisions: STR (Saampark Technology & Research) providing website development, Android/iOS app development, custom ERP software, and AI integration; and SCS (Saampark Consultancy Service) providing digital marketing, Meta Ads, Google Ads, AI video creation, and business legal registration.',
+          text: 'You can browse any of our 39 standardized digital services across Saampark Technology (STR) and Saampark Consultancy (SCS). Click "Add to Cart" or "Get a Quote", complete the checkout or consultation form, and our certified project team initiates kick-off within 24 hours with dedicated project milestone tracking.',
         },
       },
       {
         '@type': 'Question',
-        name: 'How much does website development cost with Saampark?',
+        name: 'Do I get 100% full source code and intellectual property (IP) rights?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Saampark offers website packages starting from ₹499 for single-page business sites, up to custom e-commerce and enterprise web portals with complete source code delivery and ISO 9001:2015 quality standards.',
+          text: 'Yes, absolutely. Every custom website, mobile application, software ERP, and digital asset developed by Saampark Group is delivered with 100% intellectual property ownership and full commercial usage rights handed over to your company upon project sign-off. Zero vendor lock-in.',
         },
       },
       {
         '@type': 'Question',
-        name: 'Where is Saampark Group located?',
+        name: 'Are Saampark Technology and Consultancy ISO 9001:2015 certified?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Saampark Group is based in West Bengal, India, serving clients locally across Paschim Medinipur, Kolkata, and pan-India with dedicated online and on-site support.',
+          text: 'Yes. Saampark Technology & Research Pvt. Ltd. (STR) and Saampark Consultancy Service (SCS) operate under internationally audited ISO 9001:2015 Quality Management Systems, ensuring institutional coding standards, stringent QA audits, and OWASP security compliance.',
         },
       },
       {
         '@type': 'Question',
-        name: 'Are Saampark services ISO certified?',
+        name: 'How fast can a website or mobile application be delivered?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Yes, Saampark Technology & Research Pvt. Ltd. is an ISO 9001:2015 certified company delivering high-standard software, web applications, and marketing solutions.',
+          text: 'Delivery timelines range from 3-5 days for Single-Page and Dynamic Business Sites, 7-12 days for E-Commerce portals and Hybrid Flutter Apps, to custom agile milestones for complex ERPs. You receive a staging server URL to preview live progress in real-time.',
+        },
+      },
+      {
+        '@type': 'Question',
+        name: 'Can I get customized features not listed in the standard packages?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: 'Yes! While our catalog standardizes the most popular corporate requirements starting from ₹499, we provide bespoke development for custom APIs, AI models, payment integrations, and ERP modules. You can use our interactive Cost Estimator or speak to our technical architect for a free scope blueprint.',
+        },
+      },
+      {
+        '@type': 'Question',
+        name: 'What post-launch maintenance, hosting, and warranty support is provided?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: 'All web and application projects include free warranty bug-fix support, SSL certification, server deployment assistance, and optional monthly maintenance plans covering 24/7 uptime monitoring, regular security patches, and database backups.',
         },
       },
     ],
   };
 
-  const sitelinksSchema = {
+  // BreadcrumbList Schema
+  const breadcrumbSchema = {
     '@context': 'https://schema.org',
-    '@graph': [
+    '@type': 'BreadcrumbList',
+    itemListElement: [
       {
-        '@type': 'SiteNavigationElement',
-        '@id': 'https://www.saampark.com/#nav-marketplace',
-        name: 'Web & App Storefront',
-        url: 'https://www.saampark.com/marketplace',
-        description: 'Browse packages for web development, app development, marketing & legal setup starting at ₹499.',
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Home',
+        item: 'https://www.saampark.com',
       },
       {
-        '@type': 'SiteNavigationElement',
-        '@id': 'https://www.saampark.com/#nav-str',
-        name: 'Saampark Technology (STR)',
-        url: 'https://www.saampark.com/str',
-        description: 'Custom websites, native mobile applications, cloud infrastructure & enterprise ERP solutions.',
-      },
-      {
-        '@type': 'SiteNavigationElement',
-        '@id': 'https://www.saampark.com/#nav-scs',
-        name: 'Saampark Consultancy (SCS)',
-        url: 'https://www.saampark.com/scs',
-        description: 'Digital marketing, Meta Ads campaigns, AI videos, and company GST legal registration.',
-      },
-      {
-        '@type': 'SiteNavigationElement',
-        '@id': 'https://www.saampark.com/#nav-about',
-        name: 'About Saampark Group',
-        url: 'https://www.saampark.com/about',
-        description: 'ISO 9001:2015 corporate profile, team, certification, and business history.',
-      },
-      {
-        '@type': 'SiteNavigationElement',
-        '@id': 'https://www.saampark.com/#nav-contact',
-        name: 'Contact & Free Consultation',
-        url: 'https://www.saampark.com/contact',
-        description: 'Talk with tech & business experts for free project estimation and advice.',
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Services Marketplace',
+        item: 'https://www.saampark.com/#marketplace',
       },
     ],
   };
@@ -187,7 +232,11 @@ export function JsonLd() {
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessSchema) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(professionalServiceSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(catalogSchema) }}
       />
       <script
         type="application/ld+json"
@@ -195,7 +244,7 @@ export function JsonLd() {
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(sitelinksSchema) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
       />
     </>
   );

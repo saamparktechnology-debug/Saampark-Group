@@ -1,0 +1,160 @@
+.canvasContainer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 50%, rgba(37, 99, 235, 0.04) 0%, transparent 70%);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.canvasContainer:active {
+  cursor: grabbing;
+}
+
+[data-theme="dark"] .canvasContainer {
+  background: radial-gradient(circle at 50% 50%, rgba(37, 99, 235, 0.08) 0%, rgba(11, 18, 32, 0.5) 100%);
+}
+
+.webglCanvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+/* 3D HUD Overlay */
+.hudOverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px 16px;
+  z-index: 5;
+}
+
+.hudTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hudBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-family: var(--font-display, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  color: #2563EB;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="dark"] .hudBadge {
+  background: rgba(17, 24, 39, 0.85);
+  border-color: rgba(37, 99, 235, 0.45);
+  color: #60A5FA;
+}
+
+.hudPulseDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2563EB;
+  box-shadow: 0 0 8px #2563EB;
+  animation: hudPulse 2s infinite ease-in-out;
+}
+
+[data-theme="dark"] .hudPulseDot {
+  background: #38BDF8;
+  box-shadow: 0 0 8px #38BDF8;
+}
+
+@keyframes hudPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.5; }
+}
+
+.hudHint {
+  font-family: var(--font-body, sans-serif);
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748B;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 3px 8px;
+  border-radius: 6px;
+  backdrop-filter: blur(8px);
+}
+
+[data-theme="dark"] .hudHint {
+  color: #94A3B8;
+  background: rgba(17, 24, 39, 0.7);
+}
+
+.hudBottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.nodeLegend {
+  display: flex;
+  gap: 12px;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #475569;
+}
+
+[data-theme="dark"] .legendItem {
+  color: #CBD5E1;
+}
+
+.legendDotSTR {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2563EB;
+  box-shadow: 0 0 6px #2563EB;
+}
+
+.legendDotSCS {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #EB412C;
+  box-shadow: 0 0 6px #EB412C;
+}
+
+[data-theme="dark"] .legendDotSCS {
+  background: #FFC93C;
+  box-shadow: 0 0 6px #FFC93C;
+}
+
+.fpsBadge {
+  font-family: var(--font-display, monospace);
+  font-size: 9px;
+  font-weight: 800;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 2px 7px;
+  border-radius: 4px;
+}

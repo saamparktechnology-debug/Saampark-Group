@@ -32,8 +32,8 @@ function CanvasBackground() {
       colorIndex: number;
     }
 
-    const paletteLight = ['#00B4A6', '#1E90FF', '#4CAF50', '#8B5CF6', '#111827'];
-    const paletteDark  = ['#00B4A6', '#33C9BF', '#1E90FF', '#4CAF50', '#FFFFFF'];
+    const paletteLight = ['#EB412C', '#9CAF88', '#2563EB', '#F5A623', '#1F241D'];
+    const paletteDark  = ['#FFC93C', '#D9DADC', '#2563EB', '#34D399', '#FFFFFF'];
     
     const count   = Math.min(100, Math.floor(window.innerWidth / 15));
     const pts: P[]  = Array.from({ length: count }, () => ({
@@ -67,7 +67,7 @@ function CanvasBackground() {
 
       // Radial glows
       const g1 = ctx.createRadialGradient(canvas.width * 0.25, canvas.height * 0.4, 0, canvas.width * 0.25, canvas.height * 0.4, canvas.width * 0.4);
-      g1.addColorStop(0, isLight ? 'rgba(0,180,166,0.06)' : 'rgba(0,180,166,0.10)');
+      g1.addColorStop(0, isLight ? 'rgba(235,65,44,0.06)' : 'rgba(255,201,60,0.10)');
       g1.addColorStop(1, 'transparent');
       ctx.fillStyle = g1;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -117,7 +117,7 @@ function CanvasBackground() {
           if (dist < 100) {
             ctx.save();
             ctx.globalAlpha = (1 - dist / 100) * (isLight ? 0.08 : 0.12);
-            ctx.strokeStyle = isLight ? '#007A74' : '#00B4A6';
+            ctx.strokeStyle = isLight ? '#EB412C' : '#FFC93C';
             ctx.lineWidth   = 0.4;
             ctx.beginPath();
             ctx.moveTo(pts[i].x, pts[i].y);
@@ -159,12 +159,12 @@ export function Hero() {
   };
 
   const categories = [
-    { label: 'Websites',     icon: Globe,       href: '/marketplace?category=website',      color: '#00B4A6' },
+    { label: 'Websites',     icon: Globe,       href: '/marketplace?category=website',      color: '#EB412C' },
     { label: 'Mobile Apps',  icon: Smartphone,  href: '/marketplace?category=app',          color: '#1E90FF' },
-    { label: 'Software/ERP', icon: Database,    href: '/marketplace?category=software',     color: '#8B5CF6' },
-    { label: 'Digital Ads',  icon: Megaphone,   href: '/marketplace?category=meta-ads',     color: '#F4511E' },
-    { label: 'Local SEO',    icon: MapPin,      href: '/marketplace?category=google-business', color: '#4CAF50' },
-    { label: 'Company Registration', icon: FileText, href: '/marketplace?category=business-legal', color: '#EC4899' },
+    { label: 'Software/ERP', icon: Database,    href: '/marketplace?category=software',     color: '#2563EB' },
+    { label: 'Digital Ads',  icon: Megaphone,   href: '/marketplace?category=meta-ads',     color: '#EB412C' },
+    { label: 'Local SEO',    icon: MapPin,      href: '/marketplace?category=google-business', color: '#9CAF88' },
+    { label: 'Company Registration', icon: FileText, href: '/marketplace?category=business-legal', color: '#EB412C' },
   ];
 
   return (

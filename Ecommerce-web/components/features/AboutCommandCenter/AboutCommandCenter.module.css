@@ -14,7 +14,7 @@
 .heroBg {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 50% 0%, rgba(0,180,166,0.15) 0%, transparent 60%);
+  background: radial-gradient(circle at 50% 0%, var(--color-brand-subtle) 0%, transparent 60%);
   pointer-events: none;
 }
 
@@ -78,8 +78,8 @@
   height: 4px;
 }
 
-.divisionCard.str::before { background: linear-gradient(90deg, #00B4A6, #1E90FF); }
-.divisionCard.scs::before { background: linear-gradient(90deg, #4CAF50, #F5A623); }
+.divisionCard.str::before { background: linear-gradient(90deg, #2563EB, #06B6D4); }
+.divisionCard.scs::before { background: linear-gradient(90deg, #9CAF88, #EB412C); }
 
 .divHeader {
   display: flex;

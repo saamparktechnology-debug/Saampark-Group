@@ -8,6 +8,31 @@ export function RootWrapper({ children }: { children: React.ReactNode }) {
   const [showSplash, setShowSplash] = useState(true);
   const [appReady,  setAppReady]   = useState(false);
 
+  // Initialize Lenis Smooth 3D Scrolling
+  useEffect(() => {
+    let lenis: any;
+    import('lenis').then(({ default: Lenis }) => {
+      lenis = new Lenis({
+        duration: 1.15,
+        easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        smoothWheel: true,
+      });
+
+      function raf(time: number) {
+        lenis?.raf(time);
+        requestAnimationFrame(raf);
+      }
+
+      requestAnimationFrame(raf);
+    }).catch(() => {
+      // Fallback if dynamic import fails
+    });
+
+    return () => {
+      lenis?.destroy();
+    };
+  }, []);
+
   const handleSplashComplete = () => {
     setShowSplash(false);
     setAppReady(true);

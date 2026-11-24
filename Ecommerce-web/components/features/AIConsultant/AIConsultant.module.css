@@ -10,7 +10,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 30px rgba(0, 180, 166, 0.4);
+  box-shadow: 0 8px 30px var(--color-brand-subtle);
   z-index: 300;
   cursor: pointer;
   border: none;
@@ -19,7 +19,7 @@
 
 .floatBtn:hover {
   transform: scale(1.08) translateY(-2px);
-  box-shadow: 0 12px 35px rgba(0, 180, 166, 0.5);
+  box-shadow: 0 12px 35px var(--color-brand);
 }
 
 .botIcon {
@@ -196,7 +196,7 @@
 
 .userRow .bubble {
   background: var(--color-brand-subtle);
-  border-color: rgba(0, 180, 166, 0.15);
+  border-color: var(--color-border-brand);
   border-top-right-radius: 0;
 }
 
@@ -321,4 +321,19 @@
 .sendBtn:hover {
   background: var(--color-brand);
   color: var(--color-brand-on-brand);
+}
+
+@media (max-width: 600px) {
+  .chatWindow {
+    width: calc(100vw - 32px);
+    right: 16px;
+    bottom: 84px;
+    height: 460px;
+  }
+  .floatBtn {
+    bottom: 16px;
+    right: 16px;
+    width: 50px;
+    height: 50px;
+  }
 }

@@ -36,6 +36,10 @@ import {
   SlidersHorizontal,
   Wrench,
   Server,
+  Film,
+  Calculator,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   allServices,
@@ -51,6 +55,15 @@ import { PromoCarousel } from '../PromoCarousel/PromoCarousel';
 import { CategoryCoverflow } from '../CategoryCoverflow/CategoryCoverflow';
 import { SkeletonLoader } from '@/components/ui/SkeletonLoader/SkeletonLoader';
 import { ProductQuickViewModal } from './ProductQuickViewModal';
+import { Interactive3DCanvas } from '@/components/ui/Interactive3DCanvas/Interactive3DCanvas';
+import { GlassTrustMarquee } from '@/components/ui/GlassTrustMarquee/GlassTrustMarquee';
+import { InteractiveTiltCard } from '@/components/ui/InteractiveTiltCard/InteractiveTiltCard';
+import { BentoShowcase } from '@/components/sections/BentoShowcase/BentoShowcase';
+import { CostEstimator } from '@/components/features/CostEstimator/CostEstimator';
+import { InteractiveFAQ } from '@/components/features/InteractiveFAQ/InteractiveFAQ';
+import { EditorialHero } from '@/components/sections/EditorialHero/EditorialHero';
+import { DivisionsShowcase } from '@/components/sections/DivisionsShowcase/DivisionsShowcase';
+import { FeaturedShowcase3D } from '../FeaturedShowcase3D/FeaturedShowcase3D';
 import styles from './MarketplaceHome.module.css';
 
 // Dynamic Icon Map for Lucide Icons
@@ -97,6 +110,87 @@ function ServiceThumbnail({ src, alt, className }: { src: string; alt: string; c
   );
 }
 
+function CategorySectionBlock({
+  cat,
+  group,
+  catServices,
+  viewMode,
+  renderCard,
+}: {
+  cat: any;
+  group: any;
+  catServices: Service[];
+  viewMode: 'grid' | 'list' | 'cinematic';
+  renderCard: (svc: Service) => React.ReactNode;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const isHorizontal = viewMode === 'grid' && catServices.length > 4;
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (scrollRef.current) {
+      const scrollAmount = direction === 'left' ? -340 : 340;
+      scrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
+  return (
+    <section key={cat.id} id={cat.id} className={styles.categorySection}>
+      <div className={styles.categorySectionHeader}>
+        <div className={styles.catHeaderLeft}>
+          <span
+            className={styles.catGroupTag}
+            style={{ color: group.id === 'technology' ? 'var(--color-electric-blue)' : 'var(--palette-tomato-red)' }}
+          >
+            {group.name.toUpperCase()}
+          </span>
+          <h3 className={styles.catTitle}>
+            {cat.name}{' '}
+            <span className={styles.catLiveCountPill}>{catServices.length} Services</span>
+          </h3>
+        </div>
+
+        {isHorizontal && (
+          <div className={styles.horizontalNavControls}>
+            <span className={styles.scrollHintBadge}>
+              Scroll to explore all {catServices.length} →
+            </span>
+            <button
+              type="button"
+              className={styles.catNavBtn}
+              onClick={() => scroll('left')}
+              aria-label={`Scroll ${cat.name} left`}
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              type="button"
+              className={styles.catNavBtn}
+              onClick={() => scroll('right')}
+              aria-label={`Scroll ${cat.name} right`}
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {isHorizontal ? (
+        <div className={styles.horizontalScrollTrack} ref={scrollRef}>
+          {catServices.map(svc => (
+            <div key={svc.id} className={styles.horizontalCardWrap}>
+              {renderCard(svc)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className={viewMode === 'grid' ? styles.grid : viewMode === 'cinematic' ? styles.cinematicLayout : styles.listLayout}>
+          {catServices.map(svc => renderCard(svc))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function MarketplaceHome() {
   return (
     <Suspense fallback={<div style={{ textAlign: 'center', padding: '100px 0', color: 'var(--color-text-tertiary)' }}>Loading catalog...</div>}>
@@ -114,7 +208,7 @@ function MarketplaceContent() {
   const [groupFilter, setGroupFilter] = useState<ServiceGroup | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<PrimaryCategory | 'all'>('all');
   const [sortBy, setSortBy] = useState<'popular' | 'rating' | 'price-low' | 'price-high' | 'newest'>('popular');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'cinematic'>('grid');
 
   // UI Dropdowns State
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
@@ -137,7 +231,7 @@ function MarketplaceContent() {
     const queryCategory = searchParams.get('category') as PrimaryCategory;
 
     if (querySearch) setSearch(querySearch);
-    if (queryGroup && ['technology', 'research', 'consultancy'].includes(queryGroup)) setGroupFilter(queryGroup);
+    if (queryGroup && ['technology', 'consultancy'].includes(queryGroup)) setGroupFilter(queryGroup);
     if (queryCategory) setCategoryFilter(queryCategory);
   }, [searchParams]);
 
@@ -185,11 +279,11 @@ function MarketplaceContent() {
   // Dynamic Live Counts Calculations (NEVER HARDCODED)
   const totalServicesCount = useMemo(() => allServices.length, []);
 
-  const groupCounts = useMemo(() => {
+  const groupCounts: Record<string, number> = useMemo(() => {
     return {
       technology: allServices.filter(s => s.group === 'technology').length,
-      research: allServices.filter(s => s.group === 'research').length,
       consultancy: allServices.filter(s => s.group === 'consultancy').length,
+      research: allServices.filter(s => s.group === 'research').length,
     };
   }, []);
 
@@ -237,7 +331,7 @@ function MarketplaceContent() {
 
   const liveGroupCount = useMemo(() => {
     if (groupFilter === 'all') return totalServicesCount;
-    return groupCounts[groupFilter] || 0;
+    return (groupCounts as Record<string, number>)[groupFilter] || 0;
   }, [groupFilter, totalServicesCount, groupCounts]);
 
   const handleClearFilters = () => {
@@ -265,6 +359,11 @@ function MarketplaceContent() {
     openCart();
   };
 
+  const handleHeroSelectDivision = (division: 'technology' | 'consultancy' | 'all') => {
+    setGroupFilter(division);
+    setCategoryFilter('all');
+  };
+
   const getOriginalPrice = (price: number | null) => {
     if (!price) return null;
     return Math.round(price * 1.25);
@@ -282,98 +381,156 @@ function MarketplaceContent() {
     const isInCart = cart.some(c => c.serviceId === svc.id);
     const { rating, reviews } = getDeterministicRating(svc.id);
     const originalPrice = getOriginalPrice(svc.startingPrice);
+    const cardGlow =
+      svc.group === 'technology'
+        ? 'rgba(37, 99, 235, 0.5)'
+        : 'rgba(235, 65, 44, 0.5)';
+
+    const techBadge =
+      svc.group === 'technology'
+        ? svc.primaryCategory === 'web-services'
+          ? 'Next.js 16 • TS'
+          : svc.primaryCategory === 'application-services'
+            ? 'Flutter • iOS/Android'
+            : svc.primaryCategory === 'ai-services'
+              ? 'GPT-4o • Agents'
+              : svc.primaryCategory === 'software-services'
+                ? 'Cloud ERP • SaaS'
+                : 'Server SLA 99.9%'
+        : svc.primaryCategory === 'digital-marketing'
+          ? 'ROAS 4.8x • Meta Ads'
+          : svc.primaryCategory === 'legal'
+            ? 'MCA Govt • ISO'
+            : svc.primaryCategory === 'ai-video'
+              ? 'Studio 4K • AI Voice'
+              : 'Enterprise Scale';
+
+    const topFeatures = svc.features ? svc.features.slice(0, 2) : [];
+    const discountPercent = originalPrice && svc.startingPrice
+      ? Math.round(((originalPrice - svc.startingPrice) / originalPrice) * 100)
+      : null;
 
     return (
-      <div key={svc.id} className={`${styles.card} ${viewMode === 'list' ? styles.listCard : ''}`}>
-        <div className={styles.imageWrap}>
-          <ServiceThumbnail
-            src={svc.image || '/assets/images/website-dev.jpg'}
-            alt={svc.name}
-            className={styles.thumbnail}
-          />
-
-          {svc.badge && <div className={styles.offerBadge}>{svc.badge}</div>}
-
-          <button
-            className={`${styles.wishBtn} ${isWishlisted ? styles.wishlisted : ''}`}
-            onClick={e => {
-              e.preventDefault();
-              e.stopPropagation();
-              toggleWishlist(svc.id);
-            }}
-            aria-label="Wishlist"
-          >
-            <Bookmark size={16} fill={isWishlisted ? 'currentColor' : 'none'} />
-          </button>
-
-          <button
-            className={styles.quickViewBtn}
-            onClick={e => {
-              e.preventDefault();
-              e.stopPropagation();
-              setQuickViewService(svc);
-            }}
-            title="Quick View Details"
-          >
-            <Eye size={14} /> Quick View
-          </button>
-
-          <span
-            className={`${styles.entityBadge}`}
-            style={{
-              background:
-                svc.group === 'technology' ? '#00B4A6' : svc.group === 'research' ? '#8B5CF6' : '#4CAF50',
-            }}
-          >
-            {svc.group.toUpperCase()}
-          </span>
-        </div>
-
-        <Link href={svc.href} className={styles.cardLink}>
-          <div className={styles.cardBody}>
-            <div className={styles.ratingRow}>
-              <span className={styles.stars}>★ {rating}</span>
-              <span className={styles.reviews}>({reviews} reviews)</span>
-            </div>
-
-            <h3 className={styles.cardTitle}>{svc.name}</h3>
-            <p className={styles.cardDesc}>{svc.description}</p>
-
-            <div className={styles.priceRow}>
-              <div className={styles.priceCol}>
-                {originalPrice && (
-                  <span className={styles.originalPrice}>₹{originalPrice.toLocaleString('en-IN')}</span>
-                )}
-                <span className={styles.price}>{formatPrice(svc.startingPrice, svc.priceType)}</span>
-              </div>
-              {svc.deliveryDays && <span className={styles.delivery}>⚡ {svc.deliveryDays}d</span>}
-            </div>
-          </div>
-        </Link>
-
-        <div className={styles.cardActions}>
-          <button
-            onClick={e => handleAddToCart(e, svc)}
-            className={`btn btn-sm ${isInCart ? 'btn-secondary' : 'btn-primary'}`}
-            style={{ flex: 1, justifyContent: 'center' }}
-          >
-            {isInCart ? <Check size={14} /> : <ShoppingBag size={14} />}
-            {isInCart ? 'In Cart' : 'Add to Cart'}
-          </button>
-
-          <label className={styles.compareCheck} onClick={e => e.stopPropagation()}>
-            <input
-              type="checkbox"
-              checked={isCompared}
-              onChange={() => {
-                toggleCompare(svc.id);
-                openCompare();
-              }}
+      <InteractiveTiltCard key={svc.id} glowColor={cardGlow}>
+        <div className={`${styles.card} ${viewMode === 'list' ? styles.listCard : ''} ${viewMode === 'cinematic' ? styles.cinematicCard : ''}`}>
+          <div className={styles.liquidGlassSheen} />
+          
+          <div className={styles.imageWrap}>
+            <ServiceThumbnail
+              src={svc.image || '/assets/images/website-dev.jpg'}
+              alt={svc.name}
+              className={styles.thumbnail}
             />
-            <span className={styles.compareLabel}>Compare</span>
-          </label>
+
+            {svc.badge && <div className={styles.offerBadge}>{svc.badge}</div>}
+
+            {/* Holographic Tech Stack Indicator */}
+            <div className={styles.techPillOverlay}>
+              <span className={styles.techPillDot}>●</span>
+              <span>{techBadge}</span>
+            </div>
+
+            <button
+              className={`${styles.wishBtn} ${isWishlisted ? styles.wishlisted : ''}`}
+              onClick={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleWishlist(svc.id);
+              }}
+              aria-label="Wishlist"
+            >
+              <Bookmark size={15} fill={isWishlisted ? 'currentColor' : 'none'} />
+            </button>
+
+            <button
+              className={styles.quickViewBtn}
+              onClick={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                setQuickViewService(svc);
+              }}
+              title="Quick View Details"
+            >
+              <Eye size={13} /> Quick Specs
+            </button>
+
+            <span
+              className={styles.entityBadge}
+              style={{
+                background:
+                  svc.group === 'technology'
+                    ? 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)'
+                    : 'linear-gradient(135deg, #EB412C 0%, #C22F1D 100%)',
+              }}
+            >
+              {svc.group.toUpperCase()}
+            </span>
+          </div>
+
+          <Link href={svc.href} className={styles.cardLink}>
+            <div className={styles.cardBody}>
+              <div className={styles.ratingRow}>
+                <span className={styles.stars}>★ {rating}</span>
+                <span className={styles.reviews}>({reviews} reviews)</span>
+                <span className={styles.verifiedTag}>Verified ISO</span>
+              </div>
+
+              <h3 className={styles.cardTitle}>{svc.name}</h3>
+              <p className={styles.cardDesc}>{svc.description}</p>
+
+              {/* Top Deliverables Feature Pills */}
+              {topFeatures.length > 0 && (
+                <ul className={styles.cardFeaturePills}>
+                  {topFeatures.map((feat, fIdx) => (
+                    <li key={fIdx} className={styles.cardFeatureItem}>
+                      <Check size={11} className={styles.cardFeatureIcon} />
+                      <span className={styles.cardFeatureText}>{feat}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div className={styles.priceRow}>
+                <div className={styles.priceCol}>
+                  {originalPrice && (
+                    <div className={styles.priceOldRow}>
+                      <span className={styles.originalPrice}>₹{originalPrice.toLocaleString('en-IN')}</span>
+                      {discountPercent && discountPercent > 0 && (
+                        <span className={styles.discountBadge}>SAVE {discountPercent}%</span>
+                      )}
+                    </div>
+                  )}
+                  <span className={styles.price}>{formatPrice(svc.startingPrice, svc.priceType)}</span>
+                </div>
+                {svc.deliveryDays && <span className={styles.delivery}>⚡ {svc.deliveryDays}d SLA</span>}
+              </div>
+            </div>
+          </Link>
+
+          <div className={styles.cardActions}>
+            <button
+              onClick={e => handleAddToCart(e, svc)}
+              style={{ flex: 1, justifyContent: 'center' }}
+              className={`${styles.cartBtn} ${isInCart ? styles.inCartBtn : styles.addToCartBtn}`}
+            >
+              {isInCart ? <Check size={14} /> : <ShoppingBag size={14} />}
+              {isInCart ? 'In Cart' : 'Add to Cart'}
+            </button>
+
+            <label className={styles.compareCheck} onClick={e => e.stopPropagation()}>
+              <input
+                type="checkbox"
+                checked={isCompared}
+                onChange={() => {
+                  toggleCompare(svc.id);
+                  openCompare();
+                }}
+              />
+              <span className={styles.compareLabel}>Compare</span>
+            </label>
+          </div>
         </div>
-      </div>
+      </InteractiveTiltCard>
     );
   };
 
@@ -395,19 +552,64 @@ function MarketplaceContent() {
     <div className={styles.marketplace}>
       <div className={`container ${styles.layout}`}>
         <main className={styles.main}>
-          <PromoCarousel />
-          <CategoryCoverflow />
+          {/* ────────────────────────────────────────────────────────
+              1. EDITORIAL SIGNATURE HERO (Sorrel & Pace Masterpiece)
+             ──────────────────────────────────────────────────────── */}
+          <EditorialHero onSelectDivision={handleHeroSelectDivision} />
 
           {/* ────────────────────────────────────────────────────────
-              1. SECTION HEADER
+              2. 3D FLOATING LIQUID GLASS TRUST MARQUEE RIBBON
              ──────────────────────────────────────────────────────── */}
-          <div className={styles.catalogSectionHeader}>
-            <span className={styles.catalogBadge}>
-              <Sparkles size={13} /> SERVICES MARKETPLACE
-            </span>
-            <h1 className={styles.catalogTitle}>Explore Premium Web, App Development &amp; Marketing Services</h1>
+          <GlassTrustMarquee />
+
+          {/* ────────────────────────────────────────────────────────
+              3. CAMPAIGN SHOWCASE (Flagship Deals Carousel)
+             ──────────────────────────────────────────────────────── */}
+          <div className={styles.heroLandingStage}>
+            <div className={styles.ambientBlob1} />
+            <div className={styles.ambientBlob2} />
+            <div className={styles.ambientBlob3} />
+            <div className={styles.lightBeam} />
+            <div className={styles.gridOverlay} />
+            <div className={styles.heroContentWrap}>
+              <PromoCarousel />
+            </div>
+          </div>
+
+          {/* ────────────────────────────────────────────────────────
+              4. DOMAIN CORE CAPABILITIES (3D Coverflow Experience)
+             ──────────────────────────────────────────────────────── */}
+          <div className={styles.domainCoverflowSection}>
+            <CategoryCoverflow />
+          </div>
+
+          {/* ────────────────────────────────────────────────────────
+              5. TWO DIVISIONS ARCHITECTURAL SHOWCASE (STR vs SCS)
+             ──────────────────────────────────────────────────────── */}
+          <DivisionsShowcase onSelectDivision={handleHeroSelectDivision} />
+
+          {/* ────────────────────────────────────────────────────────
+              6. SECTION HEADER (Cinematic Technical Telemetry HUD)
+             ──────────────────────────────────────────────────────── */}
+          <div id="marketplace-catalog" className={styles.catalogSectionHeader}>
+            <div className={styles.telemetryHUD}>
+              <span className={styles.catalogBadge}>
+                <Sparkles size={13} /> LIVE PRODUCT &amp; SERVICES ENGINE
+              </span>
+              <div className={styles.telemetryStrip}>
+                <span className={styles.telemetryItem}><span className={styles.telemetryDot} /> 39 NODES ACTIVE</span>
+                <span className={styles.telemetryDivider}>|</span>
+                <span className={styles.telemetryItem}>⚡ 99.98% SLA</span>
+                <span className={styles.telemetryDivider}>|</span>
+                <span className={styles.telemetryItem}>🛡️ ISO 9001:2015</span>
+                <span className={styles.telemetryDivider}>|</span>
+                <span className={styles.telemetryItem}>★ 4.9/5 CSAT</span>
+              </div>
+            </div>
+
+            <h1 className={styles.catalogTitle}>Explore Verified Engineering &amp; Strategic Solutions</h1>
             <p className={styles.catalogSubtitle}>
-              Find the right ISO 9001:2015 certified solution for your business growth
+              Tailored architecture, production-ready codebases, verified compliance &amp; performance growth
             </p>
           </div>
 
@@ -429,13 +631,18 @@ function MarketplaceContent() {
                   aria-expanded={groupDropdownOpen}
                   aria-haspopup="true"
                 >
-                  <div className={styles.controlBtnContent}>
-                    <span className={styles.controlLabel}>
-                      {groupFilter === 'all' ? 'ALL GROUP SERVICES' : getGroupLabel(groupFilter)}
-                    </span>
-                    <span className={styles.controlSubCount}>
-                      <span className={styles.liveDot} /> {liveGroupCount} Services • LIVE
-                    </span>
+                  <div className={styles.controlBtnLeft}>
+                    <div className={styles.controlGlassIconWrap}>
+                      <Globe size={18} className={styles.controlGlassIcon} />
+                    </div>
+                    <div className={styles.controlBtnContent}>
+                      <span className={styles.controlLabel}>
+                        {groupFilter === 'all' ? 'ALL GROUP SERVICES' : getGroupLabel(groupFilter)}
+                      </span>
+                      <span className={styles.controlSubCount}>
+                        <span className={styles.liveDot} /> {liveGroupCount} Services • LIVE
+                      </span>
+                    </div>
                   </div>
                   <ChevronDown
                     size={16}
@@ -481,20 +688,6 @@ function MarketplaceContent() {
 
                     <button
                       type="button"
-                      className={`${styles.dropdownOption} ${groupFilter === 'research' ? styles.dropdownOptionActive : ''}`}
-                      onClick={() => {
-                        setGroupFilter('research');
-                        setCategoryFilter('all');
-                        setGroupDropdownOpen(false);
-                      }}
-                    >
-                      <span className={styles.optionDotResearch}>🟣</span>
-                      <span className={styles.optionText}>Saampark Research</span>
-                      <span className={styles.optionCountBadge}>{groupCounts.research}</span>
-                    </button>
-
-                    <button
-                      type="button"
                       className={`${styles.dropdownOption} ${groupFilter === 'consultancy' ? styles.dropdownOptionActive : ''}`}
                       onClick={() => {
                         setGroupFilter('consultancy');
@@ -522,13 +715,18 @@ function MarketplaceContent() {
                   aria-expanded={explorerOpen}
                   aria-haspopup="true"
                 >
-                  <div className={styles.controlBtnContent}>
-                    <span className={styles.controlLabel}>
-                      {categoryFilter === 'all' ? 'ALL SERVICES' : getCategoryLabel(categoryFilter)}
-                    </span>
-                    <span className={styles.controlSubCount}>
-                      <span className={styles.liveDot} /> {filteredServices.length} Services • LIVE
-                    </span>
+                  <div className={styles.controlBtnLeft}>
+                    <div className={styles.controlGlassIconWrap}>
+                      <Layers size={18} className={styles.controlGlassIcon} />
+                    </div>
+                    <div className={styles.controlBtnContent}>
+                      <span className={styles.controlLabel}>
+                        {categoryFilter === 'all' ? 'ALL SERVICES' : getCategoryLabel(categoryFilter)}
+                      </span>
+                      <span className={styles.controlSubCount}>
+                        <span className={styles.liveDot} /> {filteredServices.length} Services • LIVE
+                      </span>
+                    </div>
                   </div>
                   <ChevronDown
                     size={16}
@@ -547,7 +745,7 @@ function MarketplaceContent() {
                           <h4 className={styles.explorerHeading}>SERVICE EXPLORER</h4>
                           <p className={styles.explorerSubheading}>
                             {groupFilter === 'all'
-                              ? `Browse ${totalServicesCount} live services across 3 groups`
+                              ? `Browse ${totalServicesCount} live services across 2 companies`
                               : `Browse ${liveGroupCount} live services in ${getGroupLabel(groupFilter)}`}
                           </p>
                         </div>
@@ -693,6 +891,47 @@ function MarketplaceContent() {
           </div>
 
           {/* ────────────────────────────────────────────────────────
+              QUICK CATEGORY FILTER CHIPS (Motion-Sites / Uber Style)
+             ──────────────────────────────────────────────────────── */}
+          <div className={styles.quickChipsBar} role="tablist" aria-label="Quick Category Filter">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={categoryFilter === 'all' && groupFilter === 'all'}
+              className={`${styles.chipBtn} ${categoryFilter === 'all' && groupFilter === 'all' ? styles.chipActive : ''}`}
+              onClick={() => {
+                setGroupFilter('all');
+                setCategoryFilter('all');
+              }}
+            >
+              <Sparkles size={14} className={styles.chipIcon} />
+              <span>All Solutions</span>
+              <span className={styles.chipCount}>{totalServicesCount}</span>
+            </button>
+            {SERVICE_CATEGORIES.map(cat => {
+              const isCatActive = categoryFilter === cat.id;
+              const catCount = categoryCounts[cat.id] || 0;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isCatActive}
+                  className={`${styles.chipBtn} ${isCatActive ? styles.chipActive : ''}`}
+                  onClick={() => {
+                    setGroupFilter(cat.group);
+                    setCategoryFilter(cat.id);
+                  }}
+                >
+                  <span className={styles.chipIcon}>{ICON_MAP[cat.icon] || <Globe size={14} />}</span>
+                  <span>{cat.name}</span>
+                  <span className={styles.chipCount}>{catCount}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ────────────────────────────────────────────────────────
               3. RESULTS BAR (Dynamic Showing Count, Active Pills, Sort & View Mode)
              ──────────────────────────────────────────────────────── */}
           <div className={styles.resultsBar}>
@@ -739,7 +978,7 @@ function MarketplaceContent() {
               )}
             </div>
 
-            {/* Controls Right: Sort dropdown & Grid/List view toggle */}
+            {/* Controls Right: Sort dropdown & Grid/List/Cinematic view toggle */}
             <div className={styles.resultsRightTools}>
               <div className={styles.sortWrap}>
                 <SlidersHorizontal size={14} className={styles.sortIcon} />
@@ -767,6 +1006,14 @@ function MarketplaceContent() {
                 </button>
                 <button
                   type="button"
+                  className={`${styles.viewBtn} ${viewMode === 'cinematic' ? styles.viewBtnActive : ''}`}
+                  onClick={() => setViewMode('cinematic')}
+                  title="Cinematic 3D View"
+                >
+                  <Film size={16} />
+                </button>
+                <button
+                  type="button"
                   className={`${styles.viewBtn} ${viewMode === 'list' ? styles.viewBtnActive : ''}`}
                   onClick={() => setViewMode('list')}
                   title="List View"
@@ -776,6 +1023,11 @@ function MarketplaceContent() {
               </div>
             </div>
           </div>
+
+          {/* ────────────────────────────────────────────────────────
+              CINEMATIC 3D FLAGSHIP FEATURED SPOTLIGHT STAGE
+             ──────────────────────────────────────────────────────── */}
+          <FeaturedShowcase3D onQuickView={svc => setQuickViewService(svc)} />
 
           {/* ────────────────────────────────────────────────────────
               4. SERVICE CARD GRID & CATEGORY HEADINGS
@@ -812,23 +1064,14 @@ function MarketplaceContent() {
                       if (catServices.length === 0) return null;
 
                       return (
-                        <section key={cat.id} id={cat.id} className={styles.categorySection}>
-                          <div className={styles.categorySectionHeader}>
-                            <div className={styles.catHeaderLeft}>
-                              <span className={styles.catGroupTag} style={{ color: group.color }}>
-                                {group.name.toUpperCase()}
-                              </span>
-                              <h3 className={styles.catTitle}>
-                                {cat.name}{' '}
-                                <span className={styles.catLiveCountPill}>{catServices.length} Services</span>
-                              </h3>
-                            </div>
-                          </div>
-
-                          <div className={viewMode === 'grid' ? styles.grid : styles.listLayout}>
-                            {catServices.map(svc => renderCard(svc))}
-                          </div>
-                        </section>
+                        <CategorySectionBlock
+                          key={cat.id}
+                          cat={cat}
+                          group={group}
+                          catServices={catServices}
+                          viewMode={viewMode}
+                          renderCard={renderCard}
+                        />
                       );
                     })}
                   </div>
@@ -836,6 +1079,39 @@ function MarketplaceContent() {
               })}
             </div>
           )}
+
+          {/* ────────────────────────────────────────────────────────
+              5. MOBILE-FIRST STACKED PHONE SLIDER (Kotak Neo Style Showcase)
+             ──────────────────────────────────────────────────────── */}
+          {/* MobileStackedPhoneSlider placeholder */}
+
+          {/* ────────────────────────────────────────────────────────
+              6. CINEMATIC ENTERPRISE BENTO GRID (Uber / Aceternity Style)
+             ──────────────────────────────────────────────────────── */}
+          <BentoShowcase />
+
+          {/* ────────────────────────────────────────────────────────
+              6. INTERACTIVE 3D COST ESTIMATOR (Real-Time Pricing Engine)
+             ──────────────────────────────────────────────────────── */}
+          <div id="instant-estimator" className={styles.estimatorSectionWrapper}>
+            <div className={styles.estimatorHeader}>
+              <span className={styles.estimatorBadge}>
+                <Calculator size={13} /> INSTANT PROJECT ESTIMATOR
+              </span>
+              <h2 className={styles.estimatorHeading}>
+                Calculate Your Custom Project Cost in Real-Time
+              </h2>
+              <p className={styles.estimatorSub}>
+                Customize features, platforms, and sprint timelines to get transparent instant estimations with free architecture consult.
+              </p>
+            </div>
+            <CostEstimator />
+          </div>
+
+          {/* ────────────────────────────────────────────────────────
+              7. INTERACTIVE GLASS FAQ ACCORDION (SEO & Trust Conversion)
+             ──────────────────────────────────────────────────────── */}
+          <InteractiveFAQ />
         </main>
       </div>
 

@@ -321,11 +321,11 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  background: rgba(0, 180, 166, 0.15);
+  background: var(--color-brand-subtle);
   color: var(--color-brand);
   padding: 2px 7px;
   border-radius: 9999px;
-  border: 1px solid rgba(0, 180, 166, 0.3);
+  border: 1px solid rgba(235, 65, 44, 0.3);
 }
 
 .activeTab .pageBadge {
@@ -388,8 +388,8 @@
 
 .hotlineBox {
   margin-top: var(--size-8);
-  background: linear-gradient(135deg, rgba(0, 180, 166, 0.1) 0%, rgba(30, 144, 255, 0.05) 100%);
-  border: 1.5px solid rgba(0, 180, 166, 0.3);
+  background: linear-gradient(135deg, var(--color-brand-subtle) 0%, rgba(30, 144, 255, 0.05) 100%);
+  border: 1.5px solid rgba(235, 65, 44, 0.3);
   padding: var(--size-6);
   border-radius: var(--radius-2xl);
   text-align: center;

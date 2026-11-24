@@ -2,12 +2,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 380" width="600" height="380">
   <defs>
     <linearGradient id="bg_school-system" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#190B28" />
-      <stop offset="100%" stop-color="#3B1559" />
+      <stop offset="0%" stop-color="#0B1220" />
+      <stop offset="100%" stop-color="#1E293B" />
     </linearGradient>
     <linearGradient id="accent_school-system" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#8B5CF6" />
-      <stop offset="100%" stop-color="#7C3AED" />
+      <stop offset="0%" stop-color="#2563EB" />
+      <stop offset="100%" stop-color="#1D4ED8" />
     </linearGradient>
   </defs>
 
@@ -27,20 +27,20 @@
 
   <!-- Graphic Mockup Element -->
   
-      <rect x="90" y="75" width="420" height="210" rx="14" fill="#0F172A" stroke="#8B5CF6" stroke-width="1.5" />
-      <circle cx="300" cy="150" r="38" fill="#8B5CF6" opacity="0.25" stroke="#8B5CF6" stroke-width="2" />
+      <rect x="90" y="75" width="420" height="210" rx="14" fill="#0F172A" stroke="#2563EB" stroke-width="1.5" />
+      <circle cx="300" cy="150" r="38" fill="#2563EB" opacity="0.25" stroke="#2563EB" stroke-width="2" />
       <rect x="140" y="210" width="320" height="16" rx="4" fill="#FFFFFF" />
-      <rect x="180" y="238" width="240" height="12" rx="3" fill="#8B5CF6" />
+      <rect x="180" y="238" width="240" height="12" rx="3" fill="#2563EB" />
       <rect x="210" y="260" width="180" height="10" rx="2" fill="#64748B" opacity="0.6" />
     
 
   <!-- Bottom Info Overlay Bar -->
   <rect x="0" y="300" width="600" height="80" fill="rgba(13, 27, 42, 0.95)" />
-  <line x1="0" y1="300" x2="600" y2="300" stroke="#8B5CF6" stroke-opacity="0.4" stroke-width="1.5" />
+  <line x1="0" y1="300" x2="600" y2="300" stroke="#2563EB" stroke-opacity="0.4" stroke-width="1.5" />
 
   <!-- Badge Capsule -->
-  <rect x="24" y="318" width="130" height="24" rx="12" fill="#8B5CF6" fill-opacity="0.2" stroke="#8B5CF6" stroke-opacity="0.5" />
-  <text x="89" y="334" font-family="sans-serif" font-size="10" font-weight="bold" fill="#8B5CF6" text-anchor="middle" letter-spacing="0.5">EDUCATION</text>
+  <rect x="24" y="318" width="130" height="24" rx="12" fill="#2563EB" fill-opacity="0.2" stroke="#2563EB" stroke-opacity="0.5" />
+  <text x="89" y="334" font-family="sans-serif" font-size="10" font-weight="bold" fill="#2563EB" text-anchor="middle" letter-spacing="0.5">EDUCATION</text>
 
   <!-- Title & Subtitle in Footer -->
   <text x="170" y="330" font-family="sans-serif" font-size="16" font-weight="bold" fill="#FFFFFF">School Management</text>

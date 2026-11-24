@@ -59,7 +59,7 @@
 .itemBtn.active {
   background: var(--color-brand-subtle);
   color: var(--color-brand);
-  border-color: rgba(0, 180, 166, 0.25);
+  border-color: rgba(235, 65, 44, 0.25);
   box-shadow: var(--shadow-xs);
 }
 

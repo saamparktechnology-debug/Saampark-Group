@@ -3,50 +3,62 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import styles from './CategoryCoverflow.module.css';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 
 const CATEGORIES = [
   {
     id: 'web-development',
     title: '🌐 Web Development',
-    description: 'Dynamic & E-Commerce sites built for scale.',
+    tag: 'Next.js & E-Commerce',
+    description: 'Dynamic & high-converting storefronts built for scale.',
     image: '/assets/images/services/str-web-dynamic.png',
-    gradient: 'linear-gradient(135deg, rgba(30, 144, 255, 0.1) 0%, rgba(244, 81, 30, 0.1) 100%)',
+    accent: '#EB412C',
+    glowColor: 'rgba(235, 65, 44, 0.4)',
   },
   {
     id: 'app-development',
     title: '📱 Mobile Applications',
-    description: 'High-performance Android & iOS Hybrid Apps.',
+    tag: 'iOS & Android Hybrid',
+    description: 'Flutter & React Native ultra-fast mobile applications.',
     image: '/assets/images/services/str-app-android.png',
-    gradient: 'linear-gradient(135deg, rgba(61, 220, 132, 0.1) 0%, rgba(84, 197, 248, 0.1) 100%)',
+    accent: '#9CAF88',
+    glowColor: 'rgba(156, 175, 136, 0.4)',
   },
   {
     id: 'ai-integration',
     title: '🤖 AI & Automation',
-    description: 'Custom ChatGPT Chatbots & Workflow Automation.',
+    tag: 'ChatGPT & Agents',
+    description: 'Custom AI Chatbots, agentic automation & ERP intelligence.',
     image: '/assets/images/services/str-ai-chatbot.png',
-    gradient: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%)',
+    accent: '#FFC93C',
+    glowColor: 'rgba(255, 201, 60, 0.4)',
   },
   {
-    id: 'financial-research',
-    title: '📈 Financial Research',
-    description: 'Algorithmic trading & fundamental equity analysis.',
+    id: 'software-services',
+    title: '⚙️ Software & ERP Systems',
+    tag: 'Cloud ERP & Portals',
+    description: 'Tailored enterprise software, CRM, and billing systems.',
     image: '/assets/images/services/res-stock-equity.png',
-    gradient: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%)',
+    accent: '#2563EB',
+    glowColor: 'rgba(37, 99, 235, 0.4)',
   },
   {
     id: 'digital-marketing',
     title: '📢 Digital Marketing',
-    description: 'Complete Social Media & Meta Ads Management.',
+    tag: 'Meta & Google Ads',
+    description: 'High-ROI multi-channel campaigns & verified business leads.',
     image: '/assets/images/services/scs-social-standard.png',
-    gradient: 'linear-gradient(135deg, rgba(24, 119, 242, 0.1) 0%, rgba(8, 102, 255, 0.1) 100%)',
+    accent: '#EB412C',
+    glowColor: 'rgba(235, 65, 44, 0.4)',
   },
   {
     id: 'business-legal',
     title: '⚖️ Business & Legal Setup',
-    description: 'Pvt. Ltd. Registration, GST, and MSME filings.',
+    tag: 'Pvt Ltd & GST Filings',
+    description: 'ISO-certified legal company formation & tax compliance.',
     image: '/assets/images/services/con-pvt-ltd.png',
-    gradient: 'linear-gradient(135deg, rgba(30, 41, 59, 0.1) 0%, rgba(100, 116, 139, 0.1) 100%)',
+    accent: '#9CAF88',
+    glowColor: 'rgba(156, 175, 136, 0.4)',
   },
 ];
 
@@ -65,7 +77,7 @@ export function CategoryCoverflow() {
   useEffect(() => {
     const interval = setInterval(() => {
       setActiveIndex((prev) => (prev + 1) % CATEGORIES.length);
-    }, 4000); // 4 seconds interval for a slow, smooth pace
+    }, 4500);
     return () => clearInterval(interval);
   }, []);
 
@@ -99,7 +111,13 @@ export function CategoryCoverflow() {
 
   return (
     <div className={styles.coverflowContainer}>
-      <h2 className={styles.title}>Explore Our Core</h2>
+      <div className={styles.headerArea}>
+        <span className={styles.eyebrowBadge}>
+          <Sparkles size={12} /> ENTERPRISE CORE CAPABILITIES
+        </span>
+        <h2 className={styles.title}>Explore Our Core</h2>
+        <p className={styles.subtitle}>Select any domain to explore ISO 9001:2015 verified solutions</p>
+      </div>
       
       <div className={styles.carouselWrapper}>
         <button className={styles.navBtn} onClick={handlePrev} aria-label="Previous">
@@ -117,38 +135,65 @@ export function CategoryCoverflow() {
             const absOffset = Math.abs(offset);
             const isActive = offset === 0;
 
-            const zIndex = 100 - absOffset;
+            const zIndex = 100 - absOffset * 10;
             
-            // Adjust scale to make center larger and sides smaller
-            const scale = isActive ? 1.1 : 1 - absOffset * 0.15;
+            // Compact refined 3D scale and physical depth
+            const scale = isActive ? 1.08 : Math.max(0.76, 1 - absOffset * 0.14);
             
-            const translateX = offset * (isMobile ? 85 : 110);
-            const rotateY = isActive ? 0 : offset > 0 ? -40 : 40;
-            const opacity = isActive ? 1 : absOffset === 1 ? 0.5 : absOffset === 2 ? 0.15 : 0;
+            const translateX = offset * (isMobile ? 55 : 105);
+            const rotateY = isActive ? 0 : offset > 0 ? -45 : 45;
+            const translateZ = isActive ? 100 : -absOffset * 70;
+            const opacity = isActive ? 1 : absOffset === 1 ? 0.78 : absOffset === 2 ? 0.35 : 0;
 
             return (
               <div 
                 key={cat.id} 
                 className={`${styles.card} ${isActive ? styles.active : ''}`}
                 style={{ 
-                  transform: `translateX(${translateX}%) scale(${scale}) perspective(1000px) rotateY(${rotateY}deg)`,
+                  transform: `translate3d(${translateX}%, 0, ${translateZ}px) scale(${scale}) rotateY(${rotateY}deg)`,
                   zIndex,
                   opacity,
-                  visibility: opacity === 0 ? 'hidden' : 'visible'
-                }}
+                  visibility: opacity === 0 ? 'hidden' : 'visible',
+                  '--cat-accent': cat.accent,
+                  '--cat-glow': cat.glowColor,
+                } as React.CSSProperties}
                 onClick={(e) => handleCardClick(index, cat.id, e)}
               >
-                <div className={styles.cardInner} style={{ background: cat.gradient }}>
+                <div 
+                  className={`${styles.groundShadow} ${isActive ? styles.activeGroundShadow : ''}`} 
+                />
+                
+                <div className={styles.cardInner}>
+                  <div className={styles.topGlassSheen} />
+                  
+                  {/* Directional Shading Overlay on side cards */}
+                  {!isActive && (
+                    <div 
+                      className={styles.directionalShade} 
+                      style={{ opacity: Math.min(0.6, absOffset * 0.3) }} 
+                    />
+                  )}
+
                   <div className={styles.imageWrap}>
+                    <div 
+                      className={styles.imageGlowBackdrop} 
+                      style={{ background: `radial-gradient(circle, ${cat.glowColor} 0%, transparent 70%)` }}
+                    />
                     <Image 
                       src={cat.image} 
                       alt={cat.title} 
-                      fill 
-                      style={{ objectFit: 'contain' }}
-                      sizes="(max-width: 768px) 300px, 400px"
+                      width={120}
+                      height={90}
+                      className={styles.cardImage}
+                      unoptimized
+                      priority
                     />
                   </div>
+
                   <div className={styles.cardContent}>
+                    <span className={styles.cardTag}>
+                      {cat.tag}
+                    </span>
                     <h3>{cat.title}</h3>
                     <p>{cat.description}</p>
                     {isActive && (
@@ -156,7 +201,7 @@ export function CategoryCoverflow() {
                         className={styles.exploreBtn}
                         onClick={(e) => handleExploreClick(cat.id, e)}
                       >
-                        Explore
+                        Explore Services <span className={styles.exploreArrow}>→</span>
                       </button>
                     )}
                   </div>
