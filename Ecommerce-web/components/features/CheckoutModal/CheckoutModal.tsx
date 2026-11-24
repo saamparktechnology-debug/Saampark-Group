@@ -225,7 +225,7 @@ export function CheckoutModal() {
 
               {/* Portal Card */}
               <div className={styles.portalCard}>
-                <h4>🔐 Official CRM Client Portal Account</h4>
+                <h4>Official CRM Client Portal Account</h4>
                 <p>
                   You can log in to view project milestones, download GST invoices, and track work progress:
                 </p>
@@ -273,9 +273,9 @@ export function CheckoutModal() {
             <div className={styles.body}>
               {/* Trust Badges */}
               <div className={styles.trustBadges}>
-                <span>🔒 256-Bit SSL Secured</span>
-                <span>🛡️ ISO 9001:2015 SLA</span>
-                <span>📑 Automated GST Invoicing</span>
+                <span>256-Bit SSL Secured</span>
+                <span>ISO 9001:2015 SLA</span>
+                <span>Automated GST Invoicing</span>
               </div>
 
               {/* Order Summary */}

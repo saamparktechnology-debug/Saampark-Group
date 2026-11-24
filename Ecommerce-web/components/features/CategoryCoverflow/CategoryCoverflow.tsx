@@ -8,7 +8,7 @@ import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 const CATEGORIES = [
   {
     id: 'web-development',
-    title: '🌐 Web Development',
+    title: 'Web Development',
     tag: 'Next.js & E-Commerce',
     description: 'Dynamic & high-converting storefronts built for scale.',
     image: '/assets/images/services/str-web-dynamic.png',
@@ -17,7 +17,7 @@ const CATEGORIES = [
   },
   {
     id: 'app-development',
-    title: '📱 Mobile Applications',
+    title: 'Mobile Applications',
     tag: 'iOS & Android Hybrid',
     description: 'Flutter & React Native ultra-fast mobile applications.',
     image: '/assets/images/services/str-app-android.png',
@@ -26,7 +26,7 @@ const CATEGORIES = [
   },
   {
     id: 'ai-integration',
-    title: '🤖 AI & Automation',
+    title: 'AI & Automation',
     tag: 'ChatGPT & Agents',
     description: 'Custom AI Chatbots, agentic automation & ERP intelligence.',
     image: '/assets/images/services/str-ai-chatbot.png',
@@ -35,7 +35,7 @@ const CATEGORIES = [
   },
   {
     id: 'software-services',
-    title: '⚙️ Software & ERP Systems',
+    title: 'Software & ERP Systems',
     tag: 'Cloud ERP & Portals',
     description: 'Tailored enterprise software, CRM, and billing systems.',
     image: '/assets/images/services/res-stock-equity.png',
@@ -44,7 +44,7 @@ const CATEGORIES = [
   },
   {
     id: 'digital-marketing',
-    title: '📢 Digital Marketing',
+    title: 'Digital Marketing',
     tag: 'Meta & Google Ads',
     description: 'High-ROI multi-channel campaigns & verified business leads.',
     image: '/assets/images/services/scs-social-standard.png',
@@ -53,7 +53,7 @@ const CATEGORIES = [
   },
   {
     id: 'business-legal',
-    title: '⚖️ Business & Legal Setup',
+    title: 'Business & Legal Setup',
     tag: 'Pvt Ltd & GST Filings',
     description: 'ISO-certified legal company formation & tax compliance.',
     image: '/assets/images/services/con-pvt-ltd.png',

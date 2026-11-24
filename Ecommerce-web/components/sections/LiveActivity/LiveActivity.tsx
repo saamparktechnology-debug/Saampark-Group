@@ -25,7 +25,7 @@ export function LiveActivity() {
         <div className={styles.track}>
           {items.map((item, i) => (
             <div key={i} className={styles.item}>
-              <span className={styles.emoji}>{item.emoji}</span>
+              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#10B981', marginRight: 6, flexShrink: 0 }} />
               <span className={styles.text}>{item.text}</span>
             </div>
           ))}

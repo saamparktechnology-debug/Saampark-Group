@@ -58,12 +58,8 @@ import { ProductQuickViewModal } from './ProductQuickViewModal';
 import { Interactive3DCanvas } from '@/components/ui/Interactive3DCanvas/Interactive3DCanvas';
 import { GlassTrustMarquee } from '@/components/ui/GlassTrustMarquee/GlassTrustMarquee';
 import { InteractiveTiltCard } from '@/components/ui/InteractiveTiltCard/InteractiveTiltCard';
-import { BentoShowcase } from '@/components/sections/BentoShowcase/BentoShowcase';
 import { CostEstimator } from '@/components/features/CostEstimator/CostEstimator';
 import { InteractiveFAQ } from '@/components/features/InteractiveFAQ/InteractiveFAQ';
-import { EditorialHero } from '@/components/sections/EditorialHero/EditorialHero';
-import { DivisionsShowcase } from '@/components/sections/DivisionsShowcase/DivisionsShowcase';
-import { FeaturedShowcase3D } from '../FeaturedShowcase3D/FeaturedShowcase3D';
 import styles from './MarketplaceHome.module.css';
 
 // Dynamic Icon Map for Lucide Icons
@@ -470,7 +466,7 @@ function MarketplaceContent() {
           <Link href={svc.href} className={styles.cardLink}>
             <div className={styles.cardBody}>
               <div className={styles.ratingRow}>
-                <span className={styles.stars}>★ {rating}</span>
+                <span className={styles.stars}>{rating}</span>
                 <span className={styles.reviews}>({reviews} reviews)</span>
                 <span className={styles.verifiedTag}>Verified ISO</span>
               </div>
@@ -502,7 +498,7 @@ function MarketplaceContent() {
                   )}
                   <span className={styles.price}>{formatPrice(svc.startingPrice, svc.priceType)}</span>
                 </div>
-                {svc.deliveryDays && <span className={styles.delivery}>⚡ {svc.deliveryDays}d SLA</span>}
+                {svc.deliveryDays && <span className={styles.delivery}>{svc.deliveryDays}d Delivery SLA</span>}
               </div>
             </div>
           </Link>
@@ -553,17 +549,12 @@ function MarketplaceContent() {
       <div className={`container ${styles.layout}`}>
         <main className={styles.main}>
           {/* ────────────────────────────────────────────────────────
-              1. EDITORIAL SIGNATURE HERO (Sorrel & Pace Masterpiece)
-             ──────────────────────────────────────────────────────── */}
-          <EditorialHero onSelectDivision={handleHeroSelectDivision} />
-
-          {/* ────────────────────────────────────────────────────────
-              2. 3D FLOATING LIQUID GLASS TRUST MARQUEE RIBBON
+              1. 3D FLOATING LIQUID GLASS TRUST MARQUEE RIBBON
              ──────────────────────────────────────────────────────── */}
           <GlassTrustMarquee />
 
           {/* ────────────────────────────────────────────────────────
-              3. CAMPAIGN SHOWCASE (Flagship Deals Carousel)
+              2. CAMPAIGN SHOWCASE (Flagship Deals Carousel)
              ──────────────────────────────────────────────────────── */}
           <div className={styles.heroLandingStage}>
             <div className={styles.ambientBlob1} />
@@ -577,24 +568,29 @@ function MarketplaceContent() {
           </div>
 
           {/* ────────────────────────────────────────────────────────
-              4. DOMAIN CORE CAPABILITIES (3D Coverflow Experience)
+              3. DOMAIN CORE CAPABILITIES (3D Coverflow Experience)
              ──────────────────────────────────────────────────────── */}
           <div className={styles.domainCoverflowSection}>
             <CategoryCoverflow />
           </div>
 
           {/* ────────────────────────────────────────────────────────
-              5. TWO DIVISIONS ARCHITECTURAL SHOWCASE (STR vs SCS)
-             ──────────────────────────────────────────────────────── */}
-          <DivisionsShowcase onSelectDivision={handleHeroSelectDivision} />
-
-          {/* ────────────────────────────────────────────────────────
-              6. SECTION HEADER & DIVISION CONTROLLER (Clean, Unslopped)
+              4. SECTION HEADER (Cinematic Technical Telemetry HUD)
              ──────────────────────────────────────────────────────── */}
           <div id="marketplace-catalog" className={styles.catalogSectionHeader}>
-            <div className={styles.catalogBadge}>
-              <Sparkles size={13} />
-              <span>OFFICIAL CATALOG • {totalServicesCount} VERIFIED SOLUTIONS</span>
+            <div className={styles.telemetryHUD}>
+              <span className={styles.catalogBadge}>
+                <Sparkles size={13} /> LIVE PRODUCT &amp; SERVICES ENGINE
+              </span>
+              <div className={styles.telemetryStrip}>
+                <span className={styles.telemetryItem}><span className={styles.telemetryDot} /> 39 NODES ACTIVE</span>
+                <span className={styles.telemetryDivider}>|</span>
+                <span className={styles.telemetryItem}>99.98% SLA</span>
+                <span className={styles.telemetryDivider}>|</span>
+                <span className={styles.telemetryItem}>ISO 9001:2015</span>
+                <span className={styles.telemetryDivider}>|</span>
+                <span className={styles.telemetryItem}>4.9/5 CSAT Rating</span>
+              </div>
             </div>
 
             <h2 className={styles.catalogTitle}>Browse Solutions &amp; Services</h2>
@@ -671,7 +667,7 @@ function MarketplaceContent() {
                         setGroupDropdownOpen(false);
                       }}
                     >
-                      <span className={styles.optionDotTech}>🔵</span>
+                      <span className={styles.optionDotTech}></span>
                       <span className={styles.optionText}>Saampark Technology</span>
                       <span className={styles.optionCountBadge}>{groupCounts.technology}</span>
                     </button>
@@ -685,7 +681,7 @@ function MarketplaceContent() {
                         setGroupDropdownOpen(false);
                       }}
                     >
-                      <span className={styles.optionDotConsultancy}>🟢</span>
+                      <span className={styles.optionDotConsultancy}></span>
                       <span className={styles.optionText}>Saampark Consultancy</span>
                       <span className={styles.optionCountBadge}>{groupCounts.consultancy}</span>
                     </button>
@@ -859,7 +855,7 @@ function MarketplaceContent() {
 
                     <div className={styles.explorerFooter}>
                       <span className={styles.footerInfo}>
-                        💡 Tip: Click any category to filter catalog immediately
+                        Tip: Click any category to filter catalog immediately
                       </span>
                       <button
                         type="button"
@@ -1015,12 +1011,7 @@ function MarketplaceContent() {
           </div>
 
           {/* ────────────────────────────────────────────────────────
-              CINEMATIC 3D FLAGSHIP FEATURED SPOTLIGHT STAGE
-             ──────────────────────────────────────────────────────── */}
-          <FeaturedShowcase3D onQuickView={svc => setQuickViewService(svc)} />
-
-          {/* ────────────────────────────────────────────────────────
-              4. SERVICE CARD GRID & CATEGORY HEADINGS
+              SERVICE CARD GRID & CATEGORY HEADINGS
              ──────────────────────────────────────────────────────── */}
           {loading ? (
             <SkeletonLoader count={8} />
@@ -1074,11 +1065,6 @@ function MarketplaceContent() {
               5. MOBILE-FIRST STACKED PHONE SLIDER (Kotak Neo Style Showcase)
              ──────────────────────────────────────────────────────── */}
           {/* MobileStackedPhoneSlider placeholder */}
-
-          {/* ────────────────────────────────────────────────────────
-              6. CINEMATIC ENTERPRISE BENTO GRID (Uber / Aceternity Style)
-             ──────────────────────────────────────────────────────── */}
-          <BentoShowcase />
 
           {/* ────────────────────────────────────────────────────────
               6. INTERACTIVE 3D COST ESTIMATOR (Real-Time Pricing Engine)

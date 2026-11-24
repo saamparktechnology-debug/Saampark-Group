@@ -120,28 +120,28 @@ export function CostEstimator() {
     let msg = `Hello Saampark Group,\n\nI used your online calculator and want to order services:\n\n`;
     
     if (projectType === 'web') {
-      msg += `💻 *Service:* Web Development\n`;
-      msg += `📄 *Pages:* ${webPages}\n`;
-      msg += `⚙️ *Features Selected:* \n`;
+      msg += `*Service:* Web Development\n`;
+      msg += `*Pages:* ${webPages}\n`;
+      msg += `️ *Features Selected:* \n`;
       if (webAdmin) msg += ` - Admin Panel / CMS\n`;
       if (webDatabase) msg += ` - Custom Database Management\n`;
       if (webPayment) msg += ` - Payment Gateway Integration\n`;
       if (webSEO) msg += ` - Advanced On-Page SEO Setup\n`;
     } else if (projectType === 'app') {
-      msg += `📱 *Service:* Mobile App Development\n`;
-      msg += `📱 *Platform:* ${appPlatform.toUpperCase()}\n`;
-      msg += `⚙️ *Features Selected:* \n`;
+      msg += `*Service:* Mobile App Development\n`;
+      msg += `*Platform:* ${appPlatform.toUpperCase()}\n`;
+      msg += `️ *Features Selected:* \n`;
       if (appAuth) msg += ` - User Authentication & Profiles\n`;
       if (appPayment) msg += ` - Payment Gateway Setup\n`;
       if (appPush) msg += ` - Dynamic Push Notifications\n`;
     } else if (projectType === 'ads') {
-      msg += `📢 *Service:* Managed Ads Campaign\n`;
-      msg += `🎯 *Platform:* ${adsPlatform === 'meta' ? 'Meta (FB & IG)' : 'Google Search & Display'}\n`;
-      msg += `⏱️ *Duration:* ${adsDuration.toUpperCase()}\n`;
-      msg += `💎 *Plan:* ${adsPremium ? 'Premium Tier Campaign' : 'Standard Tier Campaign'}\n`;
+      msg += `*Service:* Managed Ads Campaign\n`;
+      msg += `*Platform:* ${adsPlatform === 'meta' ? 'Meta (FB & IG)' : 'Google Search & Display'}\n`;
+      msg += `️ *Duration:* ${adsDuration.toUpperCase()}\n`;
+      msg += `*Plan:* ${adsPremium ? 'Premium Tier Campaign' : 'Standard Tier Campaign'}\n`;
     } else if (projectType === 'legal') {
-      msg += `💼 *Service:* Business Incorporation / Registration\n`;
-      msg += `📋 *Selection:* ${
+      msg += `*Service:* Business Incorporation / Registration\n`;
+      msg += `*Selection:* ${
         legalSelection === 'pvtltd' ? 'Pvt. Ltd. Company Incorporation' : 
         legalSelection === 'gst' ? 'GST Tax Registration' : 'MSME (Udyam) Registration'
       }\n`;
@@ -172,25 +172,25 @@ export function CostEstimator() {
           className={`${styles.tabBtn} ${projectType === 'web' ? styles.activeTab : ''}`}
           onClick={() => setProjectType('web')}
         >
-          🌐 Websites
+          Websites
         </button>
         <button 
           className={`${styles.tabBtn} ${projectType === 'app' ? styles.activeTab : ''}`}
           onClick={() => setProjectType('app')}
         >
-          📱 Mobile Apps
+          Mobile Apps
         </button>
         <button 
           className={`${styles.tabBtn} ${projectType === 'ads' ? styles.activeTab : ''}`}
           onClick={() => setProjectType('ads')}
         >
-          📢 Managed Ads
+          Managed Ads
         </button>
         <button 
           className={`${styles.tabBtn} ${projectType === 'legal' ? styles.activeTab : ''}`}
           onClick={() => setProjectType('legal')}
         >
-          💼 Business Registrations
+          Business Registrations
         </button>
       </div>
 
@@ -327,7 +327,7 @@ export function CostEstimator() {
               <label className={styles.checkLabel}>
                 <input type="checkbox" checked={adsPremium} onChange={(e) => setAdsPremium(e.target.checked)} />
                 <div className={styles.checkInfo}>
-                  <span className={styles.checkName}>💎 Premium Tier Package Upgrade</span>
+                  <span className={styles.checkName}>Premium Tier Package Upgrade</span>
                   <span className={styles.checkDesc}>Includes custom AI promotional videos, reels & 1M guaranteed impressions</span>
                 </div>
               </label>

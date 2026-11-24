@@ -28,8 +28,8 @@ export function Footer() {
                 digital excellence for businesses across India.
               </p>
               <div className={styles.iso}>
-                <span className={styles.isoTag}>🏆 ISO 9001:2015</span>
-                <span className={styles.isoTag}>📋 Pvt. Ltd. Registered</span>
+                <span className={styles.isoTag}>ISO 9001:2015 Certified</span>
+                <span className={styles.isoTag}>Pvt. Ltd. Registered</span>
               </div>
             </div>
 
@@ -76,7 +76,7 @@ export function Footer() {
             {/* SCS Column */}
             <div className={styles.col}>
               <div className={styles.colHeader}>
-                <span style={{ fontSize: 20 }}>📊</span>
+                
                 <span className={styles.colTitle}>Consultancy</span>
               </div>
               <nav className={styles.colLinks}>

@@ -5,17 +5,17 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import styles from './CategoryBar.module.css';
 
 const CATEGORIES = [
-  { value: 'all', label: 'All Services', emoji: '🛍️' },
-  { value: 'website', label: 'Websites', emoji: '🌐' },
-  { value: 'app', label: 'Mobile Apps', emoji: '📱' },
-  { value: 'software', label: 'Software / ERP', emoji: '⚙️' },
-  { value: 'specialized-website', label: 'Specialized Web', emoji: '🚀' },
-  { value: 'social-media', label: 'Social Media', emoji: '📣' },
-  { value: 'meta-ads', label: 'Meta Ads', emoji: '📢' },
-  { value: 'google-ads', label: 'Google Ads', emoji: '🔍' },
-  { value: 'google-business', label: 'Google Business', emoji: '📍' },
-  { value: 'video-ai', label: 'Video & AI', emoji: '🤖' },
-  { value: 'business-legal', label: 'Business & Legal', emoji: '💼' },
+  { value: 'all', label: 'All Services', emoji: '' },
+  { value: 'website', label: 'Websites', emoji: '' },
+  { value: 'app', label: 'Mobile Apps', emoji: '' },
+  { value: 'software', label: 'Software / ERP', emoji: '' },
+  { value: 'specialized-website', label: 'Specialized Web', emoji: '' },
+  { value: 'social-media', label: 'Social Media', emoji: '' },
+  { value: 'meta-ads', label: 'Meta Ads', emoji: '' },
+  { value: 'google-ads', label: 'Google Ads', emoji: '' },
+  { value: 'google-business', label: 'Google Business', emoji: '' },
+  { value: 'video-ai', label: 'Video & AI', emoji: '' },
+  { value: 'business-legal', label: 'Business & Legal', emoji: '' },
 ];
 
 export function CategoryBar() {

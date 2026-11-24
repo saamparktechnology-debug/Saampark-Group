@@ -399,6 +399,9 @@ export function HeroNexus3D({ activeDivision = 'str' }: HeroNexus3DProps) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       aria-label="Saampark 3D Digital Nexus World"
-    />
+    >
+      {/* 3D Telemetry HUD Overlay */}
+      <span className={styles.fpsBadge}>60-120 FPS</span>
+    </div>
   );
 }

@@ -49,7 +49,7 @@ export default function ContactPage() {
             {/* Tech (STR) */}
             <div style={{ background: 'var(--color-bg-surface)', padding: 'var(--size-6)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border-default)' }}>
               <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                💻 Technology Division (STR)
+                Technology Division (STR)
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, color: 'var(--color-text-secondary)', fontSize: 14 }}>
                 <a href={CONTACT.str.tel1} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none' }}>
@@ -67,7 +67,7 @@ export default function ContactPage() {
             {/* Consultancy (SCS) */}
             <div style={{ background: 'var(--color-bg-surface)', padding: 'var(--size-6)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border-default)' }}>
               <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                📊 Consultancy Division (SCS)
+                Consultancy Division (SCS)
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, color: 'var(--color-text-secondary)', fontSize: 14 }}>
                 <a href={CONTACT.scs.tel} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none' }}>
@@ -85,7 +85,7 @@ export default function ContactPage() {
             {/* Office */}
             <div style={{ background: 'var(--color-bg-surface)', padding: 'var(--size-6)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border-default)' }}>
               <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                📍 Corporate Office
+                Corporate Office
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, color: 'var(--color-text-secondary)', fontSize: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, lineHeight: 1.5 }}>

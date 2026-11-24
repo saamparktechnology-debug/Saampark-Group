@@ -273,7 +273,7 @@ export function ServiceDetail({ service }: Props) {
               </div>
 
               <div className={styles.guaranteeNote}>
-                🔒 100% Satisfaction Guarantee • Direct Engineer & Consultant Access
+                100% Satisfaction Guarantee • Direct Engineer & Consultant Access
               </div>
             </div>
 
@@ -364,7 +364,7 @@ export function ServiceDetail({ service }: Props) {
           {selectedTab === 'gallery' && (
             <div className={styles.tabPane}>
               <div className={styles.paneHeader}>
-                <h2>📸 5-10 Live Screenshots & UI Template Showcase</h2>
+                <h2>Curated UI Screenshots & Template Showcase</h2>
                 <p>Click any screenshot to zoom in full resolution.</p>
               </div>
 
@@ -402,7 +402,7 @@ export function ServiceDetail({ service }: Props) {
           {selectedTab === 'specs' && (
             <div className={styles.tabPane}>
               <div className={styles.paneHeader}>
-                <h2>⚙️ Page 2: Technical Specifications & System Architecture</h2>
+                <h2>Page 2: Technical Specifications & Architecture</h2>
                 <p>Granular breakdown of frameworks, security protocols, API endpoints & database schemas.</p>
               </div>
 
@@ -435,7 +435,7 @@ export function ServiceDetail({ service }: Props) {
           {selectedTab === 'roadmap' && (
             <div className={styles.tabPane}>
               <div className={styles.paneHeader}>
-                <h2>🚀 Page 3: 5-Phase Project Roadmap & Delivery Milestones</h2>
+                <h2>Page 3: Project Roadmap & Delivery Milestones</h2>
                 <p>Structured execution pipeline ensuring fast, transparent, zero-delay project delivery.</p>
               </div>
 
@@ -473,7 +473,7 @@ export function ServiceDetail({ service }: Props) {
           {selectedTab === 'faqs' && (
             <div className={styles.tabPane}>
               <div className={styles.paneHeader}>
-                <h2>💡 Page 5: FAQs & Direct Consultation Hotline</h2>
+                <h2>Page 5: Frequently Asked Questions & Consultation</h2>
                 <p>Got questions? Speak directly with our lead software engineers & marketing directors.</p>
               </div>
 

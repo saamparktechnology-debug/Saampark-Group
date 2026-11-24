@@ -237,7 +237,7 @@ function NavbarContent() {
                         className={styles.dropLinkBtn} 
                         onClick={() => { setProfileOpen(false); openTracking(); }}
                       >
-                        📦 Live Order Tracking
+                        Live Order Tracking
                       </button>
                       <a 
                         href="https://crm2.saampark.com/login" 
@@ -247,13 +247,13 @@ function NavbarContent() {
                         onClick={() => setProfileOpen(false)}
                         style={{ color: 'var(--color-brand)', fontWeight: 600 }}
                       >
-                        🔑 CRM Client Portal ↗
+                        CRM Client Portal ↗
                       </a>
                       <button 
                         className={styles.dropLinkBtn} 
                         onClick={() => { setProfileOpen(false); openWishlist(); }}
                       >
-                        ❤️ Saved Wishlist ({wishlistIds.length})
+                        Saved Wishlist ({wishlistIds.length})
                       </button>
 
                       {myOrders && myOrders.length > 0 && (
@@ -271,10 +271,10 @@ function NavbarContent() {
                       
                       <div className={styles.colTitle} style={{ marginTop: 16 }}>Services Portal</div>
                       <Link href="/" className={styles.dropLink} onClick={() => setProfileOpen(false)}>
-                        ⚡ Subscribed Plans
+                        Subscribed Plans
                       </Link>
                       <Link href="/contact" className={styles.dropLink} onClick={() => setProfileOpen(false)}>
-                        💰 Custom Quote Request
+                        Custom Quote Request
                       </Link>
                     </div>
 
@@ -282,13 +282,13 @@ function NavbarContent() {
                     <div className={styles.dropdownCol} style={{ borderLeft: '1px solid var(--color-border-default)', paddingLeft: 'var(--size-4)' }}>
                       <div className={styles.colTitle}>Corporate Office</div>
                       <Link href="/about" className={styles.dropLink} onClick={() => setProfileOpen(false)}>
-                        🏢 About Saampark Group
+                        About Saampark Group
                       </Link>
                       <Link href="/contact" className={styles.dropLink} onClick={() => setProfileOpen(false)}>
-                        📞 Customer Helpdesk
+                        Customer Helpdesk
                       </Link>
                       <Link href="/about" className={styles.dropLink} onClick={() => setProfileOpen(false)}>
-                        🛡️ ISO Certification Info
+                        ISO Certification Info
                       </Link>
 
                       <div className={styles.waCard}>
