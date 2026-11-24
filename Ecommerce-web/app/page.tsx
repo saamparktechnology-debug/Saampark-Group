@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { MarketplaceHome } from '@/components/features/MarketplaceHome/MarketplaceHome';
-import { PromoRibbon }      from '@/components/sections/PromoRibbon/PromoRibbon';
 
 export const metadata: Metadata = {
   title: 'Saampark Group — Official Storefront | Web, App Development & Marketing Services',
@@ -27,8 +26,7 @@ export const metadata: Metadata = {
 
 export default function HomePage() {
   return (
-    <div style={{ paddingTop: 'calc(var(--nav-height, 56px) + 8px)' }}>
-      <PromoRibbon />
+    <div style={{ paddingTop: 'calc(var(--nav-height, 64px) + 12px)' }}>
       <MarketplaceHome />
     </div>
   );

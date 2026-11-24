@@ -77,9 +77,37 @@ const SLIDES: Slide[] = [
 ];
 
 export function PromoCarousel() {
+  const [slides, setSlides] = useState<Slide[]>(SLIDES);
   const [current, setCurrent] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  // Hydrate slides dynamically from CRM2 Storefront CMS when configured
+  useEffect(() => {
+    fetch('/api/storefront', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!json?.success || !json?.data?.storefront) return;
+        const techSlides = json.data.storefront?.tech?.heroSlides || [];
+        const consultSlides = json.data.storefront?.consultancy?.heroSlides || [];
+        const crmSlides = [...techSlides, ...consultSlides].filter((s: any) => s && s.isActive !== false);
+        if (crmSlides.length > 0) {
+          const mapped: Slide[] = crmSlides.map((s: any, idx: number) => ({
+            title: s.badge || 'Saampark Official Offer',
+            highlight: s.title || 'Digital Solutions',
+            subtitle: s.subtitle || '',
+            badge: s.badge || 'Featured',
+            badgeIcon: idx % 2 === 0 ? Rocket : Sparkles,
+            href: s.ctaLink && s.ctaLink.startsWith('/') ? s.ctaLink : '/#marketplace-catalog',
+            image: s.image || '/assets/images/one-page-web.jpg',
+            accent: idx % 2 === 0 ? '#2563EB' : '#EB412C',
+            glowColor: idx % 2 === 0 ? 'rgba(37, 99, 235, 0.35)' : 'rgba(235, 65, 44, 0.35)',
+          }));
+          setSlides([...mapped, ...SLIDES].slice(0, 8));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handleResize = () => {
@@ -93,17 +121,17 @@ export function PromoCarousel() {
   useEffect(() => {
     if (isPaused) return;
     const interval = setInterval(() => {
-      setCurrent(prev => (prev + 1) % SLIDES.length);
+      setCurrent(prev => (prev + 1) % slides.length);
     }, 4500);
     return () => clearInterval(interval);
-  }, [isPaused]);
+  }, [isPaused, slides.length]);
 
   const handleNext = () => {
-    setCurrent(prev => (prev + 1) % SLIDES.length);
+    setCurrent(prev => (prev + 1) % slides.length);
   };
 
   const handlePrev = () => {
-    setCurrent(prev => (prev - 1 + SLIDES.length) % SLIDES.length);
+    setCurrent(prev => (prev - 1 + slides.length) % slides.length);
   };
 
   // 100% width per slide guarantees exact centering on all screen widths
@@ -120,7 +148,7 @@ export function PromoCarousel() {
         className={styles.slidesTrack}
         style={{ transform: transformStyle }}
       >
-        {SLIDES.map((slide, idx) => {
+        {slides.map((slide, idx) => {
           const BadgeIcon = slide.badgeIcon;
           const isActive = idx === current;
           return (
@@ -192,7 +220,7 @@ export function PromoCarousel() {
       </button>
 
       <div className={styles.dots}>
-        {SLIDES.map((slide, idx) => (
+        {slides.map((slide, idx) => (
           <button
             key={idx}
             className={`${styles.dot} ${idx === current ? styles.activeDot : ''}`}

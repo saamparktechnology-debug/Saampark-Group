@@ -150,7 +150,7 @@ export function EditorialHero({ onSelectDivision }: EditorialHeroProps) {
               </div>
               <div className={styles.statDivider} />
               <div className={styles.statBox}>
-                <span className={styles.statNumber}>4.9★</span>
+                <span className={styles.statNumber}>4.9 / 5</span>
                 <span className={styles.statLabel}>CSAT Score</span>
               </div>
             </div>

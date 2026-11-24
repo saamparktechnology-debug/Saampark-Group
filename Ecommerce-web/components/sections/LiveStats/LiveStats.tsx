@@ -64,7 +64,7 @@ export function LiveStats() {
       <div className="container">
         <div className={styles.header}>
           <div className="section-label" style={{ color: 'var(--primitive-teal-400)' }}>
-            ✦ Live Numbers
+            Verified Metrics
           </div>
           <h2 className={`text-display-lg ${styles.title}`}>
             Trusted by Businesses Across India

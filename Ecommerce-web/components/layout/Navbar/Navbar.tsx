@@ -7,7 +7,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Globe, Smartphone, Layers, Database, ShoppingCart,
   Share2, Megaphone, Search, MapPin, Video, Briefcase,
-  Sun, Moon, ShoppingBag, Bookmark, User, Sparkles, MessageCircle, PackageSearch
+  Sun, Moon, ShoppingBag, Bookmark, User, Sparkles, MessageCircle, PackageSearch,
+  Package, Activity, FileText, ExternalLink
 } from 'lucide-react';
 import { CONTACT } from '@/lib/data/services';
 import { useCommerceStore } from '@/lib/store/cartStore';
@@ -232,34 +233,48 @@ function NavbarContent() {
                     
                     {/* Left Column: E-Commerce Session */}
                     <div className={styles.dropdownCol}>
-                      <div className={styles.colTitle}>Account & Orders</div>
-                      <button 
-                        className={styles.dropLinkBtn} 
+                      <div className={styles.colTitle}>Account &amp; Orders</div>
+                      <Link
+                        href="/account?tab=profile"
+                        className={styles.dropLink}
+                        onClick={() => setProfileOpen(false)}
+                      >
+                        <User size={14} /> My Profile &amp; Billing
+                      </Link>
+                      <Link
+                        href="/account?tab=orders"
+                        className={styles.dropLink}
+                        onClick={() => setProfileOpen(false)}
+                      >
+                        <Package size={14} /> Order History ({myOrders?.length || 0})
+                      </Link>
+                      <button
+                        className={styles.dropLinkBtn}
                         onClick={() => { setProfileOpen(false); openTracking(); }}
                       >
-                        Live Order Tracking
+                        <Activity size={14} /> Live Order Status
                       </button>
-                      <a 
-                        href="https://crm2.saampark.com/login" 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
+                      <a
+                        href="https://crm2.saampark.com/login"
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className={styles.dropLink}
                         onClick={() => setProfileOpen(false)}
                         style={{ color: 'var(--color-brand)', fontWeight: 600 }}
                       >
-                        CRM Client Portal ↗
+                        <ExternalLink size={14} /> CRM Client Portal
                       </a>
-                      <button 
-                        className={styles.dropLinkBtn} 
+                      <button
+                        className={styles.dropLinkBtn}
                         onClick={() => { setProfileOpen(false); openWishlist(); }}
                       >
-                        Saved Wishlist ({wishlistIds.length})
+                        <Bookmark size={14} /> Saved Wishlist ({wishlistIds.length})
                       </button>
 
                       {myOrders && myOrders.length > 0 && (
                         <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--color-bg-sunken)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-subtle)' }}>
                           <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', fontWeight: 700 }}>Recent Order</div>
-                          <button 
+                          <button
                             onClick={() => { setProfileOpen(false); openTracking(myOrders[0].orderNumber); }}
                             style={{ background: 'none', border: 'none', padding: '2px 0 0', cursor: 'pointer', textAlign: 'left', display: 'flex', flexDirection: 'column' }}
                           >
@@ -270,8 +285,8 @@ function NavbarContent() {
                       )}
                       
                       <div className={styles.colTitle} style={{ marginTop: 16 }}>Services Portal</div>
-                      <Link href="/" className={styles.dropLink} onClick={() => setProfileOpen(false)}>
-                        Subscribed Plans
+                      <Link href="/account?tab=status" className={styles.dropLink} onClick={() => setProfileOpen(false)}>
+                        <FileText size={14} /> Invoices &amp; Milestones
                       </Link>
                       <Link href="/contact" className={styles.dropLink} onClick={() => setProfileOpen(false)}>
                         Custom Quote Request

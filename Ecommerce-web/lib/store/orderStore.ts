@@ -25,10 +25,18 @@ export interface PlacedOrder {
   gstNumber?: string;
   panNumber?: string;
   items: OrderItem[];
+  subtotal?: number;
+  gstAmount?: number;
+  gstType?: string;
+  discountAmount?: number;
+  couponCode?: string;
+  urgency?: string;
   totalAmount: number;
   status: 'Order Pending' | 'Invoice Created' | 'Order Processed' | 'Cancelled';
   companyId: 'tech' | 'consultancy';
   orderDate: string;
+  createdAt?: string;
+  notes?: string;
   invoiceNumber?: string;
   invoiceUrl?: string;
   clientPortal?: {
@@ -50,6 +58,7 @@ interface OrderStoreState {
   openTracking: (orderNumber?: string) => void;
   closeTracking: () => void;
   savePlacedOrder: (order: PlacedOrder) => void;
+  mergeOrders: (orders: PlacedOrder[]) => void;
 }
 
 export const useOrderStore = create<OrderStoreState>()(
@@ -77,6 +86,23 @@ export const useOrderStore = create<OrderStoreState>()(
         set((state) => ({
           myOrders: [order, ...state.myOrders.filter((o) => o.orderNumber !== order.orderNumber)],
         })),
+
+      mergeOrders: (incoming) =>
+        set((state) => {
+          const map = new Map<string, PlacedOrder>();
+          [...incoming, ...state.myOrders].forEach((o) => {
+            if (o && o.orderNumber) {
+              const prev = map.get(o.orderNumber);
+              map.set(o.orderNumber, prev ? { ...prev, ...o } : o);
+            }
+          });
+          const merged = Array.from(map.values()).sort(
+            (a, b) =>
+              new Date(b.createdAt || b.orderDate || 0).getTime() -
+              new Date(a.createdAt || a.orderDate || 0).getTime()
+          );
+          return { myOrders: merged };
+        }),
     }),
     {
       name: 'saampark_order_storage',

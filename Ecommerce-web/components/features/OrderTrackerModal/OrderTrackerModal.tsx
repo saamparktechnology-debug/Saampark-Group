@@ -13,7 +13,8 @@ import {
   Package,
   ArrowRight,
   ShieldAlert,
-  Loader2
+  Loader2,
+  Check
 } from 'lucide-react';
 import { useOrderStore, PlacedOrder } from '@/lib/store/orderStore';
 import styles from './OrderTrackerModal.module.css';
@@ -175,7 +176,9 @@ export function OrderTrackerModal() {
                 <div className={styles.stepper}>
                   <div className={styles.stepItem}>
                     <div className={`${styles.stepLine} ${styles.active}`} />
-                    <div className={`${styles.stepIcon} ${styles.active}`}>✓</div>
+                    <div className={`${styles.stepIcon} ${styles.active}`}>
+                      <Check size={14} strokeWidth={3} />
+                    </div>
                     <div className={styles.stepContent}>
                       <div className={styles.stepTitle}>1. Order Placed & Confirmed</div>
                       <div className={styles.stepDesc}>
@@ -199,7 +202,11 @@ export function OrderTrackerModal() {
                           : ''
                       }`}
                     >
-                      {order.status === 'Invoice Created' || order.status === 'Order Processed' ? '✓' : '2'}
+                      {order.status === 'Invoice Created' || order.status === 'Order Processed' ? (
+                        <Check size={14} strokeWidth={3} />
+                      ) : (
+                        '2'
+                      )}
                     </div>
                     <div className={styles.stepContent}>
                       <div className={styles.stepTitle}>2. Official CRM Tax Invoice Generation</div>
@@ -212,12 +219,12 @@ export function OrderTrackerModal() {
                             {order.invoiceUrl && (
                               <div>
                                 <a
-                                  href={`https://crm2.saampark.com${order.invoiceUrl}`}
+                                  href={order.invoiceUrl.startsWith('http') ? order.invoiceUrl : `https://crm2.saampark.com${order.invoiceUrl}`}
                                   target="_blank"
                                   rel="noreferrer"
                                   className={styles.invoiceAction}
                                 >
-                                  <FileText size={14} /> View Official Invoice ↗
+                                  <FileText size={14} /> View Official GST Invoice
                                 </a>
                               </div>
                             )}
@@ -231,7 +238,7 @@ export function OrderTrackerModal() {
 
                   <div className={styles.stepItem}>
                     <div className={`${styles.stepIcon} ${order.status === 'Order Processed' ? styles.active : ''}`}>
-                      {order.status === 'Order Processed' ? '✓' : '3'}
+                      {order.status === 'Order Processed' ? <Check size={14} strokeWidth={3} /> : '3'}
                     </div>
                     <div className={styles.stepContent}>
                       <div className={styles.stepTitle}>3. Engineering & Live Deployment</div>

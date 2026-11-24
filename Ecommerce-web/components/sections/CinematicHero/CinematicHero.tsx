@@ -119,7 +119,7 @@ export function CinematicHero({ onSelectDivision }: CinematicHeroProps) {
           </div>
           <div className={styles.statDivider} />
           <div className={styles.telemetryStat}>
-            <span className={styles.statValue}>★ 4.9/5</span>
+            <span className={styles.statValue}>4.9 / 5.0</span>
             <span className={styles.statLabel}>Verified CSAT Score</span>
           </div>
         </div>

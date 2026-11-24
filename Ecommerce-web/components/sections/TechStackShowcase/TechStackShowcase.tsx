@@ -9,7 +9,7 @@ export function TechStackShowcase() {
     <section className={`section ${styles.section}`}>
       <div className="container">
         <div className="section-header">
-          <div className="section-label">🛠 Technologies We Use</div>
+          <div className="section-label">Technologies We Use</div>
           <h2 className="text-display-md">
             Built with <span className="text-gradient-brand">Industry-Leading</span> Technology
           </h2>

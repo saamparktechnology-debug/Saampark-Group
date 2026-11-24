@@ -200,11 +200,67 @@ function MarketplaceContent() {
   const searchParams = useSearchParams();
 
   // Filters State
+  const [liveServices, setLiveServices] = useState<Service[]>(allServices);
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState<ServiceGroup | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<PrimaryCategory | 'all'>('all');
   const [sortBy, setSortBy] = useState<'popular' | 'rating' | 'price-low' | 'price-high' | 'newest'>('popular');
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'cinematic'>('grid');
+
+  // Hydrate catalog dynamically from CRM2 Storefront API so Admin Panel edits reflect live
+  useEffect(() => {
+    fetch('/api/storefront', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!json?.success || !json?.data?.products) return;
+        const crmTech = Array.isArray(json.data.products.tech) ? json.data.products.tech : [];
+        const crmConsult = Array.isArray(json.data.products.consultancy) ? json.data.products.consultancy : [];
+        const combined = [...crmTech, ...crmConsult];
+        if (combined.length === 0) return;
+
+        // Map CRM2 products cleanly onto storefront Service shape while preserving static defaults as fallback
+        const staticBySlug = new Map(allServices.map((s) => [s.slug, s]));
+        const mapped: Service[] = combined.map((p: any) => {
+          const fallback = staticBySlug.get(p.slug);
+          const groupNorm: ServiceGroup =
+            p.companyId === 'consultancy' || p.group === 'consultancy' ? 'consultancy' : 'technology';
+          const entityNorm = groupNorm === 'consultancy' ? 'scs' : 'str';
+          return {
+            ...(fallback || {}),
+            id: p.id || fallback?.id || p.slug,
+            name: p.name || fallback?.name || 'Service Package',
+            shortName: p.shortName || fallback?.shortName || p.name,
+            slug: p.slug || fallback?.slug || p.id,
+            group: groupNorm,
+            entity: (p.entity || fallback?.entity || entityNorm) as any,
+            primaryCategory: (p.primaryCategory || fallback?.primaryCategory || 'web-services') as PrimaryCategory,
+            category: (p.category || fallback?.category || 'website') as any,
+            sector: p.sector || fallback?.sector || 'web-development',
+            startingPrice: typeof p.discountPrice === 'number' && p.discountPrice > 0 ? p.discountPrice : (p.startingPrice ?? fallback?.startingPrice ?? null),
+            priceType: p.priceType || fallback?.priceType || 'one-time',
+            deliveryDays: typeof p.deliveryDays === 'number'
+              ? p.deliveryDays
+              : parseInt(String(p.deliveryDays || fallback?.deliveryDays || '5'), 10) || 5,
+            badge: p.badge !== undefined ? p.badge : fallback?.badge,
+            isPopular: p.isPopular ?? fallback?.isPopular ?? false,
+            isFeatured: p.isFeatured ?? fallback?.isFeatured ?? false,
+            image: p.image || fallback?.image || '/assets/images/website-dev.jpg',
+            color: p.color || fallback?.color || '#2563EB',
+            icon: p.icon || fallback?.icon || 'Globe',
+            href: p.href || fallback?.href || `/${groupNorm}/${p.sector || 'solutions'}/${p.slug}`,
+            description: p.description || fallback?.description || '',
+            features: Array.isArray(p.features) && p.features.length > 0 ? p.features : (fallback?.features || []),
+            notIncluded: Array.isArray(p.notIncluded) ? p.notIncluded : fallback?.notIncluded,
+          } as Service;
+        });
+
+        // Append any static services not overridden by CRM slugs so nothing disappears unexpectedly
+        const seenSlugs = new Set(mapped.map((m) => m.slug));
+        const merged = [...mapped, ...allServices.filter((s) => !seenSlugs.has(s.slug))];
+        setLiveServices(merged);
+      })
+      .catch(() => {});
+  }, []);
 
   // UI Dropdowns State
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
@@ -272,28 +328,28 @@ function MarketplaceContent() {
     return { rating, reviews };
   };
 
-  // Dynamic Live Counts Calculations (NEVER HARDCODED)
-  const totalServicesCount = useMemo(() => allServices.length, []);
+  // Dynamic Live Counts Calculations
+  const totalServicesCount = useMemo(() => liveServices.length, [liveServices]);
 
   const groupCounts: Record<string, number> = useMemo(() => {
     return {
-      technology: allServices.filter(s => s.group === 'technology').length,
-      consultancy: allServices.filter(s => s.group === 'consultancy').length,
-      research: allServices.filter(s => s.group === 'research').length,
+      technology: liveServices.filter(s => s.group === 'technology').length,
+      consultancy: liveServices.filter(s => s.group === 'consultancy').length,
+      research: liveServices.filter(s => s.group === 'research').length,
     };
-  }, []);
+  }, [liveServices]);
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     SERVICE_CATEGORIES.forEach(cat => {
-      counts[cat.id] = allServices.filter(s => s.primaryCategory === cat.id).length;
+      counts[cat.id] = liveServices.filter(s => s.primaryCategory === cat.id).length;
     });
     return counts;
-  }, []);
+  }, [liveServices]);
 
   // Filtered Services Dataset
   const filteredServices = useMemo(() => {
-    let result = allServices;
+    let result = liveServices;
 
     if (groupFilter !== 'all') {
       result = result.filter(s => s.group === groupFilter);
@@ -323,7 +379,7 @@ function MarketplaceContent() {
       if (sortBy === 'newest') return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
       return 0;
     });
-  }, [groupFilter, categoryFilter, search, sortBy]);
+  }, [liveServices, groupFilter, categoryFilter, search, sortBy]);
 
   const liveGroupCount = useMemo(() => {
     if (groupFilter === 'all') return totalServicesCount;
@@ -580,16 +636,16 @@ function MarketplaceContent() {
           <div id="marketplace-catalog" className={styles.catalogSectionHeader}>
             <div className={styles.telemetryHUD}>
               <span className={styles.catalogBadge}>
-                <Sparkles size={13} /> LIVE PRODUCT &amp; SERVICES ENGINE
+                <Sparkles size={13} /> SAAMPARK OFFICIAL CATALOG
               </span>
               <div className={styles.telemetryStrip}>
-                <span className={styles.telemetryItem}><span className={styles.telemetryDot} /> 39 NODES ACTIVE</span>
+                <span className={styles.telemetryItem}><span className={styles.telemetryDot} /> {totalServicesCount} Verified Services</span>
                 <span className={styles.telemetryDivider}>|</span>
-                <span className={styles.telemetryItem}>99.98% SLA</span>
+                <span className={styles.telemetryItem}>99.98% Delivery SLA</span>
                 <span className={styles.telemetryDivider}>|</span>
-                <span className={styles.telemetryItem}>ISO 9001:2015</span>
+                <span className={styles.telemetryItem}>ISO 9001:2015 Certified</span>
                 <span className={styles.telemetryDivider}>|</span>
-                <span className={styles.telemetryItem}>4.9/5 CSAT Rating</span>
+                <span className={styles.telemetryItem}>4.9 / 5.0 Client Rating</span>
               </div>
             </div>
 

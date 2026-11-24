@@ -12,10 +12,10 @@ interface Message {
 }
 
 const PRESETS = [
-  { label: '🌐 Website Inquiry', query: 'I want to build a website' },
-  { label: '📢 Run Ads / Marketing', query: 'How do you run Meta & Google ads?' },
-  { label: '💼 Company Registration', query: 'I want to register a Pvt Ltd or GST' },
-  { label: '📞 Talk to Support', query: 'What are your support numbers?' },
+  { label: 'Website Inquiry', query: 'I want to build a website' },
+  { label: 'Run Ads & Marketing', query: 'How do you run Meta & Google ads?' },
+  { label: 'Company Registration', query: 'I want to register a Pvt Ltd or GST' },
+  { label: 'Talk to Support', query: 'What are your support numbers?' },
 ];
 
 export function AIConsultant() {
@@ -64,7 +64,7 @@ export function AIConsultant() {
     if (q.includes('contact') || q.includes('phone') || q.includes('number') || q.includes('email') || q.includes('address') || q.includes('office') || q.includes('where')) {
       return {
         sender: 'ai',
-        text: `Saampark Group Office details:\n\n📍 Address: ${CONTACT.group.address}\n\n📞 Tech Division (STR): ${CONTACT.str.phone1} / ${CONTACT.str.phone2}\n📞 Consultancy (SCS): ${CONTACT.scs.phone}\n\n📧 STR Email: ${CONTACT.str.email}\n📧 SCS Email: ${CONTACT.scs.email}`,
+        text: `Saampark Group Office details:\n\nAddress: ${CONTACT.group.address}\n\nTech Division (STR): ${CONTACT.str.phone1} / ${CONTACT.str.phone2}\nConsultancy (SCS): ${CONTACT.scs.phone}\n\nSTR Email: ${CONTACT.str.email}\nSCS Email: ${CONTACT.scs.email}`,
       };
     }
 

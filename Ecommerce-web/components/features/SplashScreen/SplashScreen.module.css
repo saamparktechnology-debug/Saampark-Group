@@ -7,8 +7,8 @@
   justify-content: center;
   background-color: #060B13;
   overflow: hidden;
-  transition: opacity 500ms cubic-bezier(0.4, 0, 0.2, 1),
-              transform 500ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 550ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 550ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .splashContainer.fadeOut {
@@ -25,31 +25,41 @@
   pointer-events: none;
 }
 
-/* Glassmorphic Central Card */
+/* 3D Liquid Glass Central Card */
 .centerCard {
   position: relative;
   z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 40px 48px;
-  background: rgba(13, 27, 42, 0.65);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(0, 212, 200, 0.25);
-  border-radius: 28px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6),
-              0 0 40px var(--color-brand-subtle),
-              inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  padding: 42px 48px;
+  background: rgba(15, 23, 42, 0.56);
+  backdrop-filter: blur(28px) saturate(185%);
+  -webkit-backdrop-filter: blur(28px) saturate(185%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 30px;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.65),
+    0 0 40px rgba(37, 99, 235, 0.18),
+    inset 0 1px 1px rgba(255, 255, 255, 0.22);
   max-width: 440px;
   width: 90%;
-  animation: cardIn 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: cardIn 550ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: box-shadow 500ms ease, border-color 500ms ease;
+}
+
+.cardGlow {
+  border-color: rgba(96, 165, 250, 0.5);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.75),
+    0 0 65px rgba(37, 99, 235, 0.42),
+    inset 0 1px 2px rgba(255, 255, 255, 0.35);
 }
 
 @keyframes cardIn {
   from {
     opacity: 0;
-    transform: translateY(20px) scale(0.95);
+    transform: translateY(20px) scale(0.94);
   }
   to {
     opacity: 1;
@@ -57,15 +67,16 @@
   }
 }
 
-/* Ring & Logo System */
+/* Ring & 3D Broken->Waving->Glowing Logo Stage */
 .ringWrapper {
   position: relative;
-  width: 140px;
-  height: 140px;
+  width: 156px;
+  height: 156px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 24px;
+  perspective: 900px;
 }
 
 .svgRing {
@@ -79,63 +90,138 @@
 .ringTrack {
   fill: none;
   stroke: rgba(255, 255, 255, 0.08);
-  stroke-width: 4;
+  stroke-width: 3.5;
 }
 
 .ringProgress {
   fill: none;
-  stroke: #FFC93C;
-  stroke-width: 4;
+  stroke: #38BDF8;
+  stroke-width: 3.5;
   stroke-linecap: round;
   stroke-dasharray: 465;
   transition: stroke-dashoffset 80ms linear;
-  filter: drop-shadow(0 0 8px rgba(0, 212, 200, 0.8));
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.85));
 }
 
-.logoContainer {
-  position: relative;
-  width: 100px;
-  height: 100px;
+.shockwaveRing {
+  position: absolute;
+  inset: 14px;
   border-radius: 50%;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.03);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: inset 0 0 20px rgba(0, 212, 200, 0.2);
+  border: 2px solid rgba(96, 165, 250, 0.85);
+  box-shadow: 0 0 30px rgba(56, 189, 248, 0.7);
+  animation: shockwaveExpand 850ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: none;
 }
 
-.logoImage {
-  width: 84px;
-  height: 84px;
-  object-fit: contain;
-  filter: drop-shadow(0 0 16px rgba(0, 212, 200, 0.5));
-  animation: logoPulse 3s ease-in-out infinite alternate;
-}
-
-@keyframes logoPulse {
+@keyframes shockwaveExpand {
   0% {
-    transform: scale(0.98);
-    filter: drop-shadow(0 0 12px rgba(235, 65, 44, 0.4));
+    transform: scale(0.75);
+    opacity: 0.95;
   }
   100% {
-    transform: scale(1.03);
-    filter: drop-shadow(0 0 24px rgba(0, 212, 200, 0.8));
+    transform: scale(1.42);
+    opacity: 0;
   }
+}
+
+.logoMatrix {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  transform-style: preserve-3d;
+}
+
+.shardTile {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  will-change: transform, opacity;
+  border-radius: 3px;
+}
+
+.shardImg {
+  position: absolute;
+  width: 96px;
+  height: 96px;
+  max-width: none;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* Phase 1: Broken and dispersed in 3D space */
+.phaseBroken .shardTile {
+  transform: translate3d(var(--tx), var(--ty), 40px) rotate(var(--rot)) scale(0.78);
+  opacity: 0.72;
+  filter: drop-shadow(0 8px 16px rgba(56, 189, 248, 0.35));
+}
+
+/* Phase 2: Harmonic waving glide back and attaching smoothly */
+.phaseWaving .shardTile {
+  animation: waveAttach 1250ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--delay);
+}
+
+@keyframes waveAttach {
+  0% {
+    transform: translate3d(var(--tx), var(--ty), 40px) rotate(var(--rot)) scale(0.78);
+    opacity: 0.75;
+  }
+  38% {
+    transform: translate3d(calc(var(--tx) * 0.45), calc(var(--ty) * 0.25 - 16px), 65px) rotate(calc(var(--rot) * -0.4)) scale(1.06);
+    opacity: 1;
+    filter: drop-shadow(0 0 12px rgba(96, 165, 250, 0.75));
+  }
+  70% {
+    transform: translate3d(calc(var(--tx) * -0.06), calc(var(--ty) * 0.08 + 7px), 20px) rotate(calc(var(--rot) * 0.15)) scale(0.98);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Phase 3: Attached & Radiant Glow */
+.phaseGlowing .shardTile {
+  transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  opacity: 0;
+  transition: opacity 250ms ease;
+}
+
+.unifiedLogo {
+  position: absolute;
+  inset: 0;
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 260ms ease, transform 500ms cubic-bezier(0.16, 1, 0.3, 1), filter 500ms ease;
+  pointer-events: none;
+}
+
+.unifiedVisible {
+  opacity: 1;
+  transform: scale(1.06);
+  filter: drop-shadow(0 0 26px rgba(56, 189, 248, 0.95)) drop-shadow(0 0 12px rgba(255, 255, 255, 0.65));
 }
 
 /* Brand Text */
 .brandBox {
   text-align: center;
-  margin-bottom: 28px;
+  margin-bottom: 26px;
 }
 
 .brandTitle {
   font-family: var(--font-display, 'Inter', sans-serif);
-  font-size: 24px;
+  font-size: 23px;
   font-weight: 800;
   letter-spacing: 0.12em;
-  background: linear-gradient(135deg, #FFFFFF 0%, #E2F8F6 50%, #FFC93C 100%);
+  background: linear-gradient(135deg, #FFFFFF 0%, #BAE6FD 50%, #60A5FA 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin: 0 0 6px 0;
@@ -143,10 +229,10 @@
 }
 
 .brandSubtitle {
-  font-size: 12px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.55);
-  letter-spacing: 0.14em;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.58);
+  letter-spacing: 0.15em;
   text-transform: uppercase;
   margin: 0;
 }
@@ -162,7 +248,7 @@
 .progressBarTrack {
   width: 100%;
   height: 4px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 99px;
   overflow: hidden;
   position: relative;
@@ -170,10 +256,10 @@
 
 .progressBarFill {
   height: 100%;
-  background: linear-gradient(90deg, #EB412C 0%, #FFC93C 50%, #A5F3FC 100%);
+  background: linear-gradient(90deg, #2563EB 0%, #38BDF8 55%, #E0F2FE 100%);
   border-radius: 99px;
   transition: width 80ms linear;
-  box-shadow: 0 0 12px rgba(0, 212, 200, 0.9);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.9);
 }
 
 .metaRow {
@@ -185,13 +271,13 @@
 
 .isoBadge {
   font-size: 11px;
-  font-weight: 600;
-  color: #FFC93C;
-  background: rgba(0, 212, 200, 0.12);
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(0, 212, 200, 0.25);
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  color: #BAE6FD;
+  background: rgba(56, 189, 248, 0.14);
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  letter-spacing: 0.05em;
 }
 
 .percentText {

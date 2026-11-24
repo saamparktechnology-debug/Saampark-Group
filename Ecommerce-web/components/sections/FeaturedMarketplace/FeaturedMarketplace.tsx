@@ -104,7 +104,7 @@ function ServiceCard({ svc }: { svc: Service }) {
           </div>
           {svc.deliveryDays && (
             <div className={styles.delivery}>
-              <span>⚡</span> {svc.deliveryDays}d
+              {svc.deliveryDays}d SLA
             </div>
           )}
         </div>
@@ -137,7 +137,7 @@ const TABS = [
   { id: 'all',        label: 'All Products' },
   { id: 'str',        label: 'Technology Solutions' },
   { id: 'scs',        label: 'Consultancy Services' },
-  { id: 'popular',    label: '🔥 Best Selling' },
+  { id: 'popular',    label: 'Best Selling' },
 ];
 
 export function FeaturedMarketplace() {

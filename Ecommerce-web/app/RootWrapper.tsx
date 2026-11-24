@@ -5,6 +5,7 @@ import { SplashScreen } from '@/components/features/SplashScreen/SplashScreen';
 import { CommerceDrawers } from '@/components/layout/CommerceDrawers/CommerceDrawers';
 import { CheckoutModal } from '@/components/features/CheckoutModal/CheckoutModal';
 import { OrderTrackerModal } from '@/components/features/OrderTrackerModal/OrderTrackerModal';
+import { AuthModal } from '@/components/features/AuthModal/AuthModal';
 
 export function RootWrapper({ children }: { children: React.ReactNode }) {
   const [showSplash, setShowSplash] = useState(true);
@@ -54,6 +55,7 @@ export function RootWrapper({ children }: { children: React.ReactNode }) {
         <CommerceDrawers />
         <CheckoutModal />
         <OrderTrackerModal />
+        <AuthModal />
       </div>
     </>
   );

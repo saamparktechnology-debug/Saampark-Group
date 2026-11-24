@@ -122,7 +122,7 @@ export function CostEstimator() {
     if (projectType === 'web') {
       msg += `*Service:* Web Development\n`;
       msg += `*Pages:* ${webPages}\n`;
-      msg += `️ *Features Selected:* \n`;
+      msg += ` *Features Selected:* \n`;
       if (webAdmin) msg += ` - Admin Panel / CMS\n`;
       if (webDatabase) msg += ` - Custom Database Management\n`;
       if (webPayment) msg += ` - Payment Gateway Integration\n`;
@@ -130,14 +130,14 @@ export function CostEstimator() {
     } else if (projectType === 'app') {
       msg += `*Service:* Mobile App Development\n`;
       msg += `*Platform:* ${appPlatform.toUpperCase()}\n`;
-      msg += `️ *Features Selected:* \n`;
+      msg += ` *Features Selected:* \n`;
       if (appAuth) msg += ` - User Authentication & Profiles\n`;
       if (appPayment) msg += ` - Payment Gateway Setup\n`;
       if (appPush) msg += ` - Dynamic Push Notifications\n`;
     } else if (projectType === 'ads') {
       msg += `*Service:* Managed Ads Campaign\n`;
       msg += `*Platform:* ${adsPlatform === 'meta' ? 'Meta (FB & IG)' : 'Google Search & Display'}\n`;
-      msg += `️ *Duration:* ${adsDuration.toUpperCase()}\n`;
+      msg += ` *Duration:* ${adsDuration.toUpperCase()}\n`;
       msg += `*Plan:* ${adsPremium ? 'Premium Tier Campaign' : 'Standard Tier Campaign'}\n`;
     } else if (projectType === 'legal') {
       msg += `*Service:* Business Incorporation / Registration\n`;

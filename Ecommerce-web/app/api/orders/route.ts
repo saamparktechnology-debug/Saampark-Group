@@ -1,15 +1,45 @@
 import { NextResponse } from 'next/server';
 
+const CRM_PUBLIC_BASE = 'http://187.124.132.7:5005/api/v1/store/public';
 const CRM_API_ENDPOINT =
   process.env.CRM_INTERNAL_API ||
   process.env.NEXT_PUBLIC_CRM_API_URL ||
-  'http://187.124.132.7:5005/api/v1/store/public/orders';
+  `${CRM_PUBLIC_BASE}/orders`;
+
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const email = searchParams.get('email');
+    if (!email) {
+      return NextResponse.json(
+        { success: false, message: 'Email query parameter is required.' },
+        { status: 400 }
+      );
+    }
+
+    const res = await fetch(
+      `${CRM_PUBLIC_BASE}/client-orders?email=${encodeURIComponent(email.trim())}`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+      }
+    );
+
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, message: err?.message || 'Failed to fetch client orders.' },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // Validate required fields
     if (!body.clientName || !body.email || !body.phone) {
       return NextResponse.json(
         { success: false, message: 'Client name, email, and phone number are required.' },
@@ -17,7 +47,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Call CRM Backend API
     const response = await fetch(CRM_API_ENDPOINT, {
       method: 'POST',
       headers: {
