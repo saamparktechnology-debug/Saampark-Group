@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 
 export default function HomePage() {
   return (
-    <div style={{ paddingTop: 'calc(var(--nav-height, 64px) + 12px)' }}>
+    <div style={{ paddingTop: 'calc(var(--nav-height, 64px) + 4px)' }}>
       <MarketplaceHome />
     </div>
   );

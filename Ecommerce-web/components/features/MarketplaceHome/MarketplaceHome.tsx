@@ -58,7 +58,6 @@ import { CategoryCoverflow } from '../CategoryCoverflow/CategoryCoverflow';
 import { SkeletonLoader } from '@/components/ui/SkeletonLoader/SkeletonLoader';
 import { ProductQuickViewModal } from './ProductQuickViewModal';
 import { Interactive3DCanvas } from '@/components/ui/Interactive3DCanvas/Interactive3DCanvas';
-import { GlassTrustMarquee } from '@/components/ui/GlassTrustMarquee/GlassTrustMarquee';
 import { InteractiveTiltCard } from '@/components/ui/InteractiveTiltCard/InteractiveTiltCard';
 import { CostEstimator } from '@/components/features/CostEstimator/CostEstimator';
 import { InteractiveFAQ } from '@/components/features/InteractiveFAQ/InteractiveFAQ';
@@ -647,12 +646,7 @@ function MarketplaceContent() {
       <div className={`container ${styles.layout}`}>
         <main className={styles.main}>
           {/* ────────────────────────────────────────────────────────
-              1. 3D FLOATING LIQUID GLASS TRUST MARQUEE RIBBON
-             ──────────────────────────────────────────────────────── */}
-          <GlassTrustMarquee />
-
-          {/* ────────────────────────────────────────────────────────
-              2. CAMPAIGN SHOWCASE (Flagship Deals Carousel)
+              1. CAMPAIGN SHOWCASE (Flagship Deals Carousel)
              ──────────────────────────────────────────────────────── */}
           <div className={styles.heroLandingStage}>
             <div className={styles.ambientBlob1} />

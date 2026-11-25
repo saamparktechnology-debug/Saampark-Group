@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import styles from './CategoryCoverflow.module.css';
-import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const CATEGORIES = [
   {
@@ -112,9 +112,6 @@ export function CategoryCoverflow() {
   return (
     <div className={styles.coverflowContainer}>
       <div className={styles.headerArea}>
-        <span className={styles.eyebrowBadge}>
-          <Sparkles size={12} /> ENTERPRISE CORE CAPABILITIES
-        </span>
         <h2 className={styles.title}>Explore Our Core</h2>
         <p className={styles.subtitle}>Select any domain to explore ISO 9001:2015 verified solutions</p>
       </div>

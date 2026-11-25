@@ -15,6 +15,7 @@ import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useOrderStore } from '@/lib/store/orderStore';
+import { GlassTrustMarquee } from '@/components/ui/GlassTrustMarquee/GlassTrustMarquee';
 import styles from './Navbar.module.css';
 
 // ── Nav Link Data ──────────────────────────────────
@@ -146,17 +147,22 @@ function NavbarContent() {
             <span className={styles.logoText}>SAAMPARK</span>
           </Link>
 
-          {/* Centered Search Bar (Independent Floating Card) */}
-          <form onSubmit={handleSearchSubmit} className={styles.searchBox}>
-            <Search size={16} className={styles.searchIcon} />
-            <input
-              type="text"
-              placeholder="Search services..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={styles.searchInput}
-            />
-          </form>
+          {/* Center Slot: Inline Scrolling Marquee Pill (Fills Gap Between Logo & Actions) + Search */}
+          <div className={styles.centerSlot}>
+            <form onSubmit={handleSearchSubmit} className={styles.searchBox}>
+              <Search size={16} className={styles.searchIcon} />
+              <input
+                type="text"
+                placeholder="Search services..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={styles.searchInput}
+              />
+            </form>
+            <div className={styles.navMarqueeSlot}>
+              <GlassTrustMarquee inlineNav />
+            </div>
+          </div>
 
           {/* Right Side Actions (Independent Floating Card) */}
           <div className={styles.actions}>

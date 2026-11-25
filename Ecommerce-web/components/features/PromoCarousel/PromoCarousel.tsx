@@ -177,7 +177,6 @@ export function PromoCarousel() {
   const transformStyle = `translateX(-${current * 100}%)`;
 
   return (
-    <div className={styles.carouselOuter}>
     <div 
       className={styles.carousel}
       onMouseEnter={() => setIsPaused(true)}
@@ -212,7 +211,7 @@ export function PromoCarousel() {
                   <h3 className={styles.highlight}>{slide.highlight}</h3>
                   <p className={styles.subtitle}>{slide.subtitle}</p>
 
-                  <div className={styles.ctaRow} style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                  <div className={styles.ctaRow}>
                     <Link 
                       href={slide.href} 
                       className={styles.ctaBtn}
@@ -227,11 +226,11 @@ export function PromoCarousel() {
                         className={styles.promoCopyPill}
                         title="Click to copy promo code"
                       >
-                        {copiedCode === slide.promoCode ? <Check size={13} /> : <Copy size={13} />}
+                        {copiedCode === slide.promoCode ? <Check size={12} /> : <Copy size={12} />}
                         <span>
                           {copiedCode === slide.promoCode
-                            ? `Copied: ${slide.promoCode}`
-                            : `Code: ${slide.promoCode}`}
+                            ? `Copied`
+                            : `${slide.promoCode}`}
                         </span>
                       </button>
                     )}
@@ -288,37 +287,6 @@ export function PromoCarousel() {
           />
         ))}
       </div>
-    </div>
-
-    {activeOffers.length > 0 && (
-      <div className={styles.offersDeck} aria-label="Active Offer Promo Codes">
-        <div className={styles.offersDeckLabel}>
-          <Tag size={14} />
-          <span>Active Offer Promo Codes</span>
-        </div>
-        <div className={styles.offersChipRow}>
-          {activeOffers.map((off) => {
-            const isCopied = copiedCode === off.code;
-            return (
-              <button
-                key={off.id}
-                type="button"
-                className={`${styles.offerVoucher} ${isCopied ? styles.offerVoucherCopied : ''}`}
-                onClick={() => handleCopyCode(off.code)}
-                title={`${off.title} — Click to copy code ${off.code}`}
-              >
-                <span className={styles.offerPercent}>{off.percent}% OFF</span>
-                <span className={styles.offerCode}>{off.code}</span>
-                <span className={styles.offerAction}>
-                  {isCopied ? <Check size={12} /> : <Copy size={12} />}
-                  {isCopied ? 'Copied' : 'Copy'}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    )}
     </div>
   );
 }

@@ -173,3 +173,104 @@
     font-size: 9px;
   }
 }
+
+/* ── Compact Inline Navbar Capsule Mode ── */
+.inlineNavMarquee {
+  position: relative;
+  width: 100%;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.92),
+    inset 0 -1px 2px rgba(31, 36, 29, 0.06),
+    0 8px 24px -6px rgba(31, 36, 29, 0.1);
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+}
+
+:global([data-theme="dark"]) .inlineNavMarquee {
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.16),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.35),
+    0 8px 24px -6px rgba(0, 0, 0, 0.55);
+}
+
+.inlineNavMarquee .fadeLeft,
+.inlineNavMarquee .fadeRight {
+  width: 24px;
+}
+
+.inlineTrack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 8px;
+  width: max-content;
+  animation: scrollMarquee 32s linear infinite;
+  will-change: transform;
+}
+
+.inlineNavMarquee:hover .inlineTrack {
+  animation-play-state: paused;
+}
+
+.inlinePillItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+}
+
+:global([data-theme="dark"]) .inlinePillItem {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.inlineIconCircle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+
+.inlinePillTitle {
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  letter-spacing: 0.03em;
+}
+
+@media (max-width: 768px) {
+  .inlineNavMarquee {
+    height: 42px;
+    border-radius: 14px;
+  }
+  .inlinePillItem {
+    padding: 3px 8px;
+    gap: 5px;
+  }
+  .inlineIconCircle {
+    width: 18px;
+    height: 18px;
+  }
+  .inlinePillTitle {
+    font-size: 9.5px;
+  }
+}

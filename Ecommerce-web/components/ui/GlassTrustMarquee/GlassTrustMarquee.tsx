@@ -55,33 +55,36 @@ const TRUST_BADGES = [
   },
 ];
 
-export function GlassTrustMarquee() {
+export function GlassTrustMarquee({ inlineNav = false }: { inlineNav?: boolean }) {
   // Duplicate for smooth seamless infinite scroll loop
   const duplicatedBadges = [...TRUST_BADGES, ...TRUST_BADGES];
 
   return (
-    <div className={styles.marqueeSection} aria-label="Trust and Certifications">
+    <div
+      className={inlineNav ? styles.inlineNavMarquee : styles.marqueeSection}
+      aria-label="Trust and Certifications"
+    >
       <div className={styles.fadeLeft} />
       <div className={styles.fadeRight} />
       
-      <div className={styles.track}>
+      <div className={inlineNav ? styles.inlineTrack : styles.track}>
         {duplicatedBadges.map((badge, idx) => {
           const Icon = badge.icon;
           return (
-            <div key={idx} className={styles.pillItem}>
+            <div key={idx} className={inlineNav ? styles.inlinePillItem : styles.pillItem}>
               <div
-                className={styles.iconCircle}
+                className={inlineNav ? styles.inlineIconCircle : styles.iconCircle}
                 style={{
-                  background: `linear-gradient(135deg, ${badge.accent}22 0%, ${badge.accent}08 100%)`,
-                  borderColor: `${badge.accent}44`,
+                  background: `linear-gradient(135deg, ${badge.accent}24 0%, ${badge.accent}0a 100%)`,
+                  borderColor: `${badge.accent}55`,
                   color: badge.accent,
                 }}
               >
-                <Icon size={16} />
+                <Icon size={inlineNav ? 12 : 16} />
               </div>
               <div className={styles.textGroup}>
-                <span className={styles.pillTitle}>{badge.title}</span>
-                <span className={styles.pillSubtitle}>{badge.subtitle}</span>
+                <span className={inlineNav ? styles.inlinePillTitle : styles.pillTitle}>{badge.title}</span>
+                {!inlineNav && <span className={styles.pillSubtitle}>{badge.subtitle}</span>}
               </div>
               <div className={styles.ambientGlow} style={{ background: badge.accent }} />
             </div>
