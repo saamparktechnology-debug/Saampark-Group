@@ -670,21 +670,6 @@ function MarketplaceContent() {
               4. SECTION HEADER (Cinematic Technical Telemetry HUD)
              ──────────────────────────────────────────────────────── */}
           <div id="marketplace-catalog" className={styles.catalogSectionHeader}>
-            <div className={styles.telemetryHUD}>
-              <span className={styles.catalogBadge}>
-                <Sparkles size={13} /> SAAMPARK OFFICIAL CATALOG
-              </span>
-              <div className={styles.telemetryStrip}>
-                <span className={styles.telemetryItem}><span className={styles.telemetryDot} /> {totalServicesCount} Verified Services</span>
-                <span className={styles.telemetryDivider}>|</span>
-                <span className={styles.telemetryItem}>99.98% Delivery SLA</span>
-                <span className={styles.telemetryDivider}>|</span>
-                <span className={styles.telemetryItem}>ISO 9001:2015 Certified</span>
-                <span className={styles.telemetryDivider}>|</span>
-                <span className={styles.telemetryItem}>4.9 / 5.0 Client Rating</span>
-              </div>
-            </div>
-
             <h2 className={styles.catalogTitle}>Browse Solutions &amp; Services</h2>
             <p className={styles.catalogSubtitle}>
               ISO 9001:2015 verified software architecture, marketing operations &amp; business consulting.
