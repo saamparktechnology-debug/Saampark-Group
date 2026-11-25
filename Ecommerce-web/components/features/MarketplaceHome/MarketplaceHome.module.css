@@ -377,13 +377,61 @@
 
 @media (max-width: 640px) {
   .controlsCenteredWrapper {
-    flex-direction: column;
-    gap: 10px;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    gap: 8px !important;
     width: 100%;
+  }
+  .dropdownControlWrap {
+    min-width: 0;
+    flex: 1 1 0%;
+  }
+  .controlBtnLeft {
+    min-width: 0;
+    gap: 7px !important;
+    flex: 1;
+  }
+  .controlBtnContent {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .controlBtn {
+    padding: 8px 10px !important;
+    border-radius: 16px !important;
+    gap: 4px;
+  }
+  .controlGlassIconWrap {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 8px !important;
+  }
+  .controlLabel {
+    font-size: 10.5px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .controlSubCount {
+    font-size: 9.5px !important;
+    white-space: nowrap;
+  }
+  .groupDropdownMenu {
+    min-width: 220px !important;
+    width: max(100%, 240px) !important;
+    left: 0 !important;
+  }
+  .megaExplorerPopover {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    right: 0 !important;
+    padding: 16px !important;
+    max-height: 75vh;
+    overflow-y: auto;
   }
 }
 
-@media (max-width: 768px) {
+@media (min-width: 641px) and (max-width: 768px) {
   .controlStage {
     margin-bottom: 20px !important;
   }

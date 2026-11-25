@@ -667,19 +667,9 @@ function MarketplaceContent() {
           </div>
 
           {/* ────────────────────────────────────────────────────────
-              4. SECTION HEADER (Cinematic Technical Telemetry HUD)
-             ──────────────────────────────────────────────────────── */}
-          <div id="marketplace-catalog" className={styles.catalogSectionHeader}>
-            <h2 className={styles.catalogTitle}>Browse Solutions &amp; Services</h2>
-            <p className={styles.catalogSubtitle}>
-              ISO 9001:2015 verified software architecture, marketing operations &amp; business consulting.
-            </p>
-          </div>
-
-          {/* ────────────────────────────────────────────────────────
               2. CENTERED CONTROLS BAR (All Group Services + All Services)
              ──────────────────────────────────────────────────────── */}
-          <div className={styles.controlsSection}>
+          <div id="marketplace-catalog" className={styles.controlsSection}>
             <div className={styles.controlsCenteredWrapper}>
               
               {/* CONTROL 1: ALL GROUP SERVICES DROPDOWN */}
