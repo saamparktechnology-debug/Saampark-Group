@@ -68,11 +68,12 @@
 .inner {
   max-width: 100%;
   width: 100%;
-  padding-inline: var(--section-px);
+  padding-inline: 0;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
 }
 
 @media (max-width: 640px) {
@@ -94,15 +95,17 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  flex: 1;
+  flex: 1 1 0%;
   min-width: 0;
-  margin-inline: 10px;
+  overflow: hidden;
+  margin-inline: 4px;
 }
 
 .navMarqueeSlot {
-  flex: 1;
+  flex: 1 1 160px;
   min-width: 0;
-  max-width: 520px;
+  max-width: 460px;
+  overflow: hidden;
 }
 
 @media (max-width: 640px) {
@@ -173,10 +176,11 @@
     inset 0 -1px 2px rgba(31, 36, 29, 0.06),
     0 8px 24px -6px rgba(31, 36, 29, 0.1);
   height: 48px;
-  padding: 0 16px;
-  max-width: 260px;
-  width: 100%;
-  flex-shrink: 1;
+  padding: 0 14px;
+  max-width: 220px;
+  min-width: 120px;
+  width: auto;
+  flex: 0 1 220px;
   transition: all var(--duration-fast) var(--ease-standard);
 }
 

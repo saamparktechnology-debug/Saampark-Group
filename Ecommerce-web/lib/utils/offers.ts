@@ -3,9 +3,12 @@ export interface StorefrontOffer {
   code: string;
   percent: number;
   title: string;
+  badge?: string;
   description: string;
   scope: 'tech' | 'consultancy';
+  showInCheckout: boolean;
   validUntil?: string;
+  ctaText?: string;
   ctaLink?: string;
   image?: string;
 }
@@ -16,20 +19,14 @@ export const DEFAULT_TECH_OFFERS: StorefrontOffer[] = [
     code: 'DIWALI25',
     percent: 25,
     title: 'Diwali Digital Booster Pack',
+    badge: '25% OFF Voucher',
     description: 'FLAT 25% DISCOUNT ON CUSTOM CRM & ERP SYSTEMS',
     scope: 'tech',
+    showInCheckout: false,
     validUntil: '2026-12-31',
+    ctaText: 'Claim Offer',
     ctaLink: '/#marketplace-catalog',
-  },
-  {
-    id: 'default-tech20',
-    code: 'TECH20',
-    percent: 20,
-    title: 'Web & App Launch Offer',
-    description: 'FLAT 20% OFF on Website & Mobile App Development packages',
-    scope: 'tech',
-    validUntil: '2026-12-31',
-    ctaLink: '/#marketplace-catalog',
+    image: '/assets/images/one-page-web.jpg',
   },
 ];
 
@@ -39,10 +36,14 @@ export const DEFAULT_CONSULTANCY_OFFERS: StorefrontOffer[] = [
     code: 'STARTUP30',
     percent: 30,
     title: 'Startup Legal Onboarding Bundle',
+    badge: '30% OFF Voucher',
     description: '30% OFF Trademark + GST + Company Registration Services',
     scope: 'consultancy',
+    showInCheckout: false,
     validUntil: '2026-12-31',
+    ctaText: 'Claim Offer',
     ctaLink: '/#marketplace-catalog',
+    image: '/assets/images/pvtltd-reg.jpg',
   },
 ];
 
@@ -61,64 +62,48 @@ function parsePercentFromText(text?: string): number | null {
 
 export function extractStorefrontOffers(storefront: any): StorefrontOffer[] {
   const results: StorefrontOffer[] = [];
-  const seenCodes = new Set<string>();
+  const seenIds = new Set<string>();
 
   const pushOffer = (offer: StorefrontOffer) => {
-    const code = offer.code.trim().toUpperCase();
-    if (!code || offer.percent <= 0 || seenCodes.has(code)) return;
-    seenCodes.add(code);
-    results.push({ ...offer, code });
+    const id = offer.id || offer.code || offer.title;
+    if (!id || seenIds.has(id)) return;
+    seenIds.add(id);
+    results.push({
+      ...offer,
+      code: (offer.code || '').trim().toUpperCase(),
+    });
   };
 
   (['tech', 'consultancy'] as const).forEach((scope) => {
     const cfg = storefront?.[scope];
-    if (cfg) {
-      const banners = Array.isArray(cfg.discountBanners) ? cfg.discountBanners : [];
-      banners.forEach((b: any, idx: number) => {
-        if (b?.isActive !== false && b?.promoCode) {
+    if (cfg && Array.isArray(cfg.discountBanners)) {
+      cfg.discountBanners.forEach((b: any, idx: number) => {
+        if (b?.isActive !== false && b?.title) {
           const pct =
             Number(b.discountPercentage) ||
             parsePercentFromText(b.discountText) ||
-            20;
+            0;
           pushOffer({
             id: b.id || `${scope}-banner-${idx}`,
-            code: String(b.promoCode),
+            code: String(b.promoCode || ''),
             percent: pct,
             title: b.title || 'Official Storefront Offer',
-            description: b.discountText || `Get ${pct}% OFF with code ${b.promoCode}`,
+            badge: b.badge || (pct > 0 ? `${pct}% OFF Voucher` : 'Featured Offer'),
+            description: b.discountText || (b.promoCode ? `Get ${pct}% OFF with code ${b.promoCode}` : ''),
             scope,
+            showInCheckout: !!b.showInCheckout,
             validUntil: b.validUntil,
+            ctaText: b.ctaText || 'Claim Offer',
             ctaLink: b.ctaLink && String(b.ctaLink).startsWith('/') ? b.ctaLink : '/#marketplace-catalog',
             image: b.image,
           });
         }
       });
-
-      if (cfg.promoRibbon?.enabled && cfg.promoRibbon?.highlightText) {
-        const ribbonCodeMatch = String(cfg.promoRibbon.highlightText).match(/([A-Z0-9]{4,16})/);
-        if (ribbonCodeMatch) {
-          const ribbonCode = ribbonCodeMatch[1];
-          const pct = parsePercentFromText(cfg.promoRibbon.text) || FALLBACK_COUPON_PERCENTAGES[ribbonCode] || 20;
-          pushOffer({
-            id: `${scope}-ribbon`,
-            code: ribbonCode,
-            percent: pct,
-            title: cfg.promoRibbon.badge || 'Limited Offer',
-            description: cfg.promoRibbon.text || `Save ${pct}% using promo code ${ribbonCode}`,
-            scope,
-            ctaLink: cfg.promoRibbon.link && String(cfg.promoRibbon.link).startsWith('/') ? cfg.promoRibbon.link : '/#marketplace-catalog',
-          });
-        }
-      }
-    } else {
+    } else if (!cfg) {
       const defaults = scope === 'tech' ? DEFAULT_TECH_OFFERS : DEFAULT_CONSULTANCY_OFFERS;
       defaults.forEach(pushOffer);
     }
   });
-
-  if (results.length === 0) {
-    [...DEFAULT_TECH_OFFERS, ...DEFAULT_CONSULTANCY_OFFERS].forEach(pushOffer);
-  }
 
   return results;
 }

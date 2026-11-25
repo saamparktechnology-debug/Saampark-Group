@@ -96,10 +96,7 @@ export function CheckoutModal() {
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; percent: number } | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [liveCoupons, setLiveCoupons] = useState<Record<string, number>>(FALLBACK_COUPON_PERCENTAGES);
-  const [activeOffers, setActiveOffers] = useState<StorefrontOffer[]>([
-    ...DEFAULT_TECH_OFFERS,
-    ...DEFAULT_CONSULTANCY_OFFERS,
-  ]);
+  const [activeOffers, setActiveOffers] = useState<StorefrontOffer[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [placedOrder, setPlacedOrder] = useState<PlacedOrder | null>(null);
@@ -130,12 +127,18 @@ export function CheckoutModal() {
       .then((json) => {
         if (json?.success && json?.data?.storefront) {
           const offers = extractStorefrontOffers(json.data.storefront);
-          setActiveOffers(offers);
-          const map: Record<string, number> = { ...FALLBACK_COUPON_PERCENTAGES };
+          setActiveOffers(
+            offers.filter((off) => Boolean(off.code && off.percent > 0 && off.showInCheckout))
+          );
+          const map: Record<string, number> = {};
           offers.forEach((off) => {
-            map[off.code] = off.percent;
+            if (off.code && off.percent > 0) {
+              map[off.code] = off.percent;
+            }
           });
-          setLiveCoupons(map);
+          setLiveCoupons(
+            Object.keys(map).length > 0 ? map : { ...FALLBACK_COUPON_PERCENTAGES }
+          );
         }
       })
       .catch(() => {});

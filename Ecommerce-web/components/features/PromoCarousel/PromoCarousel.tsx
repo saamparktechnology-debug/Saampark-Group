@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ChevronLeft, ChevronRight, Sparkles, Rocket, Megaphone, ShieldAlert, Smartphone, Tag, Copy, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Sparkles, Tag, Copy, Check } from 'lucide-react';
 import {
   extractStorefrontOffers,
   DEFAULT_TECH_OFFERS,
@@ -19,6 +19,7 @@ interface Slide {
   badge: string;
   badgeIcon: React.ComponentType<{ size?: number }>;
   href: string;
+  ctaText?: string;
   image: string;
   accent: string;
   glowColor: string;
@@ -26,74 +27,38 @@ interface Slide {
   promoPercent?: number;
 }
 
+function offerToSlide(off: StorefrontOffer): Slide {
+  const hasPromo = Boolean(off.code && off.percent > 0);
+  return {
+    title: hasPromo
+      ? `${off.scope === 'tech' ? 'Technology Offer' : 'Consultancy Offer'} • Code ${off.code}`
+      : off.scope === 'tech'
+        ? 'Saampark Technology'
+        : 'Saampark Consultancy',
+    highlight: off.title,
+    subtitle: off.description,
+    badge: off.badge || (hasPromo ? `${off.percent}% OFF Voucher` : 'Featured Offer'),
+    badgeIcon: hasPromo ? Tag : Sparkles,
+    href: off.ctaLink && off.ctaLink.startsWith('/') ? off.ctaLink : '/#marketplace-catalog',
+    ctaText: off.ctaText || 'Claim Offer',
+    image: off.image || '/assets/images/one-page-web.jpg',
+    accent: off.scope === 'tech' ? '#2563EB' : '#EB412C',
+    glowColor: off.scope === 'tech' ? 'rgba(37, 99, 235, 0.35)' : 'rgba(235, 65, 44, 0.35)',
+    promoCode: hasPromo ? off.code : undefined,
+    promoPercent: hasPromo ? off.percent : undefined,
+  };
+}
+
 const SLIDES: Slide[] = [
-  {
-    title: 'Web Engineering Special',
-    highlight: 'One Page Website at ₹1,499! (Save 25%)',
-    subtitle: 'Fully responsive, modern portfolio layout with essential SEO & lightning performance.',
-    badge: 'Special Offer',
-    badgeIcon: Rocket,
-    href: '/technology/web-development/one-page-website',
-    image: '/assets/images/one-page-web.jpg',
-    accent: '#EB412C',
-    glowColor: 'rgba(235, 65, 44, 0.45)',
-  },
-  {
-    title: 'Local Ads Launch Deal',
-    highlight: 'Meta & Google Ads Trial at ₹499/wk!',
-    subtitle: 'Target 1M+ local customers & boost verified business leads in 48 hours.',
-    badge: 'Popular',
-    badgeIcon: Megaphone,
-    href: '/consultancy/ads-management/meta-ads',
-    image: '/assets/images/meta-ads-weekly.jpg',
-    accent: '#9CAF88',
-    glowColor: 'rgba(156, 175, 136, 0.45)',
-  },
-  {
-    title: 'Creative AI Production',
-    highlight: 'Full AI Video Ad at ₹1,499!',
-    subtitle: 'Studio AI voiceover, cinematic script & guaranteed 72h turnaround delivery.',
-    badge: 'AI Innovation',
-    badgeIcon: Sparkles,
-    href: '/consultancy/video-ai/full-ai-video',
-    image: '/assets/images/video-full-ai.jpg',
-    accent: '#FFC93C',
-    glowColor: 'rgba(255, 201, 60, 0.45)',
-  },
-  {
-    title: 'Business Legal Special',
-    highlight: 'Pvt Ltd Registration — Complete Legal',
-    subtitle: 'DSC, DIN, MOA, AOA & MCA filings handled directly by certified chartered experts.',
-    badge: 'Professional Legal',
-    badgeIcon: ShieldAlert,
-    href: '/consultancy/business-legal/pvt-ltd-registration',
-    image: '/assets/images/pvtltd-reg.jpg',
-    accent: '#EB412C',
-    glowColor: 'rgba(235, 65, 44, 0.45)',
-  },
-  {
-    title: 'Mobile App Prototyping',
-    highlight: 'Hybrid App (Android + iOS) Solution',
-    subtitle: 'Flutter cross-platform single codebase development with native fluid 60FPS.',
-    badge: 'Mobile Application',
-    badgeIcon: Smartphone,
-    href: '/technology/app-development/hybrid',
-    image: '/assets/images/hybrid-app.jpg',
-    accent: '#9CAF88',
-    glowColor: 'rgba(156, 175, 136, 0.45)',
-  },
-];
+  ...DEFAULT_TECH_OFFERS,
+  ...DEFAULT_CONSULTANCY_OFFERS,
+].map(offerToSlide);
 
 export function PromoCarousel() {
   const [slides, setSlides] = useState<Slide[]>(SLIDES);
-  const [activeOffers, setActiveOffers] = useState<StorefrontOffer[]>([
-    ...DEFAULT_TECH_OFFERS,
-    ...DEFAULT_CONSULTANCY_OFFERS,
-  ]);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [current, setCurrent] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
 
   const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -101,7 +66,7 @@ export function PromoCarousel() {
     setTimeout(() => setCopiedCode((prev) => (prev === code ? null : prev)), 2500);
   };
 
-  // Hydrate slides & live offer promo codes dynamically from CRM2 Storefront CMS
+  // Hydrate homepage offer banners strictly from CRM2 Storefront CMS discountBanners
   useEffect(() => {
     fetch('/api/storefront', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
@@ -109,56 +74,17 @@ export function PromoCarousel() {
         if (!json?.success || !json?.data?.storefront) return;
         const sf = json.data.storefront;
         const offers = extractStorefrontOffers(sf);
-        setActiveOffers(offers);
-
-        const offerSlides: Slide[] = offers.map((off, idx) => ({
-          title: `${off.title} • Use Code ${off.code}`,
-          highlight: `FLAT ${off.percent}% OFF — Promo Code: ${off.code}`,
-          subtitle: off.description,
-          badge: `${off.percent}% OFF Voucher`,
-          badgeIcon: Tag,
-          href: off.ctaLink || '/#marketplace-catalog',
-          image: off.image || '/assets/images/one-page-web.jpg',
-          accent: off.scope === 'tech' ? '#2563EB' : '#EB412C',
-          glowColor: off.scope === 'tech' ? 'rgba(37, 99, 235, 0.35)' : 'rgba(235, 65, 44, 0.35)',
-          promoCode: off.code,
-          promoPercent: off.percent,
-        }));
-
-        const techSlides = sf?.tech?.heroSlides || [];
-        const consultSlides = sf?.consultancy?.heroSlides || [];
-        const crmSlides = [...techSlides, ...consultSlides].filter((s: any) => s && s.isActive !== false);
-        const mappedHero: Slide[] = crmSlides.map((s: any, idx: number) => ({
-          title: s.badge || 'Saampark Official Offer',
-          highlight: s.title || 'Digital Solutions',
-          subtitle: s.subtitle || '',
-          badge: s.badge || 'Featured',
-          badgeIcon: idx % 2 === 0 ? Rocket : Sparkles,
-          href: s.ctaLink && s.ctaLink.startsWith('/') ? s.ctaLink : '/#marketplace-catalog',
-          image: s.image || '/assets/images/one-page-web.jpg',
-          accent: idx % 2 === 0 ? '#2563EB' : '#EB412C',
-          glowColor: idx % 2 === 0 ? 'rgba(37, 99, 235, 0.35)' : 'rgba(235, 65, 44, 0.35)',
-        }));
-
-        const merged = [...offerSlides, ...mappedHero, ...SLIDES].slice(0, 8);
-        if (merged.length > 0) {
-          setSlides(merged);
+        if (offers.length > 0) {
+          const mapped = offers.map(offerToSlide);
+          setSlides(mapped);
+          setCurrent((prev) => (prev >= mapped.length ? 0 : prev));
         }
       })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || slides.length <= 1) return;
     const interval = setInterval(() => {
       setCurrent(prev => (prev + 1) % slides.length);
     }, 4500);
@@ -216,7 +142,7 @@ export function PromoCarousel() {
                       href={slide.href} 
                       className={styles.ctaBtn}
                     >
-                      <span>Claim Offer</span>
+                      <span>{slide.ctaText || 'Claim Offer'}</span>
                       <span aria-hidden="true">&rarr;</span>
                     </Link>
                     {slide.promoCode && (
@@ -229,8 +155,8 @@ export function PromoCarousel() {
                         {copiedCode === slide.promoCode ? <Check size={12} /> : <Copy size={12} />}
                         <span>
                           {copiedCode === slide.promoCode
-                            ? `Copied`
-                            : `${slide.promoCode}`}
+                            ? 'Copied'
+                            : `Code: ${slide.promoCode}`}
                         </span>
                       </button>
                     )}
