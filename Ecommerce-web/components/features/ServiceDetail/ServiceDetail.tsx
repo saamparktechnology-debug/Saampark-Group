@@ -26,12 +26,15 @@ import {
   Code,
   Database,
   Smartphone,
+  Tag,
+  Copy,
 } from 'lucide-react';
 import { type Service, CONTACT } from '@/lib/data/services';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
 import { useOrderStore } from '@/lib/store/orderStore';
 import { useAuthStore } from '@/lib/store/authStore';
+import { extractStorefrontOffers, type StorefrontOffer } from '@/lib/utils/offers';
 import styles from './ServiceDetail.module.css';
 
 const getPortfolioImages = (category: string) => {
@@ -112,6 +115,8 @@ export function ServiceDetail({ service }: Props) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [scrolled, setScrolled] = useState(false);
+  const [liveOffer, setLiveOffer] = useState<StorefrontOffer | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
 
   const { cart, addToCart, wishlistIds, toggleWishlist } = useCommerceStore();
   const { openCart } = useUIStore();
@@ -154,6 +159,19 @@ export function ServiceDetail({ service }: Props) {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    fetch('/api/storefront')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!json?.success || !json?.data?.storefront) return;
+        const offers = extractStorefrontOffers(json.data.storefront);
+        const scope = service.group === 'consultancy' || service.entity === 'scs' ? 'consultancy' : 'tech';
+        const match = offers.find((o) => o.scope === scope) || offers[0] || null;
+        setLiveOffer(match);
+      })
+      .catch(() => {});
+  }, [service.group, service.entity]);
 
   const handleAddToCart = () => {
     requireAuth(() => {
@@ -350,6 +368,31 @@ export function ServiceDetail({ service }: Props) {
                 <div className={styles.priceSub}>
                   Upfront fixed billing &bull; +18% GST Tax Invoice &bull; Zero hidden charges
                 </div>
+                {liveOffer && (
+                  <div className={styles.promoBannerBox}>
+                    <div className={styles.promoBannerLeft}>
+                      <Tag size={14} className={styles.promoTagIcon} />
+                      <div>
+                        <div className={styles.promoBannerTitle}>
+                          {liveOffer.percent}% OFF with Code <span>{liveOffer.code}</span>
+                        </div>
+                        <div className={styles.promoBannerDesc}>{liveOffer.title}</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.promoCopyBtn}
+                      onClick={() => {
+                        navigator.clipboard.writeText(liveOffer.code);
+                        setCopiedCode(true);
+                        setTimeout(() => setCopiedCode(false), 2200);
+                      }}
+                    >
+                      {copiedCode ? <Check size={12} /> : <Copy size={12} />}
+                      {copiedCode ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Primary + Secondary Glass Actions */}

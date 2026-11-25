@@ -40,7 +40,7 @@ export type ServiceCategory =
 // ─────────────────────────────────────────
 export type ServiceGroup = 'technology' | 'research' | 'consultancy';
 
-export type PrimaryCategory =
+export type KnownPrimaryCategory =
   // Technology
   | 'web-services'
   | 'application-services'
@@ -62,6 +62,8 @@ export type PrimaryCategory =
   | 'education'
   | 'legal';
 
+export type PrimaryCategory = KnownPrimaryCategory | (string & {});
+
 export interface GroupMetadata {
   id: ServiceGroup;
   name: string;
@@ -72,7 +74,7 @@ export interface GroupMetadata {
 }
 
 export interface CategoryMetadata {
-  id: PrimaryCategory;
+  id: string;
   group: ServiceGroup;
   name: string;
   capacity: string;

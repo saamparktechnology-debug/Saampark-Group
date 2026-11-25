@@ -1,0 +1,49 @@
+.page {
+  padding-top: calc(var(--nav-height) + 28px);
+  padding-bottom: var(--size-20);
+}
+
+.heroBanner {
+  background: var(--primitive-navy-900);
+  padding: var(--size-16) 0;
+  color: #ffffff;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: var(--size-10);
+  align-items: start;
+}
+
+.infoStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-6);
+  min-width: 0;
+}
+
+.infoCard {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  padding: var(--size-6);
+  border-radius: 22px;
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    var(--shadow-card);
+}
+
+:global([data-theme="dark"]) .infoCard {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    var(--shadow-card);
+}
+
+@media (max-width: 960px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: var(--size-6);
+  }
+}

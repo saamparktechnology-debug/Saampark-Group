@@ -120,10 +120,11 @@ export function Footer() {
 
               <div className={styles.quickTitle}>Quick Links</div>
               <nav className={styles.colLinks}>
-                <Link href="/marketplace">Marketplace</Link>
-                <Link href="/about">About Us</Link>
-                <Link href="/contact">Contact</Link>
-                <Link href="/contact">Get a Quote</Link>
+                <Link href="/#marketplace-catalog">Service Catalog</Link>
+                <Link href="/account">Client Account &amp; Orders</Link>
+                <Link href="/track">Track Live Order</Link>
+                <Link href="/about">About Saampark</Link>
+                <Link href="/contact">Contact &amp; Get a Quote</Link>
               </nav>
             </div>
           </div>

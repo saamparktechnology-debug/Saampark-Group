@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import { Hero }               from '@/components/sections/Hero/Hero';
 import { AboutCommandCenter } from '@/components/features/AboutCommandCenter/AboutCommandCenter';
 import { LiveStats }          from '@/components/sections/LiveStats/LiveStats';
-import { LiveActivity }       from '@/components/sections/LiveActivity/LiveActivity';
 import { TechStackShowcase }  from '@/components/sections/TechStackShowcase/TechStackShowcase';
 import { CTASection }         from '@/components/sections/CTASection/CTASection';
 
@@ -37,13 +36,10 @@ export default function AboutPage() {
       {/* 2. Group structure & Divisions */}
       <AboutCommandCenter />
 
-      {/* 3. Live Stats */}
+      {/* 3. Verified Metrics */}
       <LiveStats />
 
-      {/* 4. Live Activity */}
-      <LiveActivity />
-
-      {/* 5. Tech Stack Showcase */}
+      {/* 4. Tech Stack Showcase */}
       <TechStackShowcase />
 
       {/* 6. Final Call to Action */}

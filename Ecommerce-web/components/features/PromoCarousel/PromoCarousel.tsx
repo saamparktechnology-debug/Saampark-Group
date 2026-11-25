@@ -3,7 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ChevronLeft, ChevronRight, Sparkles, Rocket, Megaphone, ShieldAlert, Smartphone } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Sparkles, Rocket, Megaphone, ShieldAlert, Smartphone, Tag, Copy, Check } from 'lucide-react';
+import {
+  extractStorefrontOffers,
+  DEFAULT_TECH_OFFERS,
+  DEFAULT_CONSULTANCY_OFFERS,
+  type StorefrontOffer,
+} from '@/lib/utils/offers';
 import styles from './PromoCarousel.module.css';
 
 interface Slide {
@@ -16,6 +22,8 @@ interface Slide {
   image: string;
   accent: string;
   glowColor: string;
+  promoCode?: string;
+  promoPercent?: number;
 }
 
 const SLIDES: Slide[] = [
@@ -78,32 +86,63 @@ const SLIDES: Slide[] = [
 
 export function PromoCarousel() {
   const [slides, setSlides] = useState<Slide[]>(SLIDES);
+  const [activeOffers, setActiveOffers] = useState<StorefrontOffer[]>([
+    ...DEFAULT_TECH_OFFERS,
+    ...DEFAULT_CONSULTANCY_OFFERS,
+  ]);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [current, setCurrent] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  // Hydrate slides dynamically from CRM2 Storefront CMS when configured
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode((prev) => (prev === code ? null : prev)), 2500);
+  };
+
+  // Hydrate slides & live offer promo codes dynamically from CRM2 Storefront CMS
   useEffect(() => {
     fetch('/api/storefront', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (!json?.success || !json?.data?.storefront) return;
-        const techSlides = json.data.storefront?.tech?.heroSlides || [];
-        const consultSlides = json.data.storefront?.consultancy?.heroSlides || [];
+        const sf = json.data.storefront;
+        const offers = extractStorefrontOffers(sf);
+        setActiveOffers(offers);
+
+        const offerSlides: Slide[] = offers.map((off, idx) => ({
+          title: `${off.title} • Use Code ${off.code}`,
+          highlight: `FLAT ${off.percent}% OFF — Promo Code: ${off.code}`,
+          subtitle: off.description,
+          badge: `${off.percent}% OFF Voucher`,
+          badgeIcon: Tag,
+          href: off.ctaLink || '/#marketplace-catalog',
+          image: off.image || '/assets/images/one-page-web.jpg',
+          accent: off.scope === 'tech' ? '#2563EB' : '#EB412C',
+          glowColor: off.scope === 'tech' ? 'rgba(37, 99, 235, 0.35)' : 'rgba(235, 65, 44, 0.35)',
+          promoCode: off.code,
+          promoPercent: off.percent,
+        }));
+
+        const techSlides = sf?.tech?.heroSlides || [];
+        const consultSlides = sf?.consultancy?.heroSlides || [];
         const crmSlides = [...techSlides, ...consultSlides].filter((s: any) => s && s.isActive !== false);
-        if (crmSlides.length > 0) {
-          const mapped: Slide[] = crmSlides.map((s: any, idx: number) => ({
-            title: s.badge || 'Saampark Official Offer',
-            highlight: s.title || 'Digital Solutions',
-            subtitle: s.subtitle || '',
-            badge: s.badge || 'Featured',
-            badgeIcon: idx % 2 === 0 ? Rocket : Sparkles,
-            href: s.ctaLink && s.ctaLink.startsWith('/') ? s.ctaLink : '/#marketplace-catalog',
-            image: s.image || '/assets/images/one-page-web.jpg',
-            accent: idx % 2 === 0 ? '#2563EB' : '#EB412C',
-            glowColor: idx % 2 === 0 ? 'rgba(37, 99, 235, 0.35)' : 'rgba(235, 65, 44, 0.35)',
-          }));
-          setSlides([...mapped, ...SLIDES].slice(0, 8));
+        const mappedHero: Slide[] = crmSlides.map((s: any, idx: number) => ({
+          title: s.badge || 'Saampark Official Offer',
+          highlight: s.title || 'Digital Solutions',
+          subtitle: s.subtitle || '',
+          badge: s.badge || 'Featured',
+          badgeIcon: idx % 2 === 0 ? Rocket : Sparkles,
+          href: s.ctaLink && s.ctaLink.startsWith('/') ? s.ctaLink : '/#marketplace-catalog',
+          image: s.image || '/assets/images/one-page-web.jpg',
+          accent: idx % 2 === 0 ? '#2563EB' : '#EB412C',
+          glowColor: idx % 2 === 0 ? 'rgba(37, 99, 235, 0.35)' : 'rgba(235, 65, 44, 0.35)',
+        }));
+
+        const merged = [...offerSlides, ...mappedHero, ...SLIDES].slice(0, 8);
+        if (merged.length > 0) {
+          setSlides(merged);
         }
       })
       .catch(() => {});
@@ -138,6 +177,7 @@ export function PromoCarousel() {
   const transformStyle = `translateX(-${current * 100}%)`;
 
   return (
+    <div className={styles.carouselOuter}>
     <div 
       className={styles.carousel}
       onMouseEnter={() => setIsPaused(true)}
@@ -172,7 +212,7 @@ export function PromoCarousel() {
                   <h3 className={styles.highlight}>{slide.highlight}</h3>
                   <p className={styles.subtitle}>{slide.subtitle}</p>
 
-                  <div className={styles.ctaRow}>
+                  <div className={styles.ctaRow} style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
                     <Link 
                       href={slide.href} 
                       className={styles.ctaBtn}
@@ -180,6 +220,21 @@ export function PromoCarousel() {
                       <span>Claim Offer</span>
                       <span aria-hidden="true">&rarr;</span>
                     </Link>
+                    {slide.promoCode && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyCode(slide.promoCode!)}
+                        className={styles.promoCopyPill}
+                        title="Click to copy promo code"
+                      >
+                        {copiedCode === slide.promoCode ? <Check size={13} /> : <Copy size={13} />}
+                        <span>
+                          {copiedCode === slide.promoCode
+                            ? `Copied: ${slide.promoCode}`
+                            : `Code: ${slide.promoCode}`}
+                        </span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -233,6 +288,37 @@ export function PromoCarousel() {
           />
         ))}
       </div>
+    </div>
+
+    {activeOffers.length > 0 && (
+      <div className={styles.offersDeck} aria-label="Active Offer Promo Codes">
+        <div className={styles.offersDeckLabel}>
+          <Tag size={14} />
+          <span>Active Offer Promo Codes</span>
+        </div>
+        <div className={styles.offersChipRow}>
+          {activeOffers.map((off) => {
+            const isCopied = copiedCode === off.code;
+            return (
+              <button
+                key={off.id}
+                type="button"
+                className={`${styles.offerVoucher} ${isCopied ? styles.offerVoucherCopied : ''}`}
+                onClick={() => handleCopyCode(off.code)}
+                title={`${off.title} — Click to copy code ${off.code}`}
+              >
+                <span className={styles.offerPercent}>{off.percent}% OFF</span>
+                <span className={styles.offerCode}>{off.code}</span>
+                <span className={styles.offerAction}>
+                  {isCopied ? <Check size={12} /> : <Copy size={12} />}
+                  {isCopied ? 'Copied' : 'Copy'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    )}
     </div>
   );
 }

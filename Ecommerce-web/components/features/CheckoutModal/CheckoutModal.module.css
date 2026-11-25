@@ -634,3 +634,79 @@
     gap: 0.5rem 0.9rem;
   }
 }
+
+.offerChipsBox {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--color-border-default);
+}
+
+:global([data-theme="dark"]) .offerChipsBox {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.offerChipsLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-brand);
+  margin-bottom: 8px;
+}
+
+.offerChipsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.offerChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 9999px;
+  border: 1px dashed var(--color-border-strong);
+  background: var(--color-bg-surface);
+  cursor: pointer;
+  font-size: 11px;
+  transition: transform 150ms ease, border-color 150ms ease;
+}
+
+.offerChip:hover {
+  transform: translateY(-1px);
+  border-color: var(--color-brand);
+}
+
+.offerChipApplied {
+  border-style: solid;
+  border-color: #10b981;
+  background: var(--color-success-subtle);
+}
+
+.offerChipPct {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--color-brand);
+}
+
+.offerChipCode {
+  font-family: monospace;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.offerChipAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.offerChipApplied .offerChipAction {
+  color: #10b981;
+}

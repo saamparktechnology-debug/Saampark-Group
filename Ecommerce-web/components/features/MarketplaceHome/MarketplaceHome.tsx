@@ -45,6 +45,7 @@ import {
   allServices,
   SERVICE_GROUPS,
   SERVICE_CATEGORIES,
+  type CategoryMetadata,
   type Service,
   type ServiceGroup,
   type PrimaryCategory,
@@ -190,7 +191,7 @@ function CategorySectionBlock({
 
 export function MarketplaceHome() {
   return (
-    <Suspense fallback={<div style={{ textAlign: 'center', padding: '100px 0', color: 'var(--color-text-tertiary)' }}>Loading catalog...</div>}>
+    <Suspense fallback={<div className="container" style={{ paddingTop: 28, paddingBottom: 60 }}><SkeletonLoader count={8} /></div>}>
       <MarketplaceContent />
     </Suspense>
   );
@@ -202,6 +203,7 @@ function MarketplaceContent() {
 
   // Filters State
   const [liveServices, setLiveServices] = useState<Service[]>(allServices);
+  const [liveCategories, setLiveCategories] = useState<CategoryMetadata[]>(SERVICE_CATEGORIES);
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState<ServiceGroup | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<PrimaryCategory | 'all'>('all');
@@ -259,6 +261,42 @@ function MarketplaceContent() {
         const seenSlugs = new Set(mapped.map((m) => m.slug));
         const merged = [...mapped, ...allServices.filter((s) => !seenSlugs.has(s.slug))];
         setLiveServices(merged);
+
+        // Merge custom admin-created categories from CRM2 with core categories
+        const catMap = new Map<string, CategoryMetadata>(
+          SERVICE_CATEGORIES.map((c) => [c.id, c])
+        );
+        const crmCats = Array.isArray(json.data.categories) ? json.data.categories : [];
+        crmCats.forEach((c: any) => {
+          if (c && c.id && c.name) {
+            const grp: ServiceGroup =
+              c.companyId === 'consultancy' || c.group === 'consultancy' ? 'consultancy' : 'technology';
+            catMap.set(String(c.id), {
+              id: String(c.id),
+              group: grp,
+              name: String(c.name),
+              capacity: 'Expandable',
+              icon: c.icon || (grp === 'technology' ? 'Layers' : 'Briefcase'),
+            });
+          }
+        });
+        // Ensure any custom primaryCategory attached to a live product also appears as a filterable category
+        mapped.forEach((svc) => {
+          if (svc.primaryCategory && !catMap.has(svc.primaryCategory)) {
+            const pretty = svc.primaryCategory
+              .split('-')
+              .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+              .join(' ');
+            catMap.set(svc.primaryCategory, {
+              id: svc.primaryCategory,
+              group: svc.group,
+              name: pretty,
+              capacity: 'Expandable',
+              icon: svc.group === 'consultancy' ? 'Briefcase' : 'Layers',
+            });
+          }
+        });
+        setLiveCategories(Array.from(catMap.values()));
       })
       .catch(() => {});
   }, []);
@@ -343,11 +381,11 @@ function MarketplaceContent() {
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    SERVICE_CATEGORIES.forEach(cat => {
+    liveCategories.forEach(cat => {
       counts[cat.id] = liveServices.filter(s => s.primaryCategory === cat.id).length;
     });
     return counts;
-  }, [liveServices]);
+  }, [liveServices, liveCategories]);
 
   // Filtered Services Dataset
   const filteredServices = useMemo(() => {
@@ -600,7 +638,7 @@ function MarketplaceContent() {
   // Category Display Label Helper
   const getCategoryLabel = (catKey: PrimaryCategory | 'all') => {
     if (catKey === 'all') return 'All Services';
-    const found = SERVICE_CATEGORIES.find(c => c.id === catKey);
+    const found = liveCategories.find(c => c.id === catKey);
     return found ? found.name : catKey;
   };
 
@@ -839,7 +877,7 @@ function MarketplaceContent() {
                         ? SERVICE_GROUPS
                         : SERVICE_GROUPS.filter(g => g.id === groupFilter)
                       ).map(group => {
-                        const categoriesInGroup = SERVICE_CATEGORIES.filter(c => c.group === group.id);
+                        const categoriesInGroup = liveCategories.filter(c => c.group === group.id);
                         const matchGroupSearch =
                           !explorerSearch ||
                           group.name.toLowerCase().includes(explorerSearch.toLowerCase()) ||
@@ -954,7 +992,7 @@ function MarketplaceContent() {
               <span>All Solutions</span>
               <span className={styles.chipCount}>{totalServicesCount}</span>
             </button>
-            {SERVICE_CATEGORIES.map(cat => {
+            {liveCategories.map(cat => {
               const isCatActive = categoryFilter === cat.id;
               const catCount = categoryCounts[cat.id] || 0;
               return (
@@ -1093,7 +1131,7 @@ function MarketplaceContent() {
                 // If group filter is active and doesn't match this group, skip
                 if (groupFilter !== 'all' && groupFilter !== group.id) return null;
 
-                const groupCategories = SERVICE_CATEGORIES.filter(c => c.group === group.id);
+                const groupCategories = liveCategories.filter(c => c.group === group.id);
 
                 return (
                   <div key={group.id} className={styles.groupBlock}>

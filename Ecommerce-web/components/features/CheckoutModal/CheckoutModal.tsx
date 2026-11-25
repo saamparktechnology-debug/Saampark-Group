@@ -27,6 +27,13 @@ import {
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useOrderStore, PlacedOrder } from '@/lib/store/orderStore';
 import { useAuthStore } from '@/lib/store/authStore';
+import {
+  extractStorefrontOffers,
+  DEFAULT_TECH_OFFERS,
+  DEFAULT_CONSULTANCY_OFFERS,
+  FALLBACK_COUPON_PERCENTAGES,
+  type StorefrontOffer,
+} from '@/lib/utils/offers';
 import styles from './CheckoutModal.module.css';
 
 const INDIAN_STATES = [
@@ -88,7 +95,11 @@ export function CheckoutModal() {
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; percent: number } | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
-  const [liveCoupons, setLiveCoupons] = useState<Record<string, number>>(FALLBACK_COUPONS);
+  const [liveCoupons, setLiveCoupons] = useState<Record<string, number>>(FALLBACK_COUPON_PERCENTAGES);
+  const [activeOffers, setActiveOffers] = useState<StorefrontOffer[]>([
+    ...DEFAULT_TECH_OFFERS,
+    ...DEFAULT_CONSULTANCY_OFFERS,
+  ]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [placedOrder, setPlacedOrder] = useState<PlacedOrder | null>(null);
@@ -118,14 +129,11 @@ export function CheckoutModal() {
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (json?.success && json?.data?.storefront) {
-          const map: Record<string, number> = { ...FALLBACK_COUPONS };
-          ['tech', 'consultancy'].forEach((scope) => {
-            const banners = json.data.storefront?.[scope]?.discountBanners || [];
-            banners.forEach((b: any) => {
-              if (b?.isActive && b?.promoCode && b?.discountPercentage) {
-                map[String(b.promoCode).toUpperCase().trim()] = Number(b.discountPercentage);
-              }
-            });
+          const offers = extractStorefrontOffers(json.data.storefront);
+          setActiveOffers(offers);
+          const map: Record<string, number> = { ...FALLBACK_COUPON_PERCENTAGES };
+          offers.forEach((off) => {
+            map[off.code] = off.percent;
           });
           setLiveCoupons(map);
         }
@@ -177,15 +185,21 @@ export function CheckoutModal() {
     setFormData((prev) => ({ ...prev, [name]: formatted }));
   };
 
-  const handleApplyCoupon = () => {
-    const code = couponInput.trim().toUpperCase();
+  const applyCouponByCode = (rawCode: string, explicitPercent?: number) => {
+    const code = rawCode.trim().toUpperCase();
     if (!code) return;
-    if (liveCoupons[code]) {
-      setAppliedCoupon({ code, percent: liveCoupons[code] });
+    const pct = explicitPercent || liveCoupons[code];
+    if (pct) {
+      setCouponInput(code);
+      setAppliedCoupon({ code, percent: pct });
       setCouponError(null);
     } else {
       setCouponError('Invalid or expired promo code.');
     }
+  };
+
+  const handleApplyCoupon = () => {
+    applyCouponByCode(couponInput);
   };
 
   const handleCopy = (text: string) => {
@@ -513,6 +527,35 @@ export function CheckoutModal() {
                     </div>
                   </div>
                 ))}
+
+                {/* Available Live Offer Promo Codes */}
+                {activeOffers.length > 0 && (
+                  <div className={styles.offerChipsBox}>
+                    <div className={styles.offerChipsLabel}>
+                      <Tag size={12} /> Available Offer Promo Codes (Tap to Apply):
+                    </div>
+                    <div className={styles.offerChipsRow}>
+                      {activeOffers.map((off) => {
+                        const isApplied = appliedCoupon?.code === off.code;
+                        return (
+                          <button
+                            key={off.id}
+                            type="button"
+                            onClick={() => applyCouponByCode(off.code, off.percent)}
+                            className={`${styles.offerChip} ${isApplied ? styles.offerChipApplied : ''}`}
+                          >
+                            <span className={styles.offerChipPct}>{off.percent}% OFF</span>
+                            <span className={styles.offerChipCode}>{off.code}</span>
+                            <span className={styles.offerChipAction}>
+                              {isApplied ? <Check size={11} /> : null}
+                              {isApplied ? 'Applied' : 'Apply'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Promo Code Bar */}
                 <div style={{ display: 'flex', gap: '8px', marginTop: '10px', marginBottom: '6px' }}>

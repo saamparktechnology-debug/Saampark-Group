@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Phone, Mail, MapPin, Clock, MessageCircle } from 'lucide-react';
 import { CONTACT } from '@/lib/data/services';
 import { ContactSection } from '@/components/features/ContactSection/ContactSection';
+import styles from './ContactPage.module.css';
 
 export const metadata: Metadata = {
   title: 'Contact Saampark Group — Free Tech & Marketing Consultation',
@@ -24,12 +25,12 @@ export const metadata: Metadata = {
 
 export default function ContactPage() {
   return (
-    <div style={{ paddingTop: 'calc(var(--nav-height) + 28px)', paddingBottom: 'var(--size-20)' }}>
+    <div className={styles.page}>
       {/* Header */}
-      <section style={{ background: 'var(--primitive-navy-900)', padding: 'var(--size-16) 0', color: 'white' }}>
+      <section className={styles.heroBanner}>
         <div className="container" style={{ textAlign: 'center' }}>
-          <h1 className="text-display-lg" style={{ marginBottom: 16 }}>Let's Build Something Great</h1>
-          <p className="text-body-lg" style={{ color: 'rgba(255,255,255,0.7)', maxWidth: 600, margin: '0 auto' }}>
+          <h1 className="text-display-lg" style={{ marginBottom: 16 }}>Let&apos;s Build Something Great</h1>
+          <p className="text-body-lg" style={{ color: 'rgba(255,255,255,0.75)', maxWidth: 600, margin: '0 auto' }}>
             Book a free consultation with our experts. Calculate project costs or send us a message.
           </p>
         </div>
@@ -37,17 +38,17 @@ export default function ContactPage() {
 
       {/* Main Content */}
       <section className="container" style={{ marginTop: '-40px', position: 'relative', zIndex: 10 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 'var(--size-10)', alignItems: 'start' }}>
+        <div className={styles.grid}>
           
           {/* Form Side */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--size-8)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--size-8)', minWidth: 0 }}>
             <ContactSection />
           </div>
 
           {/* Info Side */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--size-6)' }}>
+          <div className={styles.infoStack}>
             {/* Tech (STR) */}
-            <div style={{ background: 'var(--color-bg-surface)', padding: 'var(--size-6)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border-default)' }}>
+            <div className={styles.infoCard}>
               <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                 Technology Division (STR)
               </h3>
@@ -55,8 +56,8 @@ export default function ContactPage() {
                 <a href={CONTACT.str.tel1} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none' }}>
                   <Phone size={16} /> {CONTACT.str.phone1}
                 </a>
-                <a href={`mailto:${CONTACT.str.email}`} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none' }}>
-                  <Mail size={16} /> {CONTACT.str.email}
+                <a href={`mailto:${CONTACT.str.email}`} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none', wordBreak: 'break-word' }}>
+                  <Mail size={16} style={{ flexShrink: 0 }} /> {CONTACT.str.email}
                 </a>
                 <a href={CONTACT.str.whatsapp1} style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#25D366', textDecoration: 'none', fontWeight: 600 }}>
                   <MessageCircle size={16} /> WhatsApp STR
@@ -65,7 +66,7 @@ export default function ContactPage() {
             </div>
 
             {/* Consultancy (SCS) */}
-            <div style={{ background: 'var(--color-bg-surface)', padding: 'var(--size-6)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border-default)' }}>
+            <div className={styles.infoCard}>
               <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                 Consultancy Division (SCS)
               </h3>
@@ -73,8 +74,8 @@ export default function ContactPage() {
                 <a href={CONTACT.scs.tel} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none' }}>
                   <Phone size={16} /> {CONTACT.scs.phone}
                 </a>
-                <a href={`mailto:${CONTACT.scs.email}`} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none' }}>
-                  <Mail size={16} /> {CONTACT.scs.email}
+                <a href={`mailto:${CONTACT.scs.email}`} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none', wordBreak: 'break-word' }}>
+                  <Mail size={16} style={{ flexShrink: 0 }} /> {CONTACT.scs.email}
                 </a>
                 <a href={CONTACT.scs.whatsapp} style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#25D366', textDecoration: 'none', fontWeight: 600 }}>
                   <MessageCircle size={16} /> WhatsApp SCS
@@ -83,7 +84,7 @@ export default function ContactPage() {
             </div>
 
             {/* Office */}
-            <div style={{ background: 'var(--color-bg-surface)', padding: 'var(--size-6)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border-default)' }}>
+            <div className={styles.infoCard}>
               <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                 Corporate Office
               </h3>

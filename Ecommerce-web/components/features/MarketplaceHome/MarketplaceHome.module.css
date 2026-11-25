@@ -994,24 +994,28 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 250, 244, 0.6) 100%);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1.2px solid rgba(220, 195, 160, 0.45);
+  background: rgba(255, 255, 255, 0.74);
+  backdrop-filter: blur(28px) saturate(210%);
+  -webkit-backdrop-filter: blur(28px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: var(--radius-full);
   font-size: 12px;
   font-weight: 700;
   color: var(--color-text-secondary);
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
-  box-shadow: 0 4px 12px rgba(180, 140, 90, 0.06);
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), border-color 220ms ease, box-shadow 240ms ease, color 200ms ease;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 4px 12px rgba(180, 140, 90, 0.06);
 }
 
 [data-theme="dark"] .chipBtn {
-  background: #2B2D31;
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  background: rgba(43, 45, 49, 0.76);
+  border-color: rgba(217, 218, 220, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
 .chipBtn:hover {
@@ -1057,16 +1061,17 @@
   gap: 16px;
   padding: 14px 22px;
   margin-bottom: 28px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 250, 244, 0.60) 100%);
-  backdrop-filter: blur(22px) saturate(180%);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  border: 1.5px solid rgba(255, 255, 255, 0.88);
-  border-radius: var(--radius-2xl);
-  box-shadow: 
-    0 10px 28px -6px rgba(180, 140, 90, 0.1),
-    inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 1);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(32px) saturate(210%);
+  -webkit-backdrop-filter: blur(32px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 26px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.35),
+    0 12px 32px -8px rgba(180, 140, 90, 0.12);
   flex-wrap: wrap;
-  transition: all 0.3s ease;
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 260ms ease;
 }
 
 @media (max-width: 640px) {
@@ -1552,36 +1557,44 @@
 /* ── 3D Liquid Glass Card Styling ── */
 .card {
   position: relative;
-  background: var(--color-bg-surface);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-2xl);
+  background: rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(32px) saturate(210%);
+  -webkit-backdrop-filter: blur(32px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 26px;
   display: flex;
   flex-direction: column;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 280ms ease, border-color 220ms ease;
   overflow: hidden;
   box-shadow: 
-    inset 0 1px 1px rgba(255, 255, 255, 0.6),
-    0 10px 30px -6px rgba(0, 0, 0, 0.05);
-  transform-style: preserve-3d;
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.3),
+    0 12px 32px -8px rgba(0, 0, 0, 0.06);
   height: 100%;
+  will-change: transform;
 }
 
 [data-theme="dark"] .card {
-  background: #313338;
-  border: 1.5px solid rgba(217, 218, 220, 0.14);
-  box-shadow: 0 10px 30px -6px rgba(0, 0, 0, 0.6);
+  background: rgba(49, 51, 56, 0.76);
+  border: 1px solid rgba(217, 218, 220, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    0 12px 34px -8px rgba(0, 0, 0, 0.6);
 }
 
 .card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 18px 45px -8px rgba(156, 175, 136, 0.3);
+  transform: translate3d(0, -4px, 0);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 20px 44px -10px rgba(156, 175, 136, 0.28);
   border-color: #EB412C;
 }
 
 [data-theme="dark"] .card:hover {
-  box-shadow: 0 20px 50px -8px rgba(0, 0, 0, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 20px 48px -10px rgba(0, 0, 0, 0.85);
   border-color: #FFC93C;
 }
 

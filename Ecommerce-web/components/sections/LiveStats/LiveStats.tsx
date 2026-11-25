@@ -1,42 +1,33 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CheckCircle, Users, Grid3X3, Award } from 'lucide-react';
-import { STATS } from '@/lib/data/services';
+import { allServices } from '@/lib/data/services';
 import styles from './LiveStats.module.css';
 
-function useCountUp(target: number, duration: number, active: boolean) {
-  const [value, setValue] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    let start = 0;
-    const startTime = performance.now();
-    const step = (now: number) => {
-      const progress = Math.min((now - startTime) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.floor(eased * target));
-      if (progress < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }, [target, duration, active]);
-  return value;
+interface MetricItem {
+  value: string;
+  label: string;
+  icon: 'CheckCircle' | 'Users' | 'Grid3X3' | 'Award';
 }
 
 const ICONS = { CheckCircle, Users, Grid3X3, Award };
 
-function StatCard({ value, suffix, label, icon, active }: {
-  value: number; suffix: string; label: string; icon: string; active: boolean;
-}) {
-  const count = useCountUp(value, 2000, active);
-  const Icon  = ICONS[icon as keyof typeof ICONS] ?? CheckCircle;
+const DEFAULT_METRICS: MetricItem[] = [
+  { value: `${allServices.length}+`, label: 'Verified Service Packages', icon: 'Grid3X3' },
+  { value: '2 Divisions', label: 'STR & SCS Specialized Arms', icon: 'Users' },
+  { value: 'ISO 9001:2015', label: 'Certified Quality Process', icon: 'Award' },
+  { value: '100% GST', label: 'Compliant Tax Invoicing', icon: 'CheckCircle' },
+];
+
+function StatCard({ value, label, icon }: MetricItem) {
+  const Icon = ICONS[icon] ?? CheckCircle;
   return (
     <div className={styles.statCard}>
       <div className={styles.iconWrap}>
         <Icon size={24} />
       </div>
-      <div className={styles.statValue}>
-        {count}{suffix}
-      </div>
+      <div className={styles.statValue}>{value}</div>
       <div className={styles.statLabel}>{label}</div>
       <div className={styles.statPulse} />
     </div>
@@ -44,36 +35,55 @@ function StatCard({ value, suffix, label, icon, active }: {
 }
 
 export function LiveStats() {
-  const ref    = useRef<HTMLElement>(null);
-  const [active, setActive] = useState(false);
+  const [metrics, setMetrics] = useState<MetricItem[]>(DEFAULT_METRICS);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setActive(true); observer.disconnect(); } },
-      { threshold: 0.3 }
-    );
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
+    fetch('/api/storefront')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!json?.success || !json?.data) return;
+        const techCount = Array.isArray(json.data.products?.tech) ? json.data.products.tech.length : 0;
+        const consultCount = Array.isArray(json.data.products?.consultancy)
+          ? json.data.products.consultancy.length
+          : 0;
+        const totalLive = techCount + consultCount;
+        const techStats = json.data.storefront?.tech?.liveStats;
+        setMetrics([
+          {
+            value: totalLive > 0 ? `${totalLive} Services` : `${allServices.length}+`,
+            label: 'Active Storefront Solutions',
+            icon: 'Grid3X3',
+          },
+          {
+            value: techStats?.clientSatisfaction || '99.4%',
+            label: 'Delivery SLA Benchmark',
+            icon: 'CheckCircle',
+          },
+          { value: 'ISO 9001:2015', label: 'Certified Quality System', icon: 'Award' },
+          { value: 'STR + SCS', label: 'Tech & Consultancy Divisions', icon: 'Users' },
+        ]);
+      })
+      .catch(() => {});
   }, []);
 
   return (
-    <section ref={ref} className={styles.section}>
+    <section className={styles.section}>
       {/* Background */}
       <div className={styles.bg} />
 
       <div className="container">
         <div className={styles.header}>
           <div className="section-label" style={{ color: 'var(--primitive-teal-400)' }}>
-            Verified Metrics
+            Verified Credentials
           </div>
           <h2 className={`text-display-lg ${styles.title}`}>
-            Trusted by Businesses Across India
+            Built on Certified Quality &amp; Dual-Division Focus
           </h2>
         </div>
 
         <div className={styles.grid}>
-          {STATS.map(s => (
-            <StatCard key={s.label} {...s} active={active} />
+          {metrics.map((s) => (
+            <StatCard key={s.label} {...s} />
           ))}
         </div>
       </div>
