@@ -47,6 +47,21 @@ export async function POST(req: Request) {
       );
     }
 
+    if (!Array.isArray(body.items) || body.items.length === 0) {
+      return NextResponse.json(
+        { success: false, message: 'At least one priced service package is required to place an order.' },
+        { status: 400 }
+      );
+    }
+
+    const rawTotal = Number(body.totalAmount);
+    if (!Number.isFinite(rawTotal) || rawTotal <= 0) {
+      return NextResponse.json(
+        { success: false, message: 'Order total must be greater than ₹0.' },
+        { status: 400 }
+      );
+    }
+
     const response = await fetch(CRM_API_ENDPOINT, {
       method: 'POST',
       headers: {

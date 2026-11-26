@@ -7,7 +7,6 @@ import { X, Check, Bookmark, ShoppingBag, MessageCircle, Maximize2, Shield, Cloc
 import { type Service } from '@/lib/data/services';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
-import { useAuthStore } from '@/lib/store/authStore';
 import styles from './ProductQuickViewModal.module.css';
 
 // 5 to 10 screenshots per category
@@ -74,28 +73,31 @@ export function ProductQuickViewModal({ service, onClose }: Props) {
   const [activeImgIndex, setActiveImgIndex] = useState(0);
   const { cart, addToCart, wishlistIds, toggleWishlist } = useCommerceStore();
   const { openCart } = useUIStore();
-  const { requireAuth } = useAuthStore();
 
+  const cartItem = cart.find(c => c.serviceId === service.id);
   const screenshots = getPortfolioImages(service.category);
   const isWishlisted = wishlistIds.includes(service.id);
-  const isInCart = cart.some(c => c.serviceId === service.id);
+  const isInCart = Boolean(cartItem);
 
   const handleAddToCart = () => {
-    requireAuth(() => {
-      if (isInCart) {
-        onClose();
-        openCart();
-        return;
-      }
-      addToCart({
-        serviceId: service.id,
-        serviceName: service.name,
-        price: service.startingPrice,
-        quantity: 1
-      });
+    if (isInCart) {
       onClose();
       openCart();
-    }, `Sign in or register to add "${service.name}" to your bag.`);
+      return;
+    }
+    addToCart({
+      serviceId: service.id,
+      serviceName: service.name,
+      price: service.startingPrice,
+      quantity: 1,
+      group: service.group,
+      entity: service.entity,
+      priceType: service.priceType,
+      deliveryDays: service.deliveryDays ?? '3-5 Days',
+      image: service.image,
+    });
+    onClose();
+    openCart();
   };
 
   const handleWA = () => {

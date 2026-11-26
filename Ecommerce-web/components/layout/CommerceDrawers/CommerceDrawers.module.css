@@ -135,6 +135,64 @@
   gap: var(--size-2);
 }
 
+.cartItemRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.cartQtyBox {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 5px;
+  border-radius: 9999px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+}
+
+.cartQtyBtn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-bg-sunken);
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.cartQtyBtn:hover {
+  background: var(--color-brand);
+  color: #FFFFFF;
+}
+
+.cartQtyNum {
+  min-width: 18px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.calcSummaryList {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.calcSummaryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
 .removeBtn {
   background: transparent;
   border: none;

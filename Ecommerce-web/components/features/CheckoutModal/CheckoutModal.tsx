@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   X,
@@ -23,17 +23,18 @@ import {
   Plus,
   LogIn,
   Globe,
+  Trash2,
+  AlertCircle,
 } from 'lucide-react';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useOrderStore, PlacedOrder } from '@/lib/store/orderStore';
 import { useAuthStore } from '@/lib/store/authStore';
 import {
   extractStorefrontOffers,
-  DEFAULT_TECH_OFFERS,
-  DEFAULT_CONSULTANCY_OFFERS,
   FALLBACK_COUPON_PERCENTAGES,
   type StorefrontOffer,
 } from '@/lib/utils/offers';
+import { calculateOrderTotals } from '@/lib/utils/pricing';
 import styles from './CheckoutModal.module.css';
 
 const INDIAN_STATES = [
@@ -65,7 +66,7 @@ const FALLBACK_COUPONS: Record<string, number> = {
 };
 
 export function CheckoutModal() {
-  const { cart, clearCart, updateQuantity } = useCommerceStore();
+  const { cart, clearCart, updateQuantity, removeFromCart } = useCommerceStore();
   const { user, setAuthenticatedUser, openAuthModal } = useAuthStore();
   const {
     checkoutOpen,
@@ -99,13 +100,20 @@ export function CheckoutModal() {
   const [activeOffers, setActiveOffers] = useState<StorefrontOffer[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [placedOrder, setPlacedOrder] = useState<PlacedOrder | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const submittingRef = useRef(false);
+  const idempotencyKeyRef = useRef<string>('');
 
   // Sync live coupon codes from CRM2 storefront config & prefill client profile
   useEffect(() => {
     if (!checkoutOpen) return;
     setPlacedOrder(null);
+    setFormError(null);
+    submittingRef.current = false;
+    idempotencyKeyRef.current = `chk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
     const latestOrder = myOrders?.[0];
     setFormData((prev) => ({
@@ -146,37 +154,56 @@ export function CheckoutModal() {
 
   if (!checkoutOpen) return null;
 
-  const orderItems = activeDirectService
+  const rawLineItems = activeDirectService
     ? [
         {
+          cartId: activeDirectService.id,
           serviceId: activeDirectService.id,
           name: activeDirectService.name,
-          price: activeDirectService.startingPrice || 4999,
+          price: activeDirectService.startingPrice ?? 0,
           qty: 1,
+          group: activeDirectService.group,
           priceType: activeDirectService.priceType || 'one-time',
           deliveryDays: String(activeDirectService.deliveryDays || '3-5 Days'),
         },
       ]
     : cart.map((item) => ({
+        cartId: item.id,
         serviceId: item.serviceId,
         name: item.serviceName,
-        price: item.price || 4999,
+        price: item.price ?? 0,
         qty: item.quantity,
-        priceType: 'one-time',
-        deliveryDays: '3-5 Days',
+        group: item.group,
+        priceType: item.priceType || 'one-time',
+        deliveryDays: String(item.deliveryDays || '3-5 Days'),
       }));
 
-  const subtotal = orderItems.reduce((acc, it) => acc + (it.price || 0) * it.qty, 0);
-  const discountAmount = appliedCoupon ? Math.round((subtotal * appliedCoupon.percent) / 100) : 0;
-  const taxableBase = Math.max(0, subtotal - discountAmount);
-  const gstAmount = Math.round((taxableBase * 18) / 100);
-  const isIntraState = formData.state.toLowerCase().includes('west bengal');
-  const gstType = isIntraState ? 'CGST (9%) + SGST (9%)' : 'IGST (18%)';
-  const totalAmount = taxableBase + gstAmount;
+  const totals = calculateOrderTotals({
+    items: rawLineItems,
+    couponPercent: appliedCoupon?.percent || 0,
+    state: formData.state,
+    urgency: formData.urgency,
+  });
+
+  const orderItems = totals.billableItems.map((it) => ({
+    serviceId: it.serviceId,
+    name: it.name,
+    price: it.unitPrice,
+    qty: it.qty,
+    priceType: it.priceType || 'one-time',
+    deliveryDays: it.deliveryDays || '3-5 Days',
+  }));
+
+  const canPlaceOrder = totals.billableItems.length > 0 && totals.totalAmount > 0;
 
   const isConsultancy = activeDirectService
     ? activeDirectService.group === 'consultancy' || activeDirectService.entity === 'scs'
-    : orderItems.some((it) => it.serviceId.includes('scs') || it.serviceId.includes('consult'));
+    : rawLineItems.some(
+        (it) =>
+          it.group === 'consultancy' ||
+          it.serviceId.includes('scs') ||
+          it.serviceId.includes('consult')
+      );
   const companyScope: 'tech' | 'consultancy' = isConsultancy ? 'consultancy' : 'tech';
 
   const handleChange = (
@@ -226,12 +253,19 @@ export function CheckoutModal() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current || isSubmitting) return;
+
+    setFormError(null);
     if (!user) {
       openAuthModal('Please sign in or register an account before placing your order.');
       return;
     }
+    if (!canPlaceOrder) {
+      setFormError('No priced service package selected (₹0 orders cannot be billed). Please add a priced service or request a Custom Quote.');
+      return;
+    }
     if (!formData.clientName.trim() || !formData.email.trim() || !formData.phone.trim()) {
-      alert('Please fill in your full name, email address, and phone number.');
+      setFormError('Please fill in your full name, email address, and phone number.');
       return;
     }
 
@@ -239,14 +273,19 @@ export function CheckoutModal() {
       formData.projectReference.trim()
         ? `Reference / Domain: ${formData.projectReference.trim()}`
         : '',
+      totals.quoteOnlyCount > 0
+        ? `Includes ${totals.quoteOnlyCount} custom-quote item(s) for offline quotation`
+        : '',
       formData.notes.trim(),
     ]
       .filter(Boolean)
       .join(' | ');
 
+    submittingRef.current = true;
     setIsSubmitting(true);
     try {
       const payload = {
+        idempotencyKey: idempotencyKeyRef.current,
         clientName: formData.clientName.trim(),
         businessName: formData.businessName.trim(),
         email: formData.email.trim(),
@@ -261,12 +300,13 @@ export function CheckoutModal() {
         notes: mergedNotes,
         companyId: companyScope,
         items: orderItems,
-        subtotal,
-        discountAmount,
+        subtotal: totals.grossSubtotal,
+        urgencyFee: totals.urgencyFee,
+        discountAmount: totals.discountAmount,
         couponCode: appliedCoupon?.code || '',
-        gstAmount,
-        gstType,
-        totalAmount,
+        gstAmount: totals.gstAmount,
+        gstType: totals.gstType,
+        totalAmount: totals.totalAmount,
       };
 
       const res = await fetch('/api/orders', {
@@ -280,9 +320,10 @@ export function CheckoutModal() {
         throw new Error(json.message || 'Failed to submit order');
       }
 
+      const srvOrder = json.data?.order || {};
       const confirmedOrder: PlacedOrder = {
-        id: json.data?.order?.id || `ord-${Date.now()}`,
-        orderNumber: json.data?.order?.orderNumber || `ORD-${Date.now()}`,
+        id: srvOrder.id || `ord-${Date.now()}`,
+        orderNumber: srvOrder.orderNumber || `ORD-${Date.now()}`,
         clientName: formData.clientName.trim(),
         businessName: formData.businessName.trim(),
         email: formData.email.trim().toLowerCase(),
@@ -293,14 +334,15 @@ export function CheckoutModal() {
         pincode: formData.pincode.trim(),
         gstNumber: formData.gstNumber.trim(),
         panNumber: formData.panNumber.trim(),
-        items: orderItems,
-        subtotal,
-        discountAmount,
+        items: Array.isArray(srvOrder.items) && srvOrder.items.length > 0 ? srvOrder.items : orderItems,
+        subtotal: typeof srvOrder.subtotal === 'number' ? srvOrder.subtotal : totals.grossSubtotal,
+        discountAmount:
+          typeof srvOrder.discountAmount === 'number' ? srvOrder.discountAmount : totals.discountAmount,
         couponCode: appliedCoupon?.code,
-        gstAmount,
-        gstType,
+        gstAmount: typeof srvOrder.gstAmount === 'number' ? srvOrder.gstAmount : totals.gstAmount,
+        gstType: srvOrder.gstType || totals.gstType,
         urgency: formData.urgency,
-        totalAmount,
+        totalAmount: typeof srvOrder.totalAmount === 'number' ? srvOrder.totalAmount : totals.totalAmount,
         status: 'Order Pending',
         companyId: companyScope,
         orderDate: new Date().toISOString().split('T')[0],
@@ -335,8 +377,9 @@ export function CheckoutModal() {
         clearCart();
       }
     } catch (err: any) {
-      alert(`Order notice: ${err.message || 'Network error'}`);
+      setFormError(err.message || 'Network error while placing order. Please try again.');
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -492,47 +535,82 @@ export function CheckoutModal() {
               <div className={styles.summaryBox}>
                 <div className={styles.sectionHeader}>
                   <div className={styles.sectionTitle} style={{ marginBottom: 0 }}>
-                    <ShoppingBag size={14} /> Selected Packages ({orderItems.length})
+                    <ShoppingBag size={14} /> Selected Packages ({rawLineItems.length})
                   </div>
                   <span className={styles.stepPill}>{companyScope === 'tech' ? 'STR Division' : 'SCS Division'}</span>
                 </div>
-                {orderItems.map((item, idx) => (
-                  <div key={idx} className={styles.summaryItem}>
-                    <div style={{ minWidth: 0, flex: 1, paddingRight: 10 }}>
-                      <div className={styles.summaryItemName}>{item.name}</div>
-                      <div className={styles.fieldHelp}>Delivery SLA: {item.deliveryDays}</div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                      {!activeDirectService && (
-                        <div className={styles.qtyControl}>
-                          <button
-                            type="button"
-                            className={styles.qtyBtn}
-                            onClick={() => updateQuantity(item.serviceId, Math.max(1, item.qty - 1))}
-                            aria-label="Decrease quantity"
-                          >
-                            <Minus size={12} />
-                          </button>
-                          <span className={styles.qtyVal}>{item.qty}</span>
-                          <button
-                            type="button"
-                            className={styles.qtyBtn}
-                            onClick={() => updateQuantity(item.serviceId, item.qty + 1)}
-                            aria-label="Increase quantity"
-                          >
-                            <Plus size={12} />
-                          </button>
-                        </div>
-                      )}
-                      <div className={styles.summaryItemPrice}>
-                        ₹{(item.price * item.qty).toLocaleString('en-IN')}
-                      </div>
-                    </div>
+
+                {rawLineItems.length === 0 ? (
+                  <div className={styles.errorBanner}>
+                    <AlertCircle size={15} />
+                    <span>Your cart is empty. Please add a priced service package before checking out.</span>
                   </div>
-                ))}
+                ) : (
+                  rawLineItems.map((item) => {
+                    const isBillable = typeof item.price === 'number' && item.price > 0;
+                    return (
+                      <div key={item.cartId} className={styles.summaryItem}>
+                        <div style={{ minWidth: 0, flex: 1, paddingRight: 10 }}>
+                          <div className={styles.summaryItemName}>{item.name}</div>
+                          <div className={styles.fieldHelp}>
+                            Delivery SLA: {item.deliveryDays}
+                            {isBillable
+                              ? ` • ₹${item.price.toLocaleString('en-IN')} / unit`
+                              : ' • Custom Quotation'}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                          {!activeDirectService && (
+                            <div className={styles.qtyControl}>
+                              <button
+                                type="button"
+                                className={styles.qtyBtn}
+                                onClick={() => updateQuantity(item.cartId, Math.max(1, item.qty - 1))}
+                                aria-label="Decrease quantity"
+                              >
+                                <Minus size={12} />
+                              </button>
+                              <span className={styles.qtyVal}>{item.qty}</span>
+                              <button
+                                type="button"
+                                className={styles.qtyBtn}
+                                onClick={() => updateQuantity(item.cartId, item.qty + 1)}
+                                aria-label="Increase quantity"
+                              >
+                                <Plus size={12} />
+                              </button>
+                            </div>
+                          )}
+                          <div className={styles.summaryItemPrice}>
+                            {isBillable
+                              ? `₹${(item.price * item.qty).toLocaleString('en-IN')}`
+                              : 'Quote Only'}
+                          </div>
+                          {!activeDirectService && (
+                            <button
+                              type="button"
+                              className={styles.itemRemoveBtn}
+                              onClick={() => removeFromCart(item.cartId)}
+                              aria-label={`Remove ${item.name}`}
+                              title="Remove package"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+
+                {totals.quoteOnlyCount > 0 && (
+                  <div className={styles.hintBanner}>
+                    Note: Custom Quotation packages are handled free-of-charge via our architect desk and excluded from GST billing above.
+                  </div>
+                )}
 
                 {/* Available Live Offer Promo Codes */}
-                {activeOffers.length > 0 && (
+                {activeOffers.length > 0 && canPlaceOrder && (
                   <div className={styles.offerChipsBox}>
                     <div className={styles.offerChipsLabel}>
                       <Tag size={12} /> Available Offer Promo Codes (Tap to Apply):
@@ -561,48 +639,95 @@ export function CheckoutModal() {
                 )}
 
                 {/* Promo Code Bar */}
-                <div style={{ display: 'flex', gap: '8px', marginTop: '10px', marginBottom: '6px' }}>
-                  <div style={{ position: 'relative', flex: 1 }}>
-                    <input
-                      type="text"
-                      placeholder="Have a Promo Code? (e.g. TECH20)"
-                      value={couponInput}
-                      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                      className={styles.promoInput}
-                    />
+                {canPlaceOrder && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px', marginBottom: '6px' }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <input
+                        type="text"
+                        placeholder="Have a Promo Code? (e.g. TECH20)"
+                        value={couponInput}
+                        onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                        className={styles.promoInput}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      className="btn btn-secondary btn-sm"
+                      style={{ height: '36px', padding: '0 14px', fontSize: '12px' }}
+                    >
+                      <Tag size={12} /> Apply
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleApplyCoupon}
-                    className="btn btn-secondary btn-sm"
-                    style={{ height: '36px', padding: '0 14px', fontSize: '12px' }}
-                  >
-                    <Tag size={12} /> Apply
-                  </button>
-                </div>
+                )}
                 {couponError && (
                   <div style={{ fontSize: '11px', color: 'var(--color-error)', marginBottom: '4px' }}>
                     {couponError}
                   </div>
                 )}
-                {appliedCoupon && (
-                  <div className={styles.summaryItem} style={{ borderBottom: 'none', paddingTop: '2px', color: '#10b981' }}>
-                    <span className={styles.fieldHelp} style={{ color: '#10b981', fontWeight: 700 }}>
-                      Promo Applied ({appliedCoupon.code} - {appliedCoupon.percent}% Off):
-                    </span>
-                    <span className={styles.fieldHelp} style={{ color: '#10b981', fontWeight: 700 }}>
-                      -₹{discountAmount.toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                )}
 
-                <div className={styles.summaryItem} style={{ borderBottom: 'none', paddingTop: '4px' }}>
-                  <span className={styles.fieldHelp}>Tax ({gstType}):</span>
-                  <span className={styles.fieldHelp}>+₹{gstAmount.toLocaleString('en-IN')}</span>
+                {/* Transparent Itemized Calculation Table */}
+                <div className={styles.calcBreakdown}>
+                  <div className={styles.calcRow}>
+                    <span>Services Base Subtotal:</span>
+                    <strong>₹{totals.baseSubtotal.toLocaleString('en-IN')}</strong>
+                  </div>
+
+                  {totals.urgencyFee > 0 && (
+                    <div className={styles.calcRow}>
+                      <span>Priority Express Kickoff (+10%):</span>
+                      <strong>+₹{totals.urgencyFee.toLocaleString('en-IN')}</strong>
+                    </div>
+                  )}
+
+                  {appliedCoupon && totals.discountAmount > 0 && (
+                    <div className={styles.calcRow} style={{ color: '#10b981' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        Promo ({appliedCoupon.code} &bull; {appliedCoupon.percent}% Off)
+                        <button
+                          type="button"
+                          className={styles.removeCouponBtn}
+                          onClick={() => {
+                            setAppliedCoupon(null);
+                            setCouponInput('');
+                            setCouponError(null);
+                          }}
+                          title="Remove promo code"
+                        >
+                          Remove
+                        </button>
+                      </span>
+                      <strong>-₹{totals.discountAmount.toLocaleString('en-IN')}</strong>
+                    </div>
+                  )}
+
+                  <div className={styles.calcRow}>
+                    <span>Taxable Value:</span>
+                    <span>₹{totals.taxableAmount.toLocaleString('en-IN')}</span>
+                  </div>
+
+                  {totals.isIntraState ? (
+                    <>
+                      <div className={styles.calcRow}>
+                        <span>CGST (9%):</span>
+                        <span>+₹{totals.cgstAmount.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className={styles.calcRow}>
+                        <span>SGST (9%):</span>
+                        <span>+₹{totals.sgstAmount.toLocaleString('en-IN')}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className={styles.calcRow}>
+                      <span>IGST (18%):</span>
+                      <span>+₹{totals.igstAmount.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
                 </div>
+
                 <div className={styles.totalRow}>
                   <span>Grand Total (Incl. GST):</span>
-                  <span style={{ color: '#2563eb' }}>₹{totalAmount.toLocaleString('en-IN')}</span>
+                  <span style={{ color: '#2563eb' }}>₹{totals.totalAmount.toLocaleString('en-IN')}</span>
                 </div>
               </div>
 
@@ -781,8 +906,8 @@ export function CheckoutModal() {
                   <div className={styles.field} style={{ marginBottom: 0 }}>
                     <label>Delivery Priority</label>
                     <select name="urgency" value={formData.urgency} onChange={handleChange}>
-                      <option value="Standard">Standard SLA Schedule</option>
-                      <option value="Priority">Priority Express Kickoff</option>
+                      <option value="Standard">Standard SLA Schedule (Included)</option>
+                      <option value="Priority">Priority Express Kickoff (+10% Fee)</option>
                     </select>
                   </div>
                   <div className={styles.field} style={{ marginBottom: 0 }}>
@@ -807,6 +932,12 @@ export function CheckoutModal() {
                   />
                 </div>
               </div>
+              {formError && (
+                <div className={styles.errorBanner} style={{ marginTop: 12 }}>
+                  <AlertCircle size={15} />
+                  <span>{formError}</span>
+                </div>
+              )}
             </div>
 
             <div className={styles.footer}>
@@ -818,7 +949,11 @@ export function CheckoutModal() {
                     : 'SAAMPARK CONSULTANCY SERVICE'}
                 </strong>
               </div>
-              <button type="submit" disabled={isSubmitting} className="btn btn-primary">
+              <button
+                type="submit"
+                disabled={isSubmitting || !canPlaceOrder}
+                className="btn btn-primary"
+              >
                 {isSubmitting ? (
                   <>
                     <Loader2 size={15} className="animate-spin" />
@@ -827,7 +962,9 @@ export function CheckoutModal() {
                 ) : (
                   <>
                     <Sparkles size={15} />
-                    Confirm Order &amp; Request Invoice
+                    {canPlaceOrder
+                      ? `Confirm Order (₹${totals.totalAmount.toLocaleString('en-IN')})`
+                      : 'Add Priced Service'}
                     <ArrowRight size={15} />
                   </>
                 )}

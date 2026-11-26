@@ -118,7 +118,7 @@ export function ServiceDetail({ service }: Props) {
   const [liveOffer, setLiveOffer] = useState<StorefrontOffer | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
 
-  const { cart, addToCart, wishlistIds, toggleWishlist } = useCommerceStore();
+  const { cart, addToCart, updateQuantity, wishlistIds, toggleWishlist } = useCommerceStore();
   const { openCart } = useUIStore();
   const { openCheckout } = useOrderStore();
   const { requireAuth } = useAuthStore();
@@ -151,8 +151,9 @@ export function ServiceDetail({ service }: Props) {
   const faqsList =
     Array.isArray(service.faqs) && service.faqs.length > 0 ? service.faqs : DEFAULT_FAQS;
 
+  const cartEntry = cart.find((c) => c.serviceId === service.id);
   const isWishlisted = wishlistIds.includes(service.id);
-  const isInCart = cart.some((c) => c.serviceId === service.id);
+  const isInCart = Boolean(cartEntry);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 360);
@@ -174,22 +175,29 @@ export function ServiceDetail({ service }: Props) {
   }, [service.group, service.entity]);
 
   const handleAddToCart = () => {
-    requireAuth(() => {
-      if (useCommerceStore.getState().cart.some((c) => c.serviceId === service.id)) {
-        openCart();
-        return;
-      }
-      addToCart({
-        serviceId: service.id,
-        serviceName: service.name,
-        price: service.startingPrice,
-        quantity: 1,
-      });
+    if (isInCart) {
       openCart();
-    }, `Sign in or register with your email to add "${service.name}" to your cart.`);
+      return;
+    }
+    addToCart({
+      serviceId: service.id,
+      serviceName: service.name,
+      price: service.startingPrice,
+      quantity: 1,
+      group: service.group,
+      entity: service.entity,
+      priceType: service.priceType,
+      deliveryDays: service.deliveryDays ?? '3-5 Days',
+      image: service.image,
+    });
+    openCart();
   };
 
   const handleInstantOrder = () => {
+    if (!service.startingPrice || service.startingPrice <= 0) {
+      window.location.href = `/contact?service=${encodeURIComponent(service.name)}`;
+      return;
+    }
     requireAuth(
       () => openCheckout(service),
       `Please sign in or register with your email before ordering "${service.name}".`
@@ -412,7 +420,7 @@ export function ServiceDetail({ service }: Props) {
                     onClick={handleAddToCart}
                   >
                     <ShoppingBag size={16} />
-                    {isInCart ? 'View in Cart' : 'Add to Cart'}
+                    {isInCart ? `In Cart (${cartEntry?.quantity || 1}) • View Cart` : 'Add to Cart'}
                   </button>
 
                   <button

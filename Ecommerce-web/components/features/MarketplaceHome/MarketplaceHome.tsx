@@ -40,6 +40,8 @@ import {
   Calculator,
   ChevronLeft,
   ChevronRight,
+  Minus,
+  Plus,
 } from 'lucide-react';
 import {
   allServices,
@@ -376,7 +378,7 @@ function MarketplaceContent() {
   const groupDropdownRef = useRef<HTMLDivElement>(null);
   const explorerRef = useRef<HTMLDivElement>(null);
 
-  const { wishlistIds, toggleWishlist, compareIds, toggleCompare, addToCart, cart } = useCommerceStore();
+  const { wishlistIds, toggleWishlist, compareIds, toggleCompare, addToCart, updateQuantity, cart } = useCommerceStore();
   const { openCart, openCompare } = useUIStore();
   const { requireAuth } = useAuthStore();
 
@@ -510,20 +512,23 @@ function MarketplaceContent() {
   const handleAddToCart = (e: React.MouseEvent, svc: Service) => {
     e.preventDefault();
     e.stopPropagation();
-    requireAuth(() => {
-      const isInCart = useCommerceStore.getState().cart.some(c => c.serviceId === svc.id);
-      if (isInCart) {
-        openCart();
-        return;
-      }
-      addToCart({
-        serviceId: svc.id,
-        serviceName: svc.name,
-        price: svc.startingPrice,
-        quantity: 1,
-      });
+    const isAlreadyInCart = useCommerceStore.getState().cart.some((c) => c.serviceId === svc.id);
+    if (isAlreadyInCart) {
       openCart();
-    }, `Sign in or register with your email to add "${svc.name}" to your cart.`);
+      return;
+    }
+    addToCart({
+      serviceId: svc.id,
+      serviceName: svc.name,
+      price: svc.startingPrice,
+      quantity: 1,
+      group: svc.group,
+      entity: svc.entity,
+      priceType: svc.priceType,
+      deliveryDays: svc.deliveryDays ?? '3-5 Days',
+      image: svc.image,
+    });
+    openCart();
   };
 
   const handleHeroSelectDivision = (division: 'technology' | 'consultancy' | 'all') => {
@@ -545,7 +550,8 @@ function MarketplaceContent() {
   const renderCard = (svc: Service) => {
     const isWishlisted = wishlistIds.includes(svc.id);
     const isCompared = compareIds.includes(svc.id);
-    const isInCart = cart.some(c => c.serviceId === svc.id);
+    const cartEntry = cart.find(c => c.serviceId === svc.id);
+    const isInCart = Boolean(cartEntry);
     const { rating, reviews } = getDeterministicRating(svc.id);
     const originalPrice = getOriginalPrice(svc.startingPrice);
     const cardGlow =
@@ -677,14 +683,45 @@ function MarketplaceContent() {
             </Link>
 
             <div className={styles.cardActions}>
-              <button
-                onClick={e => handleAddToCart(e, svc)}
-                style={{ flex: 1, justifyContent: 'center' }}
-                className={`${styles.cartBtn} ${isInCart ? styles.inCartBtn : styles.addToCartBtn}`}
-              >
-                {isInCart ? <Check size={14} /> : <ShoppingBag size={14} />}
-                {isInCart ? 'In Cart' : 'Add to Cart'}
-              </button>
+              {isInCart && cartEntry ? (
+                <div className={styles.cardCartStepper} onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className={styles.cardStepBtn}
+                    onClick={() => updateQuantity(cartEntry.id, cartEntry.quantity - 1)}
+                    aria-label={`Decrease quantity for ${svc.name}`}
+                  >
+                    <Minus size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.cardStepViewBtn}
+                    onClick={() => openCart()}
+                    title="Open Cart"
+                  >
+                    <Check size={12} />
+                    <span>{cartEntry.quantity} in Cart</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.cardStepBtn}
+                    onClick={() => updateQuantity(cartEntry.id, cartEntry.quantity + 1)}
+                    aria-label={`Increase quantity for ${svc.name}`}
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={e => handleAddToCart(e, svc)}
+                  style={{ flex: 1, justifyContent: 'center' }}
+                  className={`${styles.cartBtn} ${styles.addToCartBtn}`}
+                >
+                  <ShoppingBag size={14} />
+                  {svc.startingPrice && svc.startingPrice > 0 ? 'Add to Cart' : 'Add Quote'}
+                </button>
+              )}
 
               <label className={styles.compareCheck} onClick={e => e.stopPropagation()}>
                 <input

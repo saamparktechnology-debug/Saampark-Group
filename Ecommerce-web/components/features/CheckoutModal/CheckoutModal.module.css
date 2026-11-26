@@ -340,6 +340,76 @@
   color: var(--color-text-tertiary);
 }
 
+.itemRemoveBtn {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.itemRemoveBtn:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.removeCouponBtn {
+  border: none;
+  background: rgba(239, 68, 68, 0.14);
+  color: #ef4444;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  cursor: pointer;
+}
+
+.calcBreakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+}
+
+.calcRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+}
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.hintBanner {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  color: #d97706;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
 .authGateCard {
   text-align: center;
   padding: 2rem 1.25rem;

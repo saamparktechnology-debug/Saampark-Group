@@ -5,18 +5,19 @@ import Link from 'next/link';
 import Image from 'next/image';
 import {
   X, Trash2, ShoppingBag, Bookmark, ArrowRight, MessageCircle,
-  Check, Clock, Award, Layers
+  Check, Clock, Award, Layers, Minus, Plus
 } from 'lucide-react';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
 import { useOrderStore } from '@/lib/store/orderStore';
 import { useAuthStore } from '@/lib/store/authStore';
 import { getServiceById } from '@/lib/data/services';
+import { calculateOrderTotals } from '@/lib/utils/pricing';
 import styles from './CommerceDrawers.module.css';
 
 export function CommerceDrawers() {
   const {
-    cart, addToCart, removeFromCart, clearCart,
+    cart, addToCart, removeFromCart, updateQuantity, clearCart,
     wishlistIds, toggleWishlist,
     compareIds, toggleCompare, clearCompare
   } = useCommerceStore();
@@ -59,8 +60,21 @@ export function CommerceDrawers() {
     return () => { document.body.style.overflow = ''; };
   }, [anyOpen]);
 
-  const cartTotal = cart.reduce((acc, item) => acc + (item.price || 0) * item.quantity, 0);
-  const cartHasQuote = cart.some(item => !item.price);
+  const cartTotals = calculateOrderTotals({
+    items: cart.map((c) => ({
+      serviceId: c.serviceId,
+      name: c.serviceName,
+      price: c.price,
+      qty: c.quantity,
+      priceType: c.priceType,
+      deliveryDays: c.deliveryDays,
+    })),
+    state: 'West Bengal',
+    urgency: 'Standard',
+  });
+  const cartTotal = cartTotals.baseSubtotal;
+  const cartHasQuote = cartTotals.quoteOnlyCount > 0;
+  const cartCanCheckout = cartTotals.billableItems.length > 0 && cartTotals.totalAmount > 0;
 
   const resolveService = (id: string) => {
     const staticSvc = getServiceById(id);
@@ -86,22 +100,25 @@ export function CommerceDrawers() {
   const fastestSla = slaValues.length > 1 ? Math.min(...slaValues) : null;
 
   const handleCompareAddToCart = (svc: any) => {
-    requireAuth(() => {
-      const inCart = useCommerceStore.getState().cart.some((c) => c.serviceId === svc.id);
-      if (inCart) {
-        closeCompare();
-        openCart();
-        return;
-      }
-      addToCart({
-        serviceId: svc.id,
-        serviceName: svc.name,
-        price: svc.startingPrice ?? null,
-        quantity: 1,
-      });
+    const inCart = useCommerceStore.getState().cart.some((c) => c.serviceId === svc.id);
+    if (inCart) {
       closeCompare();
       openCart();
-    }, `Sign in with your email to add "${svc.name}" to cart.`);
+      return;
+    }
+    addToCart({
+      serviceId: svc.id,
+      serviceName: svc.name,
+      price: svc.startingPrice ?? null,
+      quantity: 1,
+      group: svc.group,
+      entity: svc.entity,
+      priceType: svc.priceType,
+      deliveryDays: svc.deliveryDays ?? '3-5 Days',
+      image: svc.image,
+    });
+    closeCompare();
+    openCart();
   };
 
   const handleCheckoutWA = () => {
@@ -145,14 +162,46 @@ export function CommerceDrawers() {
                 <div key={item.id} className={styles.item}>
                   <div className={styles.itemInfo}>
                     <div className={styles.itemName}>{item.serviceName}</div>
-                    <div className={styles.itemMeta}>Qty: {item.quantity}</div>
+                    <div className={styles.itemMeta}>
+                      {item.price && item.price > 0
+                        ? `₹${item.price.toLocaleString('en-IN')} × ${item.quantity}`
+                        : 'Custom Quote Package'}
+                    </div>
                     <div className={styles.itemPrice}>
-                      {item.price ? `₹${item.price.toLocaleString('en-IN')}` : 'Custom Quote'}
+                      {item.price && item.price > 0
+                        ? `₹${(item.price * item.quantity).toLocaleString('en-IN')}`
+                        : 'Custom Quote'}
                     </div>
                   </div>
-                  <button className={styles.removeBtn} onClick={() => removeFromCart(item.id)}>
-                    <Trash2 size={16} />
-                  </button>
+                  <div className={styles.cartItemRight}>
+                    <div className={styles.cartQtyBox}>
+                      <button
+                        type="button"
+                        className={styles.cartQtyBtn}
+                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                        aria-label={`Decrease ${item.serviceName} quantity`}
+                      >
+                        <Minus size={12} />
+                      </button>
+                      <span className={styles.cartQtyNum}>{item.quantity}</span>
+                      <button
+                        type="button"
+                        className={styles.cartQtyBtn}
+                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                        aria-label={`Increase ${item.serviceName} quantity`}
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.removeBtn}
+                      onClick={() => removeFromCart(item.id)}
+                      aria-label={`Remove ${item.serviceName}`}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -161,26 +210,55 @@ export function CommerceDrawers() {
 
         {cart.length > 0 && (
           <div className={styles.footer}>
-            <div className={styles.totalRow}>
-              <span>Subtotal:</span>
-              <span className={styles.totalPrice}>
-                {cartTotal > 0 ? `₹${cartTotal.toLocaleString('en-IN')}` : ''}
-                {cartHasQuote && (cartTotal > 0 ? ' + Quotes' : 'To be quoted')}
-              </span>
+            <div className={styles.calcSummaryList}>
+              <div className={styles.calcSummaryRow}>
+                <span>Services Subtotal:</span>
+                <span>
+                  {cartTotal > 0 ? `₹${cartTotal.toLocaleString('en-IN')}` : 'Custom Quote'}
+                </span>
+              </div>
+              {cartCanCheckout && (
+                <div className={styles.calcSummaryRow}>
+                  <span>Estimated GST (18%):</span>
+                  <span>+₹{cartTotals.gstAmount.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              <div className={styles.totalRow} style={{ marginTop: 6, marginBottom: 'var(--size-3)' }}>
+                <span>Estimated Total:</span>
+                <span className={styles.totalPrice}>
+                  {cartCanCheckout
+                    ? `₹${cartTotals.totalAmount.toLocaleString('en-IN')}`
+                    : 'To be quoted'}
+                  {cartCanCheckout && cartHasQuote ? ' + Quotes' : ''}
+                </span>
+              </div>
             </div>
 
-            <button
-              className="btn btn-primary"
-              onClick={() => {
-                requireAuth(() => {
+            {cartCanCheckout ? (
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  requireAuth(() => {
+                    closeCart();
+                    openCheckout();
+                  }, 'Please sign in or create an account before proceeding to checkout.');
+                }}
+                style={{ width: '100%', justifyContent: 'center', marginBottom: 8, gap: 6, fontWeight: 700 }}
+              >
+                <ShoppingBag size={18} /> Proceed to Official Checkout
+              </button>
+            ) : (
+              <button
+                className="btn btn-primary"
+                onClick={() => {
                   closeCart();
-                  openCheckout();
-                }, 'Please sign in or create an account before proceeding to checkout.');
-              }}
-              style={{ width: '100%', justifyContent: 'center', marginBottom: 8, gap: 6, fontWeight: 700 }}
-            >
-              <ShoppingBag size={18} /> Proceed to Official Checkout
-            </button>
+                  window.location.href = '/contact';
+                }}
+                style={{ width: '100%', justifyContent: 'center', marginBottom: 8, gap: 6, fontWeight: 700 }}
+              >
+                Request Custom Quote Consultation <ArrowRight size={16} />
+              </button>
+            )}
 
             <button
               className="btn btn-outline btn-sm"
