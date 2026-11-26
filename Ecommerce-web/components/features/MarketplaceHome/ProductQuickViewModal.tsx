@@ -1,12 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { X, Check, Bookmark, ShoppingBag, MessageCircle, Maximize2, Shield, Clock, Star, ExternalLink } from 'lucide-react';
+import {
+  X, Check, Bookmark, ShoppingBag, MessageCircle, Shield, Clock,
+  Star, ExternalLink, ChevronLeft, ChevronRight, Minus, Plus, Zap
+} from 'lucide-react';
 import { type Service } from '@/lib/data/services';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
+import { useOrderStore } from '@/lib/store/orderStore';
+import { useAuthStore } from '@/lib/store/authStore';
 import styles from './ProductQuickViewModal.module.css';
 
 // 5 to 10 screenshots per category
@@ -71,13 +76,67 @@ interface Props {
 
 export function ProductQuickViewModal({ service, onClose }: Props) {
   const [activeImgIndex, setActiveImgIndex] = useState(0);
-  const { cart, addToCart, wishlistIds, toggleWishlist } = useCommerceStore();
+  const [isHovered, setIsHovered] = useState(false);
+  const { cart, addToCart, updateQuantity, wishlistIds, toggleWishlist } = useCommerceStore();
   const { openCart } = useUIStore();
+  const { openCheckout } = useOrderStore();
+  const { requireAuth } = useAuthStore();
 
   const cartItem = cart.find(c => c.serviceId === service.id);
-  const screenshots = getPortfolioImages(service.category);
+  const screenshots = useMemo(() => {
+    const customList: { title: string; url: string }[] = [];
+    if (service.image && service.image.trim()) {
+      customList.push({ title: `${service.name} — Preview`, url: service.image.trim() });
+    }
+    if (Array.isArray(service.galleryImages)) {
+      service.galleryImages.forEach((url, i) => {
+        const clean = String(url || '').trim();
+        if (clean && !customList.some((x) => x.url === clean)) {
+          customList.push({ title: `${service.shortName || service.name} — View ${i + 2}`, url: clean });
+        }
+      });
+    }
+    // If product has multiple uploaded images use them directly; otherwise supplement up to 5 previews
+    if (customList.length <= 1) {
+      const fallbacks = getPortfolioImages(service.category);
+      for (const fb of fallbacks) {
+        if (customList.length >= 5) break;
+        if (!customList.some((x) => x.url === fb.url)) {
+          customList.push(fb);
+        }
+      }
+    }
+    return customList.length > 0 ? customList : getPortfolioImages(service.category);
+  }, [service]);
+
+  useEffect(() => {
+    setActiveImgIndex(0);
+  }, [service.id]);
+
+  // Auto-cycle multiple product images one after another cleanly
+  useEffect(() => {
+    if (isHovered || screenshots.length <= 1) return;
+    const timer = setInterval(() => {
+      setActiveImgIndex((prev) => (prev + 1) % screenshots.length);
+    }, 1200);
+    return () => clearInterval(timer);
+  }, [isHovered, screenshots.length]);
+
   const isWishlisted = wishlistIds.includes(service.id);
   const isInCart = Boolean(cartItem);
+
+  const handleInstantOrder = () => {
+    if (!service.startingPrice || service.startingPrice <= 0) {
+      onClose();
+      window.location.href = `/contact?service=${encodeURIComponent(service.name)}`;
+      return;
+    }
+    onClose();
+    requireAuth(
+      () => openCheckout(service),
+      `Please sign in or register with your email before ordering "${service.name}".`
+    );
+  };
 
   const handleAddToCart = () => {
     if (isInCart) {
@@ -119,26 +178,67 @@ export function ProductQuickViewModal({ service, onClose }: Props) {
         </button>
 
         <div className={styles.grid}>
-          {/* Left Column: Interactive 5-10 Screenshot Showcase */}
-          <div className={styles.galleryCol}>
+          {/* Left Column: Multi-Image Glass Showcase (Auto-Cycling) */}
+          <div
+            className={styles.galleryCol}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
             <div className={styles.mainView}>
-              <Image
-                src={screenshots[activeImgIndex]?.url || service.image || '/assets/images/website-dev.jpg'}
-                alt={screenshots[activeImgIndex]?.title || service.name}
-                width={600}
-                height={380}
-                className={styles.mainImg}
-                priority
-                unoptimized
-              />
-              <span className={styles.ssBadge}>
-                {screenshots[activeImgIndex]?.title || `Screenshot ${activeImgIndex + 1}`}
-              </span>
+              {screenshots.map((ss, idx) => (
+                <Image
+                  key={`${idx}-${ss.url}`}
+                  src={ss.url}
+                  alt={ss.title || service.name}
+                  width={600}
+                  height={380}
+                  className={`${styles.mainImg} ${
+                    activeImgIndex === idx ? styles.mainImgActive : styles.mainImgHidden
+                  }`}
+                  priority={idx === 0}
+                  unoptimized
+                />
+              ))}
+
+              {screenshots.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className={`${styles.navImgBtn} ${styles.navImgPrev}`}
+                    onClick={() =>
+                      setActiveImgIndex((prev) => (prev - 1 + screenshots.length) % screenshots.length)
+                    }
+                    aria-label="Previous image"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.navImgBtn} ${styles.navImgNext}`}
+                    onClick={() => setActiveImgIndex((prev) => (prev + 1) % screenshots.length)}
+                    aria-label="Next image"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </>
+              )}
+
+              <div className={styles.ssBadgeRow}>
+                <span className={styles.ssBadge}>
+                  {screenshots[activeImgIndex]?.title || `Preview ${activeImgIndex + 1}`}
+                </span>
+                {screenshots.length > 1 && (
+                  <span className={styles.ssCounter}>
+                    {activeImgIndex + 1} / {screenshots.length}
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className={styles.thumbGrid}>
               {screenshots.map((ss, idx) => (
                 <button
+                  type="button"
                   key={idx}
                   className={`${styles.thumbBtn} ${activeImgIndex === idx ? styles.thumbActive : ''}`}
                   onClick={() => setActiveImgIndex(idx)}
@@ -149,6 +249,7 @@ export function ProductQuickViewModal({ service, onClose }: Props) {
                     width={80}
                     height={50}
                     className={styles.thumbImg}
+                    unoptimized
                   />
                 </button>
               ))}
@@ -183,7 +284,7 @@ export function ProductQuickViewModal({ service, onClose }: Props) {
             </div>
 
             <div className={styles.featuresList}>
-              <div className={styles.featTitle}>Key Features & Deliverables:</div>
+              <div className={styles.featTitle}>Key Features &amp; Deliverables:</div>
               {service.features.slice(0, 5).map((f, i) => (
                 <div key={i} className={styles.featItem}>
                   <Check size={14} className={styles.checkIcon} />
@@ -192,25 +293,78 @@ export function ProductQuickViewModal({ service, onClose }: Props) {
               ))}
             </div>
 
-            <div className={styles.actionRow}>
-              <button className="btn btn-primary" onClick={handleAddToCart} style={{ flex: 1, justifyContent: 'center' }}>
-                {isInCart ? 'In Cart' : 'Add to Cart'} <ShoppingBag size={16} />
-              </button>
-              
-              <button className="btn btn-secondary" onClick={handleWA} style={{ flex: 1, justifyContent: 'center' }}>
-                <MessageCircle size={16} /> WhatsApp
+            <div className={styles.actionStack}>
+              <button
+                type="button"
+                className={`btn btn-primary ${styles.instantOrderBtn}`}
+                onClick={handleInstantOrder}
+              >
+                <Zap size={15} fill="currentColor" /> Instant Order &amp; GST Invoice
               </button>
 
-              <button 
-                className={`btn btn-icon btn-ghost ${isWishlisted ? styles.wishActive : ''}`} 
-                onClick={() => toggleWishlist(service.id)}
-              >
-                <Bookmark size={18} fill={isWishlisted ? 'currentColor' : 'none'} />
-              </button>
+              <div className={styles.actionRow}>
+                {isInCart && cartItem ? (
+                  <div className={styles.qtyStepperPill}>
+                    <button
+                      type="button"
+                      className={styles.qtyStepperBtn}
+                      onClick={() => updateQuantity(cartItem.id, cartItem.quantity - 1)}
+                      aria-label="Decrease quantity"
+                    >
+                      <Minus size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.qtyStepperText}
+                      onClick={() => {
+                        onClose();
+                        openCart();
+                      }}
+                    >
+                      <Check size={13} /> {cartItem.quantity} in Cart
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.qtyStepperBtn}
+                      onClick={() => updateQuantity(cartItem.id, cartItem.quantity + 1)}
+                      aria-label="Increase quantity"
+                    >
+                      <Plus size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className={`btn btn-secondary ${styles.actionFlexBtn}`}
+                    onClick={handleAddToCart}
+                  >
+                    <ShoppingBag size={15} /> Add to Cart
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className={`btn btn-secondary ${styles.actionFlexBtn}`}
+                  onClick={handleWA}
+                >
+                  <MessageCircle size={15} /> WhatsApp
+                </button>
+
+                <button
+                  type="button"
+                  className={`btn btn-secondary btn-icon ${styles.wishIconBtn} ${
+                    isWishlisted ? styles.wishActive : ''
+                  }`}
+                  onClick={() => toggleWishlist(service.id)}
+                  aria-label="Toggle Wishlist"
+                >
+                  <Bookmark size={17} fill={isWishlisted ? 'currentColor' : 'none'} />
+                </button>
+              </div>
             </div>
 
             <Link href={service.href} className={styles.fullPageLink} onClick={onClose}>
-              View Full Product Page & All Specs <ExternalLink size={14} />
+              View Full Product Page &amp; All Specs <ExternalLink size={14} />
             </Link>
           </div>
         </div>

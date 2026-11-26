@@ -112,6 +112,7 @@ interface Props {
 export function ServiceDetail({ service }: Props) {
   const [selectedTab, setSelectedTab] = useState<'overview' | 'specs' | 'roadmap' | 'gallery' | 'faqs'>('overview');
   const [activeImgIndex, setActiveImgIndex] = useState(0);
+  const [galleryHovered, setGalleryHovered] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [scrolled, setScrolled] = useState(false);
@@ -160,6 +161,15 @@ export function ServiceDetail({ service }: Props) {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Auto-cycle showcase images smoothly one after another when product has multiple images
+  useEffect(() => {
+    if (galleryHovered || lightboxOpen || screenshots.length <= 1) return;
+    const timer = setInterval(() => {
+      setActiveImgIndex((prev) => (prev + 1) % screenshots.length);
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [galleryHovered, lightboxOpen, screenshots.length]);
 
   useEffect(() => {
     fetch('/api/storefront')
@@ -251,17 +261,26 @@ export function ServiceDetail({ service }: Props) {
         <div className="container">
           <div className={styles.heroGrid}>
             {/* Left Column: Multi-Image Glass Showcase */}
-            <div className={styles.galleryWrap}>
+            <div
+              className={styles.galleryWrap}
+              onMouseEnter={() => setGalleryHovered(true)}
+              onMouseLeave={() => setGalleryHovered(false)}
+            >
               <div className={styles.mainViewer}>
-                <Image
-                  src={screenshots[activeImgIndex]?.url || '/assets/images/website-dev.jpg'}
-                  alt={screenshots[activeImgIndex]?.title || service.name}
-                  width={900}
-                  height={560}
-                  className={styles.mainImage}
-                  priority
-                  unoptimized
-                />
+                {screenshots.map((item, idx) => (
+                  <Image
+                    key={`${idx}-${item.url}`}
+                    src={item.url || '/assets/images/website-dev.jpg'}
+                    alt={item.title || service.name}
+                    width={900}
+                    height={560}
+                    className={`${styles.mainImage} ${
+                      activeImgIndex === idx ? styles.mainImageActive : styles.mainImageHidden
+                    }`}
+                    priority={idx === 0}
+                    unoptimized
+                  />
+                ))}
 
                 {screenshots.length > 1 && (
                   <>
