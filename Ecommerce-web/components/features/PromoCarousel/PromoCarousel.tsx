@@ -125,6 +125,17 @@ export function PromoCarousel() {
                   '--slide-glow': slide.glowColor,
                 } as React.CSSProperties}
               >
+                <Image
+                  src={slide.image}
+                  alt={slide.title}
+                  width={960}
+                  height={360}
+                  className={styles.slideBgImg}
+                  priority
+                  unoptimized
+                />
+                <div className={styles.slideBgScrim} />
+
                 <div className={styles.slideContent}>
                   <div className={styles.topMeta}>
                     <div className={styles.badge}>
@@ -161,22 +172,6 @@ export function PromoCarousel() {
                       </button>
                     )}
                   </div>
-                </div>
-
-                <div className={styles.imageColumn}>
-                  <div 
-                    className={styles.imageBackdropGlow}
-                    style={{ background: `radial-gradient(circle, ${slide.glowColor} 0%, transparent 70%)` }}
-                  />
-                  <Image
-                    src={slide.image}
-                    alt={slide.title}
-                    width={220}
-                    height={140}
-                    className={styles.slideImg}
-                    priority
-                    unoptimized
-                  />
                 </div>
               </div>
             </div>

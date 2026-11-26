@@ -8,9 +8,17 @@ import {
   Globe, Smartphone, Layers, Database, ShoppingCart,
   Share2, Megaphone, Search, MapPin, Video, Briefcase,
   Sun, Moon, ShoppingBag, Bookmark, User, Sparkles, MessageCircle, PackageSearch,
-  Package, Activity, FileText, ExternalLink
+  Package, Activity, FileText, ExternalLink, X, ArrowRight
 } from 'lucide-react';
-import { CONTACT } from '@/lib/data/services';
+import {
+  CONTACT,
+  allServices,
+  SERVICE_CATEGORIES,
+  type Service,
+  type CategoryMetadata,
+} from '@/lib/data/services';
+import { extractStorefrontOffers, type StorefrontOffer } from '@/lib/utils/offers';
+import { buildLiveSearchResults, type SearchSuggestion } from '@/lib/utils/siteSearch';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
 import { useAuthStore } from '@/lib/store/authStore';
@@ -74,12 +82,107 @@ function NavbarContent() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [isDark,      setIsDark]      = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(-1);
+  const [liveSearchServices, setLiveSearchServices] = useState<Service[]>(allServices);
+  const [liveSearchCats, setLiveSearchCats] = useState<CategoryMetadata[]>(SERVICE_CATEGORIES);
+  const [liveSearchOffers, setLiveSearchOffers] = useState<StorefrontOffer[]>([]);
   const profileRef = useRef<HTMLDivElement>(null);
+  const searchWrapRef = useRef<HTMLDivElement>(null);
+  const mobileSearchRef = useRef<HTMLDivElement>(null);
 
   const { cart, wishlistIds } = useCommerceStore();
-  const { openCart, openWishlist } = useUIStore();
+  const { openCart, openWishlist, openCompare } = useUIStore();
   const { user, logout, openAuthModal } = useAuthStore();
   const { openTracking, myOrders } = useOrderStore();
+
+  // Hydrate live catalog, categories, and promo offers once so site-wide search stays in sync
+  useEffect(() => {
+    fetch('/api/storefront')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!json?.success) return;
+        const products = json.data?.products;
+        if (products) {
+          const crmTech = Array.isArray(products.tech) ? products.tech : [];
+          const crmConsult = Array.isArray(products.consultancy) ? products.consultancy : [];
+          const staticBySlug = new Map(allServices.map((s) => [s.slug, s]));
+          const mapped: Service[] = [...crmTech, ...crmConsult].map((p: any) => {
+            const fb = staticBySlug.get(p.slug);
+            const grp = p.companyId === 'consultancy' || p.group === 'consultancy' ? 'consultancy' : 'technology';
+            return {
+              ...(fb || {}),
+              id: p.id || fb?.id || p.slug,
+              name: p.name || fb?.name || 'Service',
+              shortName: p.shortName || fb?.shortName || p.name || 'Service',
+              slug: p.slug || fb?.slug || p.id,
+              group: grp,
+              entity: (p.entity || fb?.entity || (grp === 'consultancy' ? 'scs' : 'str')) as any,
+              primaryCategory: p.primaryCategory || fb?.primaryCategory || 'web-services',
+              category: p.category || fb?.category || 'website',
+              sector: p.sector || fb?.sector || 'web-development',
+              startingPrice:
+                typeof p.discountPrice === 'number' && p.discountPrice > 0
+                  ? p.discountPrice
+                  : (p.startingPrice ?? fb?.startingPrice ?? null),
+              priceType: p.priceType || fb?.priceType || 'one-time',
+              deliveryDays: typeof p.deliveryDays === 'number' ? p.deliveryDays : (fb?.deliveryDays ?? 5),
+              badge: p.badge !== undefined ? p.badge : fb?.badge,
+              isPopular: p.isPopular ?? fb?.isPopular ?? false,
+              isFeatured: p.isFeatured ?? fb?.isFeatured ?? false,
+              image: p.image || fb?.image || '/assets/images/website-dev.jpg',
+              color: p.color || fb?.color || '#2563EB',
+              icon: p.icon || fb?.icon || 'Globe',
+              href: p.href || fb?.href || `/${grp}/${p.sector || 'solutions'}/${p.slug}`,
+              description: p.description || fb?.description || '',
+              features: Array.isArray(p.features) && p.features.length > 0 ? p.features : (fb?.features || []),
+              technologiesUsed: Array.isArray(p.technologiesUsed) ? p.technologiesUsed : fb?.technologiesUsed,
+            } as Service;
+          });
+          const seen = new Set(mapped.map((m) => m.slug));
+          setLiveSearchServices([...mapped, ...allServices.filter((s) => !seen.has(s.slug))]);
+        }
+
+        const rawCats = Array.isArray(json.data?.categories) ? json.data.categories : [];
+        const deletedMeta = rawCats.find((c: any) => c && c.id === '__deleted_ids__');
+        const deletedSet = new Set<string>(
+          Array.isArray(deletedMeta?.deletedIds) ? deletedMeta.deletedIds.map(String) : []
+        );
+        const catMap = new Map<string, CategoryMetadata>();
+        SERVICE_CATEGORIES.forEach((c) => {
+          if (!deletedSet.has(c.id)) catMap.set(c.id, c);
+        });
+        rawCats.forEach((c: any) => {
+          if (c && c.id && c.id !== '__deleted_ids__' && c.name && !deletedSet.has(String(c.id))) {
+            const grp = c.companyId === 'consultancy' || c.group === 'consultancy' ? 'consultancy' : 'technology';
+            catMap.set(String(c.id), {
+              id: String(c.id),
+              group: grp,
+              name: String(c.name),
+              capacity: 'Expandable',
+              icon: c.icon || 'Layers',
+            });
+          }
+        });
+        setLiveSearchCats(Array.from(catMap.values()));
+
+        if (json.data?.storefront) {
+          setLiveSearchOffers(extractStorefrontOffers(json.data.storefront));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const searchSuggestions = React.useMemo(
+    () =>
+      buildLiveSearchResults(searchQuery, {
+        services: liveSearchServices,
+        categories: liveSearchCats,
+        offers: liveSearchOffers,
+      }),
+    [searchQuery, liveSearchServices, liveSearchCats, liveSearchOffers]
+  );
 
   // Scroll detection
   useEffect(() => {
@@ -94,11 +197,17 @@ function NavbarContent() {
     setSearchQuery(q || '');
   }, [searchParams]);
 
-  // Click outside to close profile dropdown
+  // Click outside to close profile & search dropdowns
   useEffect(() => {
     const clickOutside = (e: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setProfileOpen(false);
+      }
+      if (searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) {
+        setSearchFocused(false);
+      }
+      if (mobileSearchRef.current && !mobileSearchRef.current.contains(e.target as Node)) {
+        setMobileSearchOpen(false);
       }
     };
     document.addEventListener('mousedown', clickOutside);
@@ -121,14 +230,146 @@ function NavbarContent() {
     localStorage.setItem('saampark-theme', next ? 'dark' : 'light');
   };
 
+  const handleSelectSuggestion = (item: SearchSuggestion) => {
+    setSearchFocused(false);
+    setMobileSearchOpen(false);
+    setHighlightIdx(-1);
+
+    if (item.action === 'open-cart') {
+      openCart();
+      return;
+    }
+    if (item.action === 'open-wishlist') {
+      openWishlist();
+      return;
+    }
+    if (item.action === 'open-compare') {
+      openCompare();
+      return;
+    }
+    if (item.action === 'open-track') {
+      openTracking();
+      return;
+    }
+    if (item.promoCode && typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(item.promoCode).catch(() => {});
+    }
+    if (item.href) {
+      router.push(item.href);
+    }
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      router.push(`/?search=${encodeURIComponent(searchQuery.trim())}`);
+    if (highlightIdx >= 0 && searchSuggestions[highlightIdx]) {
+      handleSelectSuggestion(searchSuggestions[highlightIdx]);
+      return;
+    }
+    setSearchFocused(false);
+    setMobileSearchOpen(false);
+    const trimmed = searchQuery.trim();
+    if (trimmed) {
+      router.push(`/?search=${encodeURIComponent(trimmed)}#marketplace-catalog`);
+      setTimeout(() => {
+        document.getElementById('marketplace-catalog')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
     } else {
       router.push('/');
     }
   };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setSearchFocused(false);
+      setMobileSearchOpen(false);
+      setHighlightIdx(-1);
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSearchFocused(true);
+      setHighlightIdx((prev) =>
+        searchSuggestions.length > 0 ? (prev + 1) % searchSuggestions.length : -1
+      );
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIdx((prev) =>
+        searchSuggestions.length > 0
+          ? (prev - 1 + searchSuggestions.length) % searchSuggestions.length
+          : -1
+      );
+    }
+  };
+
+  const renderSuggestionsDropdown = () => (
+    <div className={styles.searchDropdown} role="listbox" aria-label="Search suggestions">
+      <div className={styles.searchDropHeader}>
+        <span>
+          {searchQuery.trim()
+            ? `Search Results for "${searchQuery.trim()}"`
+            : 'Quick Suggestions across Saampark'}
+        </span>
+        <span className={styles.searchDropHint}>{searchSuggestions.length} matches</span>
+      </div>
+
+      {searchSuggestions.length === 0 ? (
+        <div className={styles.searchEmptyState}>
+          <p>No direct match found for &ldquo;{searchQuery.trim()}&rdquo;.</p>
+          <button
+            type="button"
+            className={styles.searchFilterAllBtn}
+            onClick={() => {
+              setSearchFocused(false);
+              setMobileSearchOpen(false);
+              router.push('/contact');
+            }}
+          >
+            Request Custom Service Quote <ArrowRight size={13} />
+          </button>
+        </div>
+      ) : (
+        <div className={styles.searchResultsList}>
+          {searchSuggestions.map((item, idx) => (
+            <button
+              key={item.id}
+              type="button"
+              role="option"
+              aria-selected={highlightIdx === idx}
+              className={`${styles.searchResultRow} ${highlightIdx === idx ? styles.searchResultActive : ''}`}
+              onClick={() => handleSelectSuggestion(item)}
+            >
+              <div className={styles.searchResultMain}>
+                <div className={styles.searchResultTop}>
+                  <span className={styles.searchTypeBadge}>{item.badge}</span>
+                  <span className={styles.searchResultTitle}>{item.title}</span>
+                </div>
+                <span className={styles.searchResultSub}>{item.subtitle}</span>
+              </div>
+              {item.priceLabel ? (
+                <span className={styles.searchResultPrice}>{item.priceLabel}</span>
+              ) : (
+                <ArrowRight size={13} className={styles.searchResultArrow} />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {searchQuery.trim() && (
+        <button
+          type="button"
+          className={styles.searchFooterBtn}
+          onClick={(e) => handleSearchSubmit(e as any)}
+        >
+          <Search size={13} />
+          <span>Filter catalog for &ldquo;{searchQuery.trim()}&rdquo;</span>
+          <ArrowRight size={13} />
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -149,16 +390,40 @@ function NavbarContent() {
 
           {/* Center Slot: Inline Scrolling Marquee Pill (Fills Gap Between Logo & Actions) + Search */}
           <div className={styles.centerSlot}>
-            <form onSubmit={handleSearchSubmit} className={styles.searchBox}>
-              <Search size={16} className={styles.searchIcon} />
-              <input
-                type="text"
-                placeholder="Search services..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={styles.searchInput}
-              />
-            </form>
+            <div className={styles.searchWrap} ref={searchWrapRef}>
+              <form onSubmit={handleSearchSubmit} className={styles.searchBox}>
+                <Search size={16} className={styles.searchIcon} />
+                <input
+                  type="text"
+                  placeholder="Search services, offers, FAQs, pages..."
+                  value={searchQuery}
+                  onFocus={() => setSearchFocused(true)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setSearchFocused(true);
+                    setHighlightIdx(-1);
+                  }}
+                  onKeyDown={handleSearchKeyDown}
+                  className={styles.searchInput}
+                  aria-label="Global search"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className={styles.searchClearBtn}
+                    onClick={() => {
+                      setSearchQuery('');
+                      setHighlightIdx(-1);
+                      if (searchParams.get('search')) router.push('/');
+                    }}
+                    aria-label="Clear search"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </form>
+              {searchFocused && renderSuggestionsDropdown()}
+            </div>
             <div className={styles.navMarqueeSlot}>
               <GlassTrustMarquee inlineNav />
             </div>
@@ -166,6 +431,15 @@ function NavbarContent() {
 
           {/* Right Side Actions (Independent Floating Card) */}
           <div className={styles.actions}>
+            {/* Mobile Global Search Trigger */}
+            <button
+              type="button"
+              onClick={() => setMobileSearchOpen((prev) => !prev)}
+              className={`btn btn-icon btn-ghost ${styles.iconBtn} ${styles.mobileSearchBtn}`}
+              aria-label="Search site"
+            >
+              <Search size={18} />
+            </button>
             
             {/* Theme Toggle */}
             <button onClick={toggleTheme} className={`btn btn-icon btn-ghost ${styles.iconBtn}`} aria-label="Toggle theme">
@@ -330,6 +604,48 @@ function NavbarContent() {
 
           </div>
         </div>
+
+        {/* Mobile Expandable Search Panel */}
+        {mobileSearchOpen && (
+          <div className={styles.mobileSearchDrawer} ref={mobileSearchRef}>
+            <form onSubmit={handleSearchSubmit} className={styles.mobileSearchForm}>
+              <Search size={16} className={styles.searchIcon} />
+              <input
+                type="text"
+                autoFocus
+                placeholder="Search everything on Saampark..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setHighlightIdx(-1);
+                }}
+                onKeyDown={handleSearchKeyDown}
+                className={styles.searchInput}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className={styles.searchClearBtn}
+                  onClick={() => {
+                    setSearchQuery('');
+                    if (searchParams.get('search')) router.push('/');
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+              <button
+                type="button"
+                className={styles.searchClearBtn}
+                onClick={() => setMobileSearchOpen(false)}
+                aria-label="Close mobile search"
+              >
+                Close
+              </button>
+            </form>
+            {renderSuggestionsDropdown()}
+          </div>
+        )}
       </nav>
     </>
   );

@@ -61,6 +61,7 @@ import { Interactive3DCanvas } from '@/components/ui/Interactive3DCanvas/Interac
 import { InteractiveTiltCard } from '@/components/ui/InteractiveTiltCard/InteractiveTiltCard';
 import { CostEstimator } from '@/components/features/CostEstimator/CostEstimator';
 import { InteractiveFAQ } from '@/components/features/InteractiveFAQ/InteractiveFAQ';
+import { serviceMatchesQuery } from '@/lib/utils/siteSearch';
 import styles from './MarketplaceHome.module.css';
 
 // Dynamic Icon Map for Lucide Icons
@@ -86,24 +87,74 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   Server: <Server size={16} />,
 };
 
-function ServiceThumbnail({ src, alt, className }: { src: string; alt: string; className: string }) {
-  const [imgSrc, setImgSrc] = useState(src);
+function ServiceThumbnail({
+  src,
+  gallery,
+  alt,
+  className,
+}: {
+  src: string;
+  gallery?: string[];
+  alt: string;
+  className: string;
+}) {
+  const slides = React.useMemo(() => {
+    const raw = [src, ...(Array.isArray(gallery) ? gallery : [])]
+      .map((u) => (typeof u === 'string' ? u.trim() : ''))
+      .filter(Boolean);
+    const unique = Array.from(new Set(raw));
+    return unique.length > 0 ? unique : ['/assets/images/website-dev.jpg'];
+  }, [src, gallery]);
+
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [fallbacks, setFallbacks] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
-    setImgSrc(src);
-  }, [src]);
+    setActiveIdx(0);
+    setFallbacks({});
+  }, [slides]);
+
+  // Cycle multiple product photos every 0.5 sec with smooth blurred transition (1-2-3-4-5 repeat)
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const timer = setInterval(() => {
+      setActiveIdx((prev) => (prev + 1) % slides.length);
+    }, 500);
+    return () => clearInterval(timer);
+  }, [slides.length]);
 
   return (
-    <Image
-      src={imgSrc}
-      alt={alt}
-      width={340}
-      height={200}
-      className={className}
-      priority
-      unoptimized
-      onError={() => setImgSrc('/assets/images/website-dev.jpg')}
-    />
+    <>
+      {slides.map((imgUrl, idx) => {
+        const isCurrent = idx === activeIdx;
+        const displaySrc = fallbacks[idx] ? '/assets/images/website-dev.jpg' : imgUrl;
+        return (
+          <Image
+            key={`${idx}-${imgUrl}`}
+            src={displaySrc}
+            alt={idx === 0 ? alt : `${alt} view ${idx + 1}`}
+            width={340}
+            height={240}
+            className={`${className} ${isCurrent ? styles.thumbnailActive : styles.thumbnailBlurred}`}
+            priority={idx === 0}
+            unoptimized
+            onError={() =>
+              setFallbacks((prev) => (prev[idx] ? prev : { ...prev, [idx]: true }))
+            }
+          />
+        );
+      })}
+      {slides.length > 1 && (
+        <div className={styles.galleryPips} aria-hidden="true">
+          {slides.map((_, idx) => (
+            <span
+              key={idx}
+              className={`${styles.galleryPip} ${idx === activeIdx ? styles.galleryPipActive : ''}`}
+            />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -247,6 +298,12 @@ function MarketplaceContent() {
             isPopular: p.isPopular ?? fallback?.isPopular ?? false,
             isFeatured: p.isFeatured ?? fallback?.isFeatured ?? false,
             image: p.image || fallback?.image || '/assets/images/website-dev.jpg',
+            galleryImages: Array.isArray(p.galleryImages) && p.galleryImages.length > 0
+              ? p.galleryImages.map((u: any) => String(u || '').trim()).filter(Boolean)
+              : (fallback?.galleryImages || []),
+            technologiesUsed: Array.isArray(p.technologiesUsed) && p.technologiesUsed.length > 0
+              ? p.technologiesUsed
+              : fallback?.technologiesUsed,
             color: p.color || fallback?.color || '#2563EB',
             icon: p.icon || fallback?.icon || 'Globe',
             href: p.href || fallback?.href || `/${groupNorm}/${p.sector || 'solutions'}/${p.slug}`,
@@ -261,13 +318,21 @@ function MarketplaceContent() {
         const merged = [...mapped, ...allServices.filter((s) => !seenSlugs.has(s.slug))];
         setLiveServices(merged);
 
-        // Merge custom admin-created categories from CRM2 with core categories
-        const catMap = new Map<string, CategoryMetadata>(
-          SERVICE_CATEGORIES.map((c) => [c.id, c])
+        // Merge live admin categories & honor deleted category IDs from CRM2
+        const rawCats = Array.isArray(json.data.categories) ? json.data.categories : [];
+        const deletedMeta = rawCats.find((c: any) => c && c.id === '__deleted_ids__');
+        const deletedCatIds = new Set<string>(
+          Array.isArray(deletedMeta?.deletedIds) ? deletedMeta.deletedIds.map(String) : []
         );
-        const crmCats = Array.isArray(json.data.categories) ? json.data.categories : [];
-        crmCats.forEach((c: any) => {
-          if (c && c.id && c.name) {
+
+        const catMap = new Map<string, CategoryMetadata>();
+        SERVICE_CATEGORIES.forEach((c) => {
+          if (!deletedCatIds.has(c.id)) {
+            catMap.set(c.id, c);
+          }
+        });
+        rawCats.forEach((c: any) => {
+          if (c && c.id && c.id !== '__deleted_ids__' && c.name && !deletedCatIds.has(String(c.id))) {
             const grp: ServiceGroup =
               c.companyId === 'consultancy' || c.group === 'consultancy' ? 'consultancy' : 'technology';
             catMap.set(String(c.id), {
@@ -281,7 +346,7 @@ function MarketplaceContent() {
         });
         // Ensure any custom primaryCategory attached to a live product also appears as a filterable category
         mapped.forEach((svc) => {
-          if (svc.primaryCategory && !catMap.has(svc.primaryCategory)) {
+          if (svc.primaryCategory && !deletedCatIds.has(svc.primaryCategory) && !catMap.has(svc.primaryCategory)) {
             const pretty = svc.primaryCategory
               .split('-')
               .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -315,15 +380,28 @@ function MarketplaceContent() {
   const { openCart, openCompare } = useUIStore();
   const { requireAuth } = useAuthStore();
 
-  // Read search param from URL if available
+  // Read search & filter params from URL cleanly and auto-scroll catalog into view when searching
   useEffect(() => {
-    const querySearch = searchParams.get('search');
+    const querySearch = searchParams.get('search') || '';
     const queryGroup = searchParams.get('group') as ServiceGroup;
     const queryCategory = searchParams.get('category') as PrimaryCategory;
 
-    if (querySearch) setSearch(querySearch);
-    if (queryGroup && ['technology', 'consultancy'].includes(queryGroup)) setGroupFilter(queryGroup);
-    if (queryCategory) setCategoryFilter(queryCategory);
+    setSearch(querySearch);
+    if (queryGroup && ['technology', 'consultancy'].includes(queryGroup)) {
+      setGroupFilter(queryGroup);
+    } else if (!queryGroup && queryCategory === null) {
+      // Keep current manual group filter unless explicitly passed
+    }
+    if (queryCategory) {
+      setCategoryFilter(queryCategory);
+    }
+
+    if (querySearch.trim()) {
+      const t = setTimeout(() => {
+        document.getElementById('marketplace-catalog')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 140);
+      return () => clearTimeout(t);
+    }
   }, [searchParams]);
 
   // Handle escape key to close dropdowns
@@ -398,14 +476,10 @@ function MarketplaceContent() {
       result = result.filter(s => s.primaryCategory === categoryFilter);
     }
 
-    if (search) {
-      const q = search.toLowerCase().trim();
-      result = result.filter(
-        s =>
-          s.name.toLowerCase().includes(q) ||
-          s.description.toLowerCase().includes(q) ||
-          s.group.toLowerCase().includes(q) ||
-          s.primaryCategory.toLowerCase().includes(q)
+    if (search.trim()) {
+      const catNameById = new Map(liveCategories.map((c) => [c.id, c.name]));
+      result = result.filter((s) =>
+        serviceMatchesQuery(s, search, catNameById.get(s.primaryCategory))
       );
     }
 
@@ -511,6 +585,7 @@ function MarketplaceContent() {
           <div className={styles.imageWrap}>
             <ServiceThumbnail
               src={svc.image || '/assets/images/website-dev.jpg'}
+              gallery={svc.galleryImages}
               alt={svc.name}
               className={styles.thumbnail}
             />
@@ -560,67 +635,69 @@ function MarketplaceContent() {
             </span>
           </div>
 
-          <Link href={svc.href} className={styles.cardLink}>
-            <div className={styles.cardBody}>
-              <div className={styles.ratingRow}>
-                <span className={styles.stars}>{rating}</span>
-                <span className={styles.reviews}>({reviews} reviews)</span>
-                <span className={styles.verifiedTag}>Verified ISO</span>
-              </div>
-
-              <h3 className={styles.cardTitle}>{svc.name}</h3>
-              <p className={styles.cardDesc}>{svc.description}</p>
-
-              {/* Top Deliverables Feature Pills */}
-              {topFeatures.length > 0 && (
-                <ul className={styles.cardFeaturePills}>
-                  {topFeatures.map((feat, fIdx) => (
-                    <li key={fIdx} className={styles.cardFeatureItem}>
-                      <Check size={11} className={styles.cardFeatureIcon} />
-                      <span className={styles.cardFeatureText}>{feat}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <div className={styles.priceRow}>
-                <div className={styles.priceCol}>
-                  {originalPrice && (
-                    <div className={styles.priceOldRow}>
-                      <span className={styles.originalPrice}>₹{originalPrice.toLocaleString('en-IN')}</span>
-                      {discountPercent && discountPercent > 0 && (
-                        <span className={styles.discountBadge}>SAVE {discountPercent}%</span>
-                      )}
-                    </div>
-                  )}
-                  <span className={styles.price}>{formatPrice(svc.startingPrice, svc.priceType)}</span>
+          <div className={styles.cardLowerHalf}>
+            <Link href={svc.href} className={styles.cardLink}>
+              <div className={styles.cardBody}>
+                <div className={styles.ratingRow}>
+                  <span className={styles.stars}>{rating}</span>
+                  <span className={styles.reviews}>({reviews} reviews)</span>
+                  <span className={styles.verifiedTag}>Verified ISO</span>
                 </div>
-                {svc.deliveryDays && <span className={styles.delivery}>{svc.deliveryDays}d Delivery SLA</span>}
+
+                <h3 className={styles.cardTitle}>{svc.name}</h3>
+                <p className={styles.cardDesc}>{svc.description}</p>
+
+                {/* Top Deliverables Feature Pills */}
+                {topFeatures.length > 0 && (
+                  <ul className={styles.cardFeaturePills}>
+                    {topFeatures.slice(0, 1).map((feat, fIdx) => (
+                      <li key={fIdx} className={styles.cardFeatureItem}>
+                        <Check size={11} className={styles.cardFeatureIcon} />
+                        <span className={styles.cardFeatureText}>{feat}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <div className={styles.priceRow}>
+                  <div className={styles.priceCol}>
+                    {originalPrice && (
+                      <div className={styles.priceOldRow}>
+                        <span className={styles.originalPrice}>₹{originalPrice.toLocaleString('en-IN')}</span>
+                        {discountPercent && discountPercent > 0 && (
+                          <span className={styles.discountBadge}>SAVE {discountPercent}%</span>
+                        )}
+                      </div>
+                    )}
+                    <span className={styles.price}>{formatPrice(svc.startingPrice, svc.priceType)}</span>
+                  </div>
+                  {svc.deliveryDays && <span className={styles.delivery}>{svc.deliveryDays}d SLA</span>}
+                </div>
               </div>
+            </Link>
+
+            <div className={styles.cardActions}>
+              <button
+                onClick={e => handleAddToCart(e, svc)}
+                style={{ flex: 1, justifyContent: 'center' }}
+                className={`${styles.cartBtn} ${isInCart ? styles.inCartBtn : styles.addToCartBtn}`}
+              >
+                {isInCart ? <Check size={14} /> : <ShoppingBag size={14} />}
+                {isInCart ? 'In Cart' : 'Add to Cart'}
+              </button>
+
+              <label className={styles.compareCheck} onClick={e => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  checked={isCompared}
+                  onChange={() => {
+                    toggleCompare(svc.id);
+                    openCompare();
+                  }}
+                />
+                <span className={styles.compareLabel}>Compare</span>
+              </label>
             </div>
-          </Link>
-
-          <div className={styles.cardActions}>
-            <button
-              onClick={e => handleAddToCart(e, svc)}
-              style={{ flex: 1, justifyContent: 'center' }}
-              className={`${styles.cartBtn} ${isInCart ? styles.inCartBtn : styles.addToCartBtn}`}
-            >
-              {isInCart ? <Check size={14} /> : <ShoppingBag size={14} />}
-              {isInCart ? 'In Cart' : 'Add to Cart'}
-            </button>
-
-            <label className={styles.compareCheck} onClick={e => e.stopPropagation()}>
-              <input
-                type="checkbox"
-                checked={isCompared}
-                onChange={() => {
-                  toggleCompare(svc.id);
-                  openCompare();
-                }}
-              />
-              <span className={styles.compareLabel}>Compare</span>
-            </label>
           </div>
         </div>
       </InteractiveTiltCard>

@@ -236,31 +236,25 @@ export function CategoryCoverflow() {
                 />
                 
                 <div className={styles.cardInner}>
+                  <Image
+                    src={cat.image}
+                    alt={cat.title}
+                    width={360}
+                    height={420}
+                    className={styles.cardBgImage}
+                    unoptimized
+                    priority
+                  />
+                  <div className={styles.cardBgScrim} />
                   <div className={styles.topGlassSheen} />
-                  
+
                   {/* Directional Shading Overlay on side cards */}
                   {!isActive && (
-                    <div 
-                      className={styles.directionalShade} 
-                      style={{ opacity: Math.min(0.6, absOffset * 0.3) }} 
+                    <div
+                      className={styles.directionalShade}
+                      style={{ opacity: Math.min(0.6, absOffset * 0.3) }}
                     />
                   )}
-
-                  <div className={styles.imageWrap}>
-                    <div 
-                      className={styles.imageGlowBackdrop} 
-                      style={{ background: `radial-gradient(circle, ${cat.glowColor} 0%, transparent 70%)` }}
-                    />
-                    <Image 
-                      src={cat.image} 
-                      alt={cat.title} 
-                      width={120}
-                      height={90}
-                      className={styles.cardImage}
-                      unoptimized
-                      priority
-                    />
-                  </div>
 
                   <div className={styles.cardContent}>
                     <span className={styles.cardTag}>
@@ -269,7 +263,7 @@ export function CategoryCoverflow() {
                     <h3>{cat.title}</h3>
                     <p>{cat.description}</p>
                     {isActive && (
-                      <button 
+                      <button
                         className={styles.exploreBtn}
                         onClick={(e) => handleExploreClick(cat.targetSectionId || cat.id, e)}
                       >
