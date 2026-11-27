@@ -125,6 +125,7 @@ export function Footer() {
                 <Link href="/track">Track Live Order</Link>
                 <Link href="/about">About Saampark</Link>
                 <Link href="/contact">Contact &amp; Get a Quote</Link>
+                <Link href="/privacy">Privacy Policy</Link>
               </nav>
             </div>
           </div>
