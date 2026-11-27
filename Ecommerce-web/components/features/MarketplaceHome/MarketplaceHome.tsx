@@ -960,7 +960,9 @@ function MarketplaceContent() {
                         ? SERVICE_GROUPS
                         : SERVICE_GROUPS.filter(g => g.id === groupFilter)
                       ).map(group => {
-                        const categoriesInGroup = liveCategories.filter(c => c.group === group.id);
+                        const categoriesInGroup = liveCategories.filter(
+                          c => c.group === group.id && (categoryCounts[c.id] || 0) > 0
+                        );
                         const matchGroupSearch =
                           !explorerSearch ||
                           group.name.toLowerCase().includes(explorerSearch.toLowerCase()) ||
@@ -1075,7 +1077,9 @@ function MarketplaceContent() {
               <span>All Solutions</span>
               <span className={styles.chipCount}>{totalServicesCount}</span>
             </button>
-            {liveCategories.map(cat => {
+            {liveCategories
+              .filter((cat) => (categoryCounts[cat.id] || 0) > 0)
+              .map(cat => {
               const isCatActive = categoryFilter === cat.id;
               const catCount = categoryCounts[cat.id] || 0;
               return (
