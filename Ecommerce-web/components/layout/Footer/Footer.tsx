@@ -124,6 +124,7 @@ export function Footer() {
                 <Link href="/account">Client Account &amp; Orders</Link>
                 <Link href="/track">Track Live Order</Link>
                 <Link href="/about">About Saampark</Link>
+                <Link href="/education">Saampark Education</Link>
                 <Link href="/contact">Contact &amp; Get a Quote</Link>
                 <Link href="/privacy">Privacy Policy</Link>
               </nav>
